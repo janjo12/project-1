@@ -1,1 +1,1 @@
-![Wireframe](Wireframe project 1.png)
+![Wireframe](/Wireframe project 1.png)
