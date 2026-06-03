@@ -3,6 +3,7 @@
     "name": "project-1",
     "slug": "project-1",
     "version": "1.0.0",
+    "platforms": ["android"],
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "project1",
