@@ -1,13 +1,16 @@
 import { PropsWithChildren } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
-import { colors } from "@/components/theme";
+import { type ThemeColors, useThemeColors } from "@/components/theme";
 
 type SettingsFieldProps = PropsWithChildren<{
   label: string;
 }>;
 
 export function SettingsField({ children, label }: SettingsFieldProps) {
+  const colors = useThemeColors();
+  const styles = createStyles(colors);
+
   return (
     <View style={styles.container}>
       <Text style={styles.label}>{label}</Text>
@@ -16,7 +19,8 @@ export function SettingsField({ children, label }: SettingsFieldProps) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     gap: 10,
   },
@@ -25,4 +29,5 @@ const styles = StyleSheet.create({
     fontSize: 30,
     fontWeight: "500",
   },
-});
+  });
+}

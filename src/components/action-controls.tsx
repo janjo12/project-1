@@ -1,6 +1,7 @@
+import { Ionicons } from "@expo/vector-icons";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { colors } from "@/components/theme";
+import { type ThemeColors, useThemeColors } from "@/components/theme";
 
 export type PlayerAction = "attack" | "defend" | "special";
 
@@ -11,26 +12,29 @@ type ActionControlsProps = {
 };
 
 const actions: { action: PlayerAction; label: string }[] = [
+  { action: "special", label: "Special" },
   { action: "defend", label: "Defend" },
   { action: "attack", label: "Attack" },
-  { action: "special", label: "Special" },
 ];
 
-const arrows = {
-  down: "v",
-  left: "<",
-  right: ">",
-  up: "^",
-};
+const arrowIcons = {
+  down: "arrow-down",
+  left: "arrow-back",
+  right: "arrow-forward",
+  up: "arrow-up",
+} as const;
 
 export function ActionControls({
   disabledActions = [],
   isBusy = false,
   onAction,
 }: ActionControlsProps) {
+  const colors = useThemeColors();
+  const styles = createStyles(colors);
+
   return (
     <View style={styles.container}>
-      <View style={styles.actionCluster}>
+      <View style={styles.actionCluster} testID="action-button-cluster">
         {actions.map(({ action, label }) => {
           const isDisabled = isBusy || disabledActions.includes(action);
 
@@ -47,6 +51,7 @@ export function ActionControls({
                 isDisabled && styles.disabledButton,
                 pressed && styles.pressed,
               ]}
+              testID={`${action}-action-button`}
             >
               <Text style={styles.actionText}>{label}</Text>
             </Pressable>
@@ -57,32 +62,31 @@ export function ActionControls({
       <View style={styles.dPad}>
         <View style={styles.dPadRow}>
           <View style={styles.dPadSpacer} />
-          <ArrowButton direction="up" label={arrows.up} />
+          <ArrowButton direction="up" color={colors.ink} styles={styles} />
           <View style={styles.dPadSpacer} />
         </View>
         <View style={styles.dPadRow}>
-          <ArrowButton direction="left" label={arrows.left} />
+          <ArrowButton direction="left" color={colors.ink} styles={styles} />
           <View style={styles.dPadCenter} />
-          <ArrowButton direction="right" label={arrows.right} />
+          <ArrowButton direction="right" color={colors.ink} styles={styles} />
         </View>
         <View style={styles.dPadRow}>
           <View style={styles.dPadSpacer} />
-          <ArrowButton direction="down" label={arrows.down} />
+          <ArrowButton direction="down" color={colors.ink} styles={styles} />
           <View style={styles.dPadSpacer} />
         </View>
       </View>
-
-      <View style={styles.footerSpacer} />
     </View>
   );
 }
 
 type ArrowButtonProps = {
+  color: string;
   direction: "down" | "left" | "right" | "up";
-  label: string;
+  styles: ReturnType<typeof createStyles>;
 };
 
-function ArrowButton({ direction, label }: ArrowButtonProps) {
+function ArrowButton({ color, direction, styles }: ArrowButtonProps) {
   return (
     <Pressable
       accessibilityLabel={`Move ${direction}`}
@@ -90,44 +94,49 @@ function ArrowButton({ direction, label }: ArrowButtonProps) {
       onPress={() => {}}
       style={({ pressed }) => [styles.arrowButton, pressed && styles.pressed]}
     >
-      <Text style={styles.arrow}>{label}</Text>
+      <Ionicons
+        color={color}
+        name={arrowIcons[direction]}
+        size={24}
+        testID={`move-${direction}-icon`}
+      />
     </Pressable>
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
-    flex: 1,
-    gap: 14,
-    justifyContent: "space-between",
-    minWidth: 126,
+    alignItems: "center",
+    gap: 18,
+    justifyContent: "flex-end",
+    minWidth: 112,
+    paddingBottom: 8,
   },
   actionCluster: {
     alignItems: "center",
-    gap: 8,
+    gap: 10,
     justifyContent: "center",
   },
   actionButton: {
     alignItems: "center",
     backgroundColor: colors.paperLight,
     borderColor: colors.sepia,
-    borderRadius: 8,
+    borderRadius: 999,
     borderWidth: 2,
+    height: 74,
     justifyContent: "center",
-    minHeight: 46,
-    paddingHorizontal: 12,
-    width: 108,
+    paddingHorizontal: 6,
+    width: 74,
   },
   actionText: {
     color: colors.ink,
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: "700",
+    textAlign: "center",
   },
   disabledButton: {
     opacity: 0.38,
-  },
-  footerSpacer: {
-    minHeight: 54,
   },
   dPad: {
     alignSelf: "center",
@@ -159,14 +168,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     width: 42,
   },
-  arrow: {
-    color: colors.ink,
-    fontSize: 25,
-    fontWeight: "800",
-    lineHeight: 28,
-    textAlign: "center",
-  },
   pressed: {
     opacity: 0.72,
   },
-});
+  });
+}

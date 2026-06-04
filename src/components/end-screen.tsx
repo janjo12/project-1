@@ -2,7 +2,7 @@ import { StyleSheet, Text, View } from "react-native";
 
 import { AppButton } from "@/components/app-button";
 import { ScreenShell } from "@/components/screen-shell";
-import { colors } from "@/components/theme";
+import { type ThemeColors, useThemeColors } from "@/components/theme";
 
 type EndScreenProps = {
   score: string;
@@ -10,6 +10,9 @@ type EndScreenProps = {
 };
 
 export function EndScreen({ score, onReturnToTitle }: EndScreenProps) {
+  const colors = useThemeColors();
+  const styles = createStyles(colors);
+
   return (
     <ScreenShell>
       <View style={styles.container}>
@@ -26,7 +29,8 @@ export function EndScreen({ score, onReturnToTitle }: EndScreenProps) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: "space-between",
@@ -49,4 +53,5 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     textAlign: "center",
   },
-});
+  });
+}

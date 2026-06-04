@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from "react-native";
 import { AppButton } from "@/components/app-button";
 import { ScreenShell } from "@/components/screen-shell";
 import { SettingsForm } from "@/components/settings-form";
-import { colors } from "@/components/theme";
+import { type ThemeColors, useThemeColors } from "@/components/theme";
 import type { GameSettings } from "@/utils/settings-storage";
 
 type StartScreenProps = {
@@ -19,6 +19,9 @@ export function StartScreen({
   onSettingsChange,
   onStartGame,
 }: StartScreenProps) {
+  const colors = useThemeColors();
+  const styles = createStyles(colors);
+
   return (
     <ScreenShell>
       <View style={styles.container}>
@@ -35,7 +38,8 @@ export function StartScreen({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: "space-between",
@@ -47,4 +51,5 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     textAlign: "center",
   },
-});
+  });
+}

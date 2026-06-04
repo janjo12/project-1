@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import * as Haptics from "expo-haptics";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 
 import {
   ActionControls,
@@ -8,12 +9,15 @@ import {
 import { DungeonMapPlaceholder } from "@/components/dungeon-map-placeholder";
 import { type Enemy, GameViewPanel } from "@/components/game-view-panel";
 import { ScreenShell } from "@/components/screen-shell";
-import { colors } from "@/components/theme";
+import { type ThemeColors, useThemeColors } from "@/components/theme";
 import type { Handedness } from "@/utils/settings-storage";
 
 type GameScreenProps = {
   handedness: Handedness;
   onGameOver: (score: number) => void;
+  onQuitToTitle?: () => void;
+  seed: string;
+  vibrationEnabled?: boolean;
 };
 
 const PLAYER_STARTING_HEALTH = 10;
@@ -28,13 +32,54 @@ const ENEMIES: Enemy[] = [
   { emoji: "🧛", hitPoints: 3, name: "Night Count" },
 ];
 
-export function GameScreen({ handedness, onGameOver }: GameScreenProps) {
+function hashSeed(seed: string) {
+  let hash = 2166136261;
+
+  for (let index = 0; index < seed.length; index += 1) {
+    hash ^= seed.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return hash >>> 0;
+}
+
+function createSeededRandom(seed: string) {
+  let state = hashSeed(seed) || 1;
+
+  return () => {
+    state = Math.imul(state, 1664525) + 1013904223;
+    return (state >>> 0) / 4294967296;
+  };
+}
+
+export function getSeededEnemyRoster(seed: string) {
+  const random = createSeededRandom(seed);
+  const roster = [...ENEMIES];
+
+  for (let index = roster.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(random() * (index + 1));
+    [roster[index], roster[swapIndex]] = [roster[swapIndex], roster[index]];
+  }
+
+  return roster;
+}
+
+export function GameScreen({
+  handedness,
+  onGameOver,
+  onQuitToTitle = () => {},
+  seed,
+  vibrationEnabled = true,
+}: GameScreenProps) {
   const isLeftHanded = handedness === "left";
+  const colors = useThemeColors();
+  const styles = createStyles(colors);
+  const enemies = useMemo(() => getSeededEnemyRoster(seed), [seed]);
   const timeoutIds = useRef<ReturnType<typeof setTimeout>[]>([]);
   const defeatedEnemiesRef = useRef(0);
   const [enemyIndex, setEnemyIndex] = useState(0);
   const [defeatedEnemies, setDefeatedEnemies] = useState(0);
-  const [enemyHitPoints, setEnemyHitPoints] = useState(ENEMIES[0].hitPoints);
+  const [enemyHitPoints, setEnemyHitPoints] = useState(enemies[0].hitPoints);
   const [enemyAttackSignal, setEnemyAttackSignal] = useState(0);
   const [enemyDamageSignal, setEnemyDamageSignal] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
@@ -44,7 +89,7 @@ export function GameScreen({ handedness, onGameOver }: GameScreenProps) {
   const [playerHealth, setPlayerHealth] = useState(PLAYER_STARTING_HEALTH);
 
   const hasLost = playerHealth <= 0;
-  const currentEnemy = ENEMIES[enemyIndex];
+  const currentEnemy = enemies[enemyIndex];
 
   useEffect(() => {
     const scheduledTimeoutIds = timeoutIds.current;
@@ -63,12 +108,32 @@ export function GameScreen({ handedness, onGameOver }: GameScreenProps) {
     setIsAnimating(false);
   }
 
+  function confirmQuitToTitle() {
+    Alert.alert("Quit to Title?", "Your current run will be lost.", [
+      { style: "cancel", text: "Cancel" },
+      {
+        onPress: onQuitToTitle,
+        style: "destructive",
+        text: "Quit",
+      },
+    ]);
+  }
+
+  function triggerDamageHaptic() {
+    if (!vibrationEnabled) {
+      return;
+    }
+
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  }
+
   function startEnemyMove(isDefending: boolean) {
     setEnemyAttackSignal((signal) => signal + 1);
 
     if (!isDefending) {
       schedule(250, () => {
         setPlayerDamageSignal((signal) => signal + 1);
+        triggerDamageHaptic();
       });
     }
 
@@ -125,8 +190,9 @@ export function GameScreen({ handedness, onGameOver }: GameScreenProps) {
         const nextDefeatedEnemies = defeatedEnemiesRef.current + 1;
         defeatedEnemiesRef.current = nextDefeatedEnemies;
         setDefeatedEnemies(nextDefeatedEnemies);
-        setEnemyIndex((index) => (index + 1) % ENEMIES.length);
-        setEnemyHitPoints(ENEMIES[(enemyIndex + 1) % ENEMIES.length].hitPoints);
+        const nextEnemyIndex = (enemyIndex + 1) % enemies.length;
+        setEnemyIndex(nextEnemyIndex);
+        setEnemyHitPoints(enemies[nextEnemyIndex].hitPoints);
         finishTurn();
         return;
       }
@@ -138,12 +204,28 @@ export function GameScreen({ handedness, onGameOver }: GameScreenProps) {
   return (
     <ScreenShell compact>
       <View style={styles.container}>
+        <View
+          style={[styles.header, isLeftHanded && styles.headerMirrored]}
+          testID="game-header"
+        >
+          <Pressable
+            accessibilityRole="button"
+            onPress={confirmQuitToTitle}
+            style={({ pressed }) => [
+              styles.quitButton,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={styles.quitButtonText}>Quit to Title</Text>
+          </Pressable>
+        </View>
+
         <GameViewPanel
           enemy={{
             ...currentEnemy,
             hitPoints: enemyHitPoints,
           }}
-          enemyRoster={ENEMIES}
+          enemyRoster={enemies}
           enemyAttackSignal={enemyAttackSignal}
           monsterDamageSignal={enemyDamageSignal}
           playerAttackSignal={playerAttackSignal}
@@ -184,15 +266,28 @@ export function GameScreen({ handedness, onGameOver }: GameScreenProps) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
     gap: 10,
   },
+  header: {
+    flexDirection: "row",
+    justifyContent: "flex-start",
+    minHeight: 46,
+    paddingTop: 18,
+  },
+  headerMirrored: {
+    justifyContent: "flex-end",
+  },
   lowerLayout: {
+    alignItems: "flex-end",
     flex: 1,
     flexDirection: "row",
     gap: 14,
+    justifyContent: "space-between",
+    paddingBottom: 18,
   },
   lowerLayoutMirrored: {
     flexDirection: "row-reverse",
@@ -204,4 +299,23 @@ const styles = StyleSheet.create({
     minHeight: 20,
     textAlign: "center",
   },
-});
+  quitButton: {
+    alignItems: "center",
+    backgroundColor: colors.paperLight,
+    borderColor: colors.ink,
+    borderRadius: 8,
+    borderWidth: 2,
+    justifyContent: "center",
+    minHeight: 36,
+    paddingHorizontal: 10,
+  },
+  quitButtonText: {
+    color: colors.ink,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  pressed: {
+    opacity: 0.72,
+  },
+  });
+}

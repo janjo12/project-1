@@ -1,13 +1,16 @@
 import { PropsWithChildren } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 
-import { colors } from "@/components/theme";
+import { type ThemeColors, useThemeColors } from "@/components/theme";
 
 type ScreenShellProps = PropsWithChildren<{
   compact?: boolean;
 }>;
 
 export function ScreenShell({ children, compact = false }: ScreenShellProps) {
+  const colors = useThemeColors();
+  const styles = createStyles(colors);
+
   return (
     <ScrollView
       contentContainerStyle={[
@@ -23,7 +26,8 @@ export function ScreenShell({ children, compact = false }: ScreenShellProps) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   scrollContent: {
     backgroundColor: colors.paperDark,
     flexGrow: 1,
@@ -34,8 +38,6 @@ const styles = StyleSheet.create({
   },
   phoneFrame: {
     backgroundColor: colors.paper,
-    borderColor: colors.ink,
-    borderWidth: 3,
     flex: 1,
     gap: 24,
     minHeight: 760,
@@ -45,4 +47,5 @@ const styles = StyleSheet.create({
     minHeight: 820,
     padding: 14,
   },
-});
+  });
+}

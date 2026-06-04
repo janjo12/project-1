@@ -1,5 +1,13 @@
-import { useEffect, useRef, useState } from "react";
-import { Animated, StyleSheet, Text } from "react-native";
+import { useEffect, useRef } from "react";
+import { StyleSheet, Text } from "react-native";
+import Animated, {
+  cancelAnimation,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
 
 type CombatantSpriteProps = {
   accessibilityLabel: string;
@@ -16,32 +24,31 @@ export function CombatantSprite({
   damageSignal = 0,
   emoji,
 }: CombatantSpriteProps) {
-  const [attackOffset] = useState(() => new Animated.Value(0));
-  const [bounce] = useState(() => new Animated.Value(0));
-  const [opacity] = useState(() => new Animated.Value(1));
+  const attackOffset = useSharedValue(0);
+  const bounce = useSharedValue(0);
+  const opacity = useSharedValue(1);
   const previousAttackSignal = useRef(attackSignal);
   const previousDamageSignal = useRef(damageSignal);
+  const spriteStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [
+      { translateX: attackOffset.value },
+      { translateY: bounce.value },
+    ],
+  }));
 
   useEffect(() => {
-    const animation = Animated.loop(
-      Animated.sequence([
-        Animated.timing(bounce, {
-          duration: 700,
-          toValue: -10,
-          useNativeDriver: true,
-        }),
-        Animated.timing(bounce, {
-          duration: 700,
-          toValue: 10,
-          useNativeDriver: true,
-        }),
-      ]),
-    );
-
-    animation.start();
+    bounce.set(withRepeat(
+      withSequence(
+        withTiming(-10, { duration: 700 }),
+        withTiming(10, { duration: 700 }),
+      ),
+      -1,
+      false,
+    ));
 
     return () => {
-      animation.stop();
+      cancelAnimation(bounce);
     };
   }, [bounce]);
 
@@ -53,18 +60,11 @@ export function CombatantSprite({
     previousAttackSignal.current = attackSignal;
     const attackDistance = attackDirection === "right" ? 42 : -42;
 
-    Animated.sequence([
-      Animated.timing(attackOffset, {
-        duration: 250,
-        toValue: attackDistance,
-        useNativeDriver: true,
-      }),
-      Animated.timing(attackOffset, {
-        duration: 250,
-        toValue: 0,
-        useNativeDriver: true,
-      }),
-    ]).start();
+    attackOffset.set(0);
+    attackOffset.set(withSequence(
+      withTiming(attackDistance, { duration: 250 }),
+      withTiming(0, { duration: 250 }),
+    ));
   }, [attackDirection, attackOffset, attackSignal]);
 
   useEffect(() => {
@@ -74,40 +74,17 @@ export function CombatantSprite({
 
     previousDamageSignal.current = damageSignal;
 
-    Animated.sequence([
-      Animated.timing(opacity, {
-        duration: 62,
-        toValue: 0,
-        useNativeDriver: true,
-      }),
-      Animated.timing(opacity, {
-        duration: 62,
-        toValue: 1,
-        useNativeDriver: true,
-      }),
-      Animated.timing(opacity, {
-        duration: 62,
-        toValue: 0,
-        useNativeDriver: true,
-      }),
-      Animated.timing(opacity, {
-        duration: 62,
-        toValue: 1,
-        useNativeDriver: true,
-      }),
-    ]).start();
+    opacity.set(1);
+    opacity.set(withSequence(
+      withTiming(0, { duration: 62 }),
+      withTiming(1, { duration: 62 }),
+      withTiming(0, { duration: 62 }),
+      withTiming(1, { duration: 62 }),
+    ));
   }, [damageSignal, opacity]);
 
   return (
-    <Animated.View
-      style={[
-        styles.sprite,
-        {
-          opacity,
-          transform: [{ translateX: attackOffset }, { translateY: bounce }],
-        },
-      ]}
-    >
+    <Animated.View style={[styles.sprite, spriteStyle]}>
       <Text accessibilityLabel={accessibilityLabel} style={styles.emoji}>
         {emoji}
       </Text>

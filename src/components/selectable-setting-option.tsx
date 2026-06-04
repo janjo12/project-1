@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { colors } from "@/components/theme";
+import { type ThemeColors, useThemeColors } from "@/components/theme";
 
 type SelectableSettingOptionProps = {
   isSelected: boolean;
@@ -16,6 +16,8 @@ export function SelectableSettingOption({
   variant,
 }: SelectableSettingOptionProps) {
   const isRadio = variant === "radio";
+  const colors = useThemeColors();
+  const styles = createStyles(colors);
 
   return (
     <Pressable
@@ -46,7 +48,8 @@ export function SelectableSettingOption({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   segment: {
     alignItems: "center",
     flex: 1,
@@ -86,4 +89,5 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     textTransform: "capitalize",
   },
-});
+  });
+}

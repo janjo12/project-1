@@ -21,15 +21,19 @@ describe("settings storage", () => {
 
   it("loads saved settings", async () => {
     await saveGameSettings({
+      appearance: "dark",
       difficulty: "hard",
       handedness: "left",
       seed: "abc123",
+      vibrationEnabled: false,
     });
 
     await expect(loadGameSettings()).resolves.toEqual({
+      appearance: "dark",
       difficulty: "hard",
       handedness: "left",
       seed: "abc123",
+      vibrationEnabled: false,
     });
   });
 
@@ -37,9 +41,11 @@ describe("settings storage", () => {
     await AsyncStorage.setItem(
       "project-1:game-settings",
       JSON.stringify({
+        appearance: "moonlight",
         difficulty: "impossible",
         handedness: "middle",
         seed: 42,
+        vibrationEnabled: "sometimes",
       }),
     );
 

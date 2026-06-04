@@ -6,17 +6,39 @@ import {
   loadGameSettings,
   saveGameSettings,
 } from "@/utils/settings-storage";
+import { generateRandomSeed } from "@/utils/seed";
 
-export function useGameSettings() {
-  const [settings, setSettings] = useState<GameSettings>(DEFAULT_GAME_SETTINGS);
+type UseGameSettingsOptions = {
+  refreshSeedOnLoad?: boolean;
+};
+
+function settingsWithFreshSeed(settings: GameSettings) {
+  return {
+    ...settings,
+    seed: generateRandomSeed(),
+  };
+}
+
+export function useGameSettings({
+  refreshSeedOnLoad = false,
+}: UseGameSettingsOptions = {}) {
+  const [settings, setSettings] = useState<GameSettings>(() =>
+    refreshSeedOnLoad
+      ? settingsWithFreshSeed(DEFAULT_GAME_SETTINGS)
+      : DEFAULT_GAME_SETTINGS,
+  );
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     void loadGameSettings().then((storedSettings) => {
-      setSettings(storedSettings);
+      setSettings(
+        refreshSeedOnLoad
+          ? settingsWithFreshSeed(storedSettings)
+          : storedSettings,
+      );
       setIsLoading(false);
     });
-  }, []);
+  }, [refreshSeedOnLoad]);
 
   async function saveSettings(nextSettings: GameSettings) {
     setSettings(nextSettings);
