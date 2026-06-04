@@ -1,17 +1,23 @@
-import { Text, View, StyleSheet } from "react-native";
+import { router } from "expo-router";
+
+import { StartScreen } from "@/components/start-screen";
+import { useGameSettings } from "@/hooks/use-game-settings";
 
 export default function Index() {
+  const { isLoading, settings, updateSettings, saveSettings } =
+    useGameSettings();
+
+  const handleStartGame = async () => {
+    await saveSettings(settings);
+    router.replace("/game");
+  };
+
   return (
-    <View style={styles.container}>
-      <Text>Edit src/app/index.tsx to edit this screen.</Text>
-    </View>
+    <StartScreen
+      isLoading={isLoading}
+      settings={settings}
+      onSettingsChange={updateSettings}
+      onStartGame={handleStartGame}
+    />
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-});
