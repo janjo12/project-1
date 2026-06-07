@@ -26,7 +26,7 @@ function createStyles(colors: ThemeColors) {
   },
   label: {
     color: colors.ink,
-    fontSize: 30,
+    fontSize: 26,
     fontWeight: "500",
   },
   });

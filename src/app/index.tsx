@@ -19,11 +19,16 @@ export default function Index() {
     router.replace("/game");
   };
 
+  const handleOpenSettings = () => {
+    router.push("/settings");
+  };
+
   return (
     <ThemeProvider appearance={settings.appearance}>
       <StartScreen
         isLoading={isLoading}
         settings={settings}
+        onOpenSettings={handleOpenSettings}
         onSettingsChange={updateSettings}
         onStartGame={handleStartGame}
       />

@@ -26,7 +26,13 @@ export function AppButton({
         pressed && styles.pressed,
       ]}
     >
-      <Text style={[styles.label, variant === "secondary" && styles.smallLabel]}>
+      <Text
+        style={[
+          styles.label,
+          variant === "primary" && styles.primaryLabel,
+          variant === "secondary" && styles.smallLabel,
+        ]}
+      >
         {label}
       </Text>
     </Pressable>
@@ -37,7 +43,7 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   button: {
     alignItems: "center",
-    backgroundColor: colors.paperLight,
+    backgroundColor: colors.ink,
     borderColor: colors.ink,
     borderRadius: 28,
     borderWidth: 3,
@@ -58,6 +64,9 @@ function createStyles(colors: ThemeColors) {
     fontSize: 30,
     fontWeight: "600",
     textAlign: "center",
+  },
+  primaryLabel: {
+    color: colors.paper,
   },
   smallLabel: {
     fontSize: 22,

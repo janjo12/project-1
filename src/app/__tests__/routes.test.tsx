@@ -4,12 +4,14 @@ import { Alert } from "react-native";
 import GameRoute from "@/app/game";
 import GameOverRoute from "@/app/game-over";
 import Index from "@/app/index";
+import SettingsRoute from "@/app/settings";
 import {
   DEFAULT_GAME_SETTINGS,
   GameSettings,
 } from "@/utils/settings-storage";
 
 const mockReplace = jest.fn();
+const mockPush = jest.fn();
 const mockSaveSettings = jest.fn();
 const mockUpdateSettings = jest.fn();
 
@@ -19,6 +21,7 @@ let mockedSearchParams: Record<string, string | undefined> = {};
 
 jest.mock("expo-router", () => ({
   router: {
+    push: (...args: unknown[]) => mockPush(...args),
     replace: (...args: unknown[]) => mockReplace(...args),
   },
   useLocalSearchParams: () => mockedSearchParams,
@@ -38,6 +41,7 @@ describe("routes", () => {
 
   beforeEach(() => {
     alertSpy = jest.spyOn(Alert, "alert").mockImplementation();
+    mockPush.mockClear();
     mockReplace.mockClear();
     mockSaveSettings.mockClear();
     mockUpdateSettings.mockClear();
@@ -80,12 +84,48 @@ describe("routes", () => {
     });
   });
 
+  it("pushes the settings route from the title screen", () => {
+    const screen = render(<Index />);
+
+    fireEvent.press(screen.getByRole("button", { name: "Settings" }));
+
+    expect(mockPush).toHaveBeenCalledWith("/settings");
+  });
+
+  it("updates preferences from the settings route", () => {
+    mockedSettings = {
+      ...DEFAULT_GAME_SETTINGS,
+      appearance: "dark",
+      vibrationEnabled: true,
+    };
+    const screen = render(<SettingsRoute />);
+
+    fireEvent(
+      screen.getByRole("switch", { name: "Dark Mode" }),
+      "valueChange",
+      false,
+    );
+    fireEvent(
+      screen.getByRole("switch", { name: "Vibration" }),
+      "valueChange",
+      false,
+    );
+    fireEvent.press(screen.getByRole("button", { name: "Back to Title" }));
+
+    expect(mockUpdateSettings).toHaveBeenCalledWith({ appearance: "light" });
+    expect(mockUpdateSettings).toHaveBeenCalledWith({
+      vibrationEnabled: false,
+    });
+    expect(mockReplace).toHaveBeenCalledWith("/");
+  });
+
   it("replaces the game route with game over when the player dies", () => {
     jest.useFakeTimers();
     const screen = render(<GameRoute />);
 
     for (let turn = 0; turn < 14; turn += 1) {
-      fireEvent.press(screen.getByRole("button", { name: "Attack" }));
+      fireEvent.press(screen.getByTestId("attack-action-button"));
+      fireEvent.press(screen.getByTestId("action-confirmation-button"));
       act(() => {
         jest.advanceTimersByTime(1000);
       });

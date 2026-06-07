@@ -5,12 +5,28 @@ import { Alert, StyleSheet } from "react-native";
 import { EndScreen } from "@/components/end-screen";
 import { GameScreen, getSeededEnemyRoster } from "@/components/game-screen";
 import { GameViewPanel } from "@/components/game-view-panel";
+import { SettingsScreen } from "@/components/settings-screen";
 import { SettingsForm } from "@/components/settings-form";
 import { StartScreen } from "@/components/start-screen";
 import { colors } from "@/components/theme";
 import { DEFAULT_GAME_SETTINGS } from "@/utils/settings-storage";
 
 const TEST_SEED = "test-88";
+const TURN_DURATION = 4000;
+
+function getBarFillWidth(screen: ReturnType<typeof render>, testID: string) {
+  return parseFloat(
+    StyleSheet.flatten(screen.getByTestId(`${testID}-fill`).props.style).width,
+  );
+}
+
+function confirmAndResolveTurn(screen: ReturnType<typeof render>) {
+  fireEvent.press(screen.getByTestId("action-confirmation-button"));
+
+  act(() => {
+    jest.advanceTimersByTime(1000);
+  });
+}
 
 describe("game screens", () => {
   let alertSpy: jest.SpyInstance;
@@ -27,38 +43,28 @@ describe("game screens", () => {
   it("starts from the title screen with editable settings", () => {
     const handleSettingsChange = jest.fn();
     const handleStartGame = jest.fn();
+    const handleOpenSettings = jest.fn();
 
     const screen = render(
       <StartScreen
         isLoading={false}
         settings={DEFAULT_GAME_SETTINGS}
+        onOpenSettings={handleOpenSettings}
         onSettingsChange={handleSettingsChange}
         onStartGame={handleStartGame}
       />,
     );
 
     fireEvent.changeText(screen.getByLabelText("Seed"), "starter-seed");
-    fireEvent(
-      screen.getByRole("switch", { name: "Dark Mode" }),
-      "valueChange",
-      false,
-    );
-    fireEvent(
-      screen.getByRole("switch", { name: "Vibration" }),
-      "valueChange",
-      false,
-    );
     fireEvent.press(screen.getByText("hard"));
     fireEvent.press(screen.getByText("left"));
+    fireEvent.press(screen.getByRole("button", { name: "Settings" }));
     fireEvent.press(screen.getByRole("button", { name: "Start" }));
 
     expect(handleSettingsChange).toHaveBeenCalledWith({ seed: "starter-seed" });
-    expect(handleSettingsChange).toHaveBeenCalledWith({ appearance: "light" });
-    expect(handleSettingsChange).toHaveBeenCalledWith({
-      vibrationEnabled: false,
-    });
     expect(handleSettingsChange).toHaveBeenCalledWith({ difficulty: "hard" });
     expect(handleSettingsChange).toHaveBeenCalledWith({ handedness: "left" });
+    expect(handleOpenSettings).toHaveBeenCalledTimes(1);
     expect(handleStartGame).toHaveBeenCalledTimes(1);
   });
 
@@ -88,10 +94,6 @@ describe("game screens", () => {
       StyleSheet.flatten(getByTestId("game-lower-layout").props.style)
         .alignItems,
     ).toBe("flex-end");
-    expect(
-      StyleSheet.flatten(getByTestId("game-lower-layout").props.style)
-        .paddingBottom,
-    ).toBeGreaterThan(0);
     expect(getByTestId("dungeon-map-placeholder").children).toEqual([]);
     expect(
       getByTestId("action-button-cluster").children.map(
@@ -112,10 +114,16 @@ describe("game screens", () => {
     ).toBe(
       StyleSheet.flatten(getByTestId("attack-action-button").props.style).width,
     );
-    expect(getByTestId("move-up-icon").props.name).toBe("arrow-up");
-    expect(getByTestId("move-left-icon").props.name).toBe("arrow-back");
-    expect(getByTestId("move-right-icon").props.name).toBe("arrow-forward");
-    expect(getByTestId("move-down-icon").props.name).toBe("arrow-down");
+    expect(
+      StyleSheet.flatten(
+        getByTestId("direction-controls", {
+          includeHiddenElements: true,
+        }).props.style,
+      ).opacity,
+    ).toBe(0);
+    expect(getByTestId("action-confirmation-button")).toHaveTextContent(
+      "Select An Action",
+    );
 
     fireEvent.press(getByRole("button", { name: "Quit to Title" }));
 
@@ -167,26 +175,20 @@ describe("game screens", () => {
     expect(differentRoster).not.toEqual(firstRoster);
   });
 
-  it("shows emoji combatants, enemy roster, and vector status icons", () => {
+  it("shows emoji combatants, enemy roster, and vector status bars", () => {
     const screen = render(<GameViewPanel />);
 
-    expect(screen.getAllByTestId("player-health-icon")).toHaveLength(10);
-    expect(screen.getAllByTestId("player-energy-icon")).toHaveLength(6);
-    expect(screen.getAllByTestId("enemy-health-icon")).toHaveLength(3);
-    expect(screen.getAllByTestId("player-health-icon")[0].props.color).toBe(
+    expect(screen.getByTestId("enemy-health-bar-icon").props.color).toBe(
       colors.health,
     );
-    expect(screen.getAllByTestId("enemy-health-icon")[0].props.color).toBe(
-      colors.health,
+    expect(getBarFillWidth(screen, "enemy-health-bar")).toBe(100);
+    expect(screen.getByLabelText("Glitch Imp")).toHaveTextContent(
+      "\uD83D\uDC7E",
     );
-    expect(screen.getAllByTestId("player-energy-icon")[0].props.color).toBe(
-      colors.energy,
-    );
-    expect(screen.getByLabelText("Glitch Imp")).toHaveTextContent("👾");
-    expect(screen.getByLabelText("Player warrior")).toHaveTextContent("🤺");
+    expect(screen.getByLabelText("Player warrior")).toBeOnTheScreen();
   });
 
-  it("resolves an attack by damaging the enemy and then the player", () => {
+  it("selects an attack, confirms it early, and resolves player then enemy damage", () => {
     jest.useFakeTimers();
 
     const screen = render(
@@ -197,7 +199,14 @@ describe("game screens", () => {
       />,
     );
 
-    fireEvent.press(screen.getByRole("button", { name: "Attack" }));
+    fireEvent.press(screen.getByTestId("attack-action-button"));
+
+    expect(screen.getByLabelText("Turn status")).toHaveTextContent(
+      "Attack selected | Defeated 0",
+    );
+    expect(screen.getByText("Strike now. The enemy answers back.")).toBeOnTheScreen();
+
+    fireEvent.press(screen.getByTestId("action-confirmation-button"));
 
     expect(screen.getByLabelText("Turn status")).toHaveTextContent(
       "Resolving turn...",
@@ -207,8 +216,10 @@ describe("game screens", () => {
       jest.advanceTimersByTime(1000);
     });
 
-    expect(screen.getAllByTestId("enemy-health-icon")).toHaveLength(2);
-    expect(screen.getAllByTestId("player-health-icon")).toHaveLength(9);
+    expect(getBarFillWidth(screen, "enemy-health-bar")).toBeCloseTo(66.67, 1);
+    expect(getBarFillWidth(screen, "player-health-bar")).toBe(90);
+    expect(screen.getByTestId("enemy-health-loss")).toHaveTextContent("- 1");
+    expect(screen.getByTestId("player-health-loss")).toHaveTextContent("- 1");
     expect(Haptics.impactAsync).toHaveBeenCalledWith(
       Haptics.ImpactFeedbackStyle.Medium,
     );
@@ -231,11 +242,8 @@ describe("game screens", () => {
       />,
     );
 
-    fireEvent.press(screen.getByRole("button", { name: "Attack" }));
-
-    act(() => {
-      jest.advanceTimersByTime(1000);
-    });
+    fireEvent.press(screen.getByTestId("attack-action-button"));
+    confirmAndResolveTurn(screen);
 
     expect(Haptics.impactAsync).not.toHaveBeenCalled();
 
@@ -253,14 +261,36 @@ describe("game screens", () => {
       />,
     );
 
-    fireEvent.press(screen.getByRole("button", { name: "Defend" }));
+    fireEvent.press(screen.getByTestId("defend-action-button"));
+    confirmAndResolveTurn(screen);
+
+    expect(getBarFillWidth(screen, "enemy-health-bar")).toBe(100);
+    expect(getBarFillWidth(screen, "player-health-bar")).toBe(100);
+
+    jest.useRealTimers();
+  });
+
+  it("defaults to defend when the turn timer runs out with no selected action", () => {
+    jest.useFakeTimers();
+
+    const screen = render(
+      <GameScreen
+        handedness="right"
+        seed={TEST_SEED}
+        onGameOver={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("action-confirmation-button")).toHaveTextContent(
+      "Select An Action",
+    );
 
     act(() => {
-      jest.advanceTimersByTime(650);
+      jest.advanceTimersByTime(TURN_DURATION + 650);
     });
 
-    expect(screen.getAllByTestId("enemy-health-icon")).toHaveLength(3);
-    expect(screen.getAllByTestId("player-health-icon")).toHaveLength(10);
+    expect(getBarFillWidth(screen, "enemy-health-bar")).toBe(100);
+    expect(getBarFillWidth(screen, "player-health-bar")).toBe(100);
 
     jest.useRealTimers();
   });
@@ -276,15 +306,13 @@ describe("game screens", () => {
       />,
     );
 
-    fireEvent.press(screen.getByRole("button", { name: "Special" }));
+    fireEvent.press(screen.getByTestId("special-action-button"));
+    confirmAndResolveTurn(screen);
 
-    act(() => {
-      jest.advanceTimersByTime(1000);
-    });
-
-    expect(screen.getAllByTestId("enemy-health-icon")).toHaveLength(1);
-    expect(screen.getAllByTestId("player-energy-icon")).toHaveLength(5);
-    expect(screen.getAllByTestId("player-health-icon")).toHaveLength(9);
+    expect(getBarFillWidth(screen, "enemy-health-bar")).toBeCloseTo(33.33, 1);
+    expect(getBarFillWidth(screen, "player-energy-bar")).toBeCloseTo(83.33, 1);
+    expect(getBarFillWidth(screen, "player-health-bar")).toBe(90);
+    expect(screen.getByTestId("player-energy-loss")).toHaveTextContent("- 1");
 
     jest.useRealTimers();
   });
@@ -307,19 +335,15 @@ describe("game screens", () => {
     expect(screen.getByLabelText("Tiny Dragon roster enemy")).toBeOnTheScreen();
     expect(screen.getByLabelText("Night Count roster enemy")).toBeOnTheScreen();
 
-    fireEvent.press(screen.getByRole("button", { name: "Special" }));
-    act(() => {
-      jest.advanceTimersByTime(1000);
-    });
-    fireEvent.press(screen.getByRole("button", { name: "Attack" }));
-    act(() => {
-      jest.advanceTimersByTime(500);
-    });
+    fireEvent.press(screen.getByTestId("special-action-button"));
+    confirmAndResolveTurn(screen);
+    fireEvent.press(screen.getByTestId("attack-action-button"));
+    confirmAndResolveTurn(screen);
 
     expect(screen.getByLabelText("Turn status")).toHaveTextContent(
       "Facing Crypt Stumbler | Defeated 1",
     );
-    expect(screen.getAllByTestId("enemy-health-icon")).toHaveLength(3);
+    expect(getBarFillWidth(screen, "enemy-health-bar")).toBe(100);
 
     jest.useRealTimers();
   });
@@ -336,20 +360,16 @@ describe("game screens", () => {
     );
 
     for (let enemyNumber = 0; enemyNumber < 4; enemyNumber += 1) {
-      fireEvent.press(screen.getByRole("button", { name: "Special" }));
-      act(() => {
-        jest.advanceTimersByTime(1000);
-      });
-      fireEvent.press(screen.getByRole("button", { name: "Attack" }));
-      act(() => {
-        jest.advanceTimersByTime(500);
-      });
+      fireEvent.press(screen.getByTestId("special-action-button"));
+      confirmAndResolveTurn(screen);
+      fireEvent.press(screen.getByTestId("attack-action-button"));
+      confirmAndResolveTurn(screen);
     }
 
     expect(screen.getByLabelText("Turn status")).toHaveTextContent(
       "Facing Glitch Imp | Defeated 4",
     );
-    expect(screen.getAllByTestId("enemy-health-icon")).toHaveLength(3);
+    expect(getBarFillWidth(screen, "enemy-health-bar")).toBe(100);
 
     jest.useRealTimers();
   });
@@ -367,10 +387,8 @@ describe("game screens", () => {
     );
 
     for (let turn = 0; turn < 14; turn += 1) {
-      fireEvent.press(screen.getByRole("button", { name: "Attack" }));
-      act(() => {
-        jest.advanceTimersByTime(1000);
-      });
+      fireEvent.press(screen.getByTestId("attack-action-button"));
+      confirmAndResolveTurn(screen);
     }
     act(() => {
       jest.advanceTimersByTime(0);
@@ -398,7 +416,7 @@ describe("game screens", () => {
 });
 
 describe("SettingsForm", () => {
-  it("marks the selected settings", () => {
+  it("marks the selected game setup settings", () => {
     const screen = render(
       <SettingsForm
         settings={{
@@ -421,16 +439,51 @@ describe("SettingsForm", () => {
     expect(screen.getByLabelText("Seed").props.placeholderTextColor).toBe(
       colors.fadedInk,
     );
+    expect(screen.getByDisplayValue("saved")).toBeOnTheScreen();
+  });
+});
+
+describe("SettingsScreen", () => {
+  it("updates appearance and vibration preferences", () => {
+    const handleSettingsChange = jest.fn();
+    const handleReturnToTitle = jest.fn();
+    const screen = render(
+      <SettingsScreen
+        settings={{
+          appearance: "dark",
+          difficulty: "easy",
+          handedness: "left",
+          seed: "saved",
+          vibrationEnabled: true,
+        }}
+        onReturnToTitle={handleReturnToTitle}
+        onSettingsChange={handleSettingsChange}
+      />,
+    );
+
     expect(screen.getByRole("switch", { name: "Dark Mode" }).props.value).toBe(
       true,
     );
     expect(screen.getByRole("switch", { name: "Vibration" }).props.value).toBe(
       true,
     );
-    expect(
-      StyleSheet.flatten(screen.getByTestId("preference-toggle-row").props.style)
-        .flexDirection,
-    ).toBe("row");
-    expect(screen.getByDisplayValue("saved")).toBeOnTheScreen();
+
+    fireEvent(
+      screen.getByRole("switch", { name: "Dark Mode" }),
+      "valueChange",
+      false,
+    );
+    fireEvent(
+      screen.getByRole("switch", { name: "Vibration" }),
+      "valueChange",
+      false,
+    );
+    fireEvent.press(screen.getByRole("button", { name: "Back to Title" }));
+
+    expect(handleSettingsChange).toHaveBeenCalledWith({ appearance: "light" });
+    expect(handleSettingsChange).toHaveBeenCalledWith({
+      vibrationEnabled: false,
+    });
+    expect(handleReturnToTitle).toHaveBeenCalledTimes(1);
   });
 });
