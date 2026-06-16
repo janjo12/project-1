@@ -23,6 +23,7 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.85.3",
+    "react-native-game-engine": "^1.2.0",
     "react-native-gesture-handler": "~2.31.1",
     "react-native-reanimated": "4.3.1",
     "react-native-safe-area-context": "~5.7.0",
@@ -48,8 +49,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "test": "jest",
-    "test:watch": "jest --watchAll"
+    "test": "jest --runInBand --runTestsByPath __tests__/dungeon-map.test.ts __tests__/game-screen.test.tsx __tests__/routes.test.tsx __tests__/seed.test.ts __tests__/settings-storage.test.ts",
+    "test:watch": "jest --runInBand --watchAll --runTestsByPath __tests__/dungeon-map.test.ts __tests__/game-screen.test.tsx __tests__/routes.test.tsx __tests__/seed.test.ts __tests__/settings-storage.test.ts"
   },
   "private": true
 }

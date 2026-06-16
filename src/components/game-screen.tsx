@@ -1,6 +1,20 @@
 import * as Haptics from "expo-haptics";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type Dispatch,
+  type RefObject,
+  type SetStateAction,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  GameEngine,
+  type GameEngineSystem,
+  type GameEngineUpdateEventOptionType,
+} from "react-native-game-engine";
 
 import {
   ActionControls,
@@ -8,16 +22,36 @@ import {
   type PlayerAction,
 } from "@/components/action-controls";
 import { DungeonMapPlaceholder } from "@/components/dungeon-map-placeholder";
-import {
-  type Enemy,
-  GameViewPanel,
-  ResourceBar,
-} from "@/components/game-view-panel";
+import { GameViewPanel, ResourceBar } from "@/components/game-view-panel";
 import { ScreenShell } from "@/components/screen-shell";
 import { type ThemeColors, useThemeColors } from "@/components/theme";
-import type { Handedness } from "@/utils/settings-storage";
+import {
+  advanceAnimationFrame,
+  COMBAT,
+  createCombatAnimationFrame,
+  getSeededEnemyRoster,
+  ITEMS,
+  PLAYER,
+  WEREWOLF,
+  type CombatAnimationFrame,
+  type Enemy,
+} from "@/entities";
+import {
+  createSeededDungeonMap,
+  getConnectedRoomId,
+  getLockedDirections,
+  getRoom,
+  getRoomEnemyIndex,
+  getRoomItemId,
+  unlockDoor,
+  type Direction,
+  type DungeonMap,
+  type ItemId,
+} from "@/utils/dungeon-map";
+import type { Difficulty, Handedness } from "@/utils/settings-storage";
 
 type GameScreenProps = {
+  difficulty?: Difficulty;
   handedness: Handedness;
   onGameOver: (score: number) => void;
   onQuitToTitle?: () => void;
@@ -26,58 +60,235 @@ type GameScreenProps = {
 };
 
 type UseGameRunOptions = {
+  difficulty: Difficulty;
   onGameOver: (score: number) => void;
   seed: string;
   vibrationEnabled: boolean;
 };
 
-const PLAYER_STARTING_HEALTH = 10;
-const PLAYER_STARTING_ENERGY = 6;
-const ATTACK_DAMAGE = 1;
-const ENEMY_DAMAGE = 1;
+const PLAYER_MAX_HEALTH = PLAYER.maxHealth;
+const PLAYER_MAX_ENERGY = PLAYER.maxEnergy;
 const TURN_DURATION = 4000;
-const TURN_TIMER_TICK = 100;
+const GAME_LOOP_TICK = 100;
 
-const ENEMIES: Enemy[] = [
-  { emoji: "\uD83D\uDC7E", hitPoints: 3, name: "Glitch Imp" },
-  { emoji: "\uD83E\uDDDF", hitPoints: 3, name: "Crypt Stumbler" },
-  { emoji: "\uD83D\uDC09", hitPoints: 3, name: "Tiny Dragon" },
-  { emoji: "\uD83E\uDDDB", hitPoints: 3, name: "Night Count" },
-];
+type GameLoopEntity = {
+  elapsed: number;
+  expired: boolean;
+  isTurnClockActive: () => boolean;
+  onExpire: () => void;
+  onFrame: (delta: number, turnTimeRemaining?: number) => void;
+};
 
-function hashSeed(seed: string) {
-  let hash = 2166136261;
+type GameLoopEntities = {
+  gameLoop: GameLoopEntity;
+};
 
-  for (let index = 0; index < seed.length; index += 1) {
-    hash ^= seed.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
+class GameLoopTimer {
+  private currentTime = 0;
+  private intervalId: ReturnType<typeof setInterval> | null = null;
+  private subscribers: ((time: number) => void)[] = [];
+
+  start() {
+    if (this.intervalId) {
+      return;
+    }
+
+    this.intervalId = setInterval(() => {
+      this.currentTime += GAME_LOOP_TICK;
+      this.subscribers.forEach((subscriber) => subscriber(this.currentTime));
+    }, GAME_LOOP_TICK);
   }
 
-  return hash >>> 0;
+  stop() {
+    if (!this.intervalId) {
+      return;
+    }
+
+    clearInterval(this.intervalId);
+    this.intervalId = null;
+  }
+
+  subscribe(callback: (time: number) => void) {
+    if (!this.subscribers.includes(callback)) {
+      this.subscribers.push(callback);
+    }
+  }
+
+  unsubscribe(callback: (time: number) => void) {
+    this.subscribers = this.subscribers.filter(
+      (subscriber) => subscriber !== callback,
+    );
+  }
 }
 
-function createSeededRandom(seed: string) {
-  let state = hashSeed(seed) || 1;
+const runGameLoop: GameEngineSystem = (
+  entities: GameLoopEntities,
+  { time }: GameEngineUpdateEventOptionType,
+) => {
+  const loop = entities.gameLoop;
 
-  return () => {
-    state = Math.imul(state, 1664525) + 1013904223;
-    return (state >>> 0) / 4294967296;
+  if (!loop) {
+    return entities;
+  }
+
+  const delta = Math.max(0, time.delta || GAME_LOOP_TICK);
+  let turnTimeRemaining: number | undefined;
+  let didExpire = false;
+
+  if (loop.isTurnClockActive() && !loop.expired) {
+    loop.elapsed = Math.min(TURN_DURATION, loop.elapsed + delta);
+    turnTimeRemaining = TURN_DURATION - loop.elapsed;
+
+    if (loop.elapsed >= TURN_DURATION) {
+      loop.expired = true;
+      didExpire = true;
+      turnTimeRemaining = 0;
+    }
+  }
+
+  loop.onFrame(delta, turnTimeRemaining);
+
+  if (didExpire) {
+    loop.onExpire();
+  }
+
+  return entities;
+};
+
+function restartAnimations(
+  setFrame: Dispatch<SetStateAction<CombatAnimationFrame>>,
+  animationKeys: (keyof Omit<CombatAnimationFrame, "bounceElapsed">)[],
+) {
+  setFrame((frame) => {
+    const nextFrame = { ...frame };
+
+    animationKeys.forEach((animationKey) => {
+      nextFrame[animationKey] = 0;
+    });
+
+    return nextFrame;
+  });
+}
+
+function createLevelMap(seed: string, level: number, enemyCount: number) {
+  return createSeededDungeonMap(seed, level, enemyCount);
+}
+
+function markRoomCleared(map: DungeonMap, roomId: string): DungeonMap {
+  return setRoomContents(map, roomId, "empty");
+}
+
+function setRoomContents(
+  map: DungeonMap,
+  roomId: string,
+  contents: DungeonMap["rooms"][number][number]["contents"],
+): DungeonMap {
+  return {
+    ...map,
+    rooms: map.rooms.map((row) =>
+      row.map((room) =>
+        room.id === roomId
+          ? {
+              ...room,
+              contents,
+            }
+          : room,
+      ),
+    ),
   };
 }
 
-export function getSeededEnemyRoster(seed: string) {
-  const random = createSeededRandom(seed);
-  const roster = [...ENEMIES];
+function getDisabledDirections({
+  dungeonMap,
+  isResolving,
+  roomId,
+}: {
+  dungeonMap: DungeonMap;
+  isResolving: boolean;
+  roomId: string;
+}) {
+  const directions: Direction[] = ["north", "east", "south", "west"];
 
-  for (let index = roster.length - 1; index > 0; index -= 1) {
-    const swapIndex = Math.floor(random() * (index + 1));
-    [roster[index], roster[swapIndex]] = [roster[swapIndex], roster[index]];
+  if (isResolving) {
+    return directions;
   }
 
-  return roster;
+  return directions.filter(
+    (direction) => !getConnectedRoomId(dungeonMap, roomId, direction),
+  );
+}
+
+function getRoomEnemyHitPoints(
+  map: DungeonMap,
+  roomId: string,
+  enemies: Enemy[],
+) {
+  const room = getRoom(map, roomId);
+  const enemyIndex = getRoomEnemyIndex(room);
+
+  if (enemyIndex === null) {
+    return 0;
+  }
+
+  return enemies[enemyIndex % enemies.length].hitPoints;
+}
+
+function canUseInventoryItem({
+  currentRoomId,
+  dungeonMap,
+  hasWerewolfInRoom,
+  inventoryItem,
+  playerEnergy,
+  playerHealth,
+}: {
+  currentRoomId: string;
+  dungeonMap: DungeonMap;
+  hasWerewolfInRoom: boolean;
+  inventoryItem: ItemId | null;
+  playerEnergy: number;
+  playerHealth: number;
+}) {
+  if (!inventoryItem) {
+    return false;
+  }
+
+  if (inventoryItem === "health-potion") {
+    return playerHealth < PLAYER_MAX_HEALTH;
+  }
+
+  if (inventoryItem === "energy-meal") {
+    return playerEnergy < PLAYER_MAX_ENERGY;
+  }
+
+  if (inventoryItem === "key") {
+    return getLockedDirections(dungeonMap, currentRoomId).length > 0;
+  }
+
+  return hasWerewolfInRoom;
+}
+
+function resetRoomFeedback({
+  setEnemyHealthLossAmount,
+  setPlayerEnergyLossAmount,
+  setPlayerHealthLossAmount,
+  setSelectedAction,
+  selectedActionRef,
+}: {
+  selectedActionRef: RefObject<PlayerAction | null>;
+  setEnemyHealthLossAmount: Dispatch<SetStateAction<number>>;
+  setPlayerEnergyLossAmount: Dispatch<SetStateAction<number>>;
+  setPlayerHealthLossAmount: Dispatch<SetStateAction<number>>;
+  setSelectedAction: Dispatch<SetStateAction<PlayerAction | null>>;
+}) {
+  setEnemyHealthLossAmount(0);
+  setPlayerEnergyLossAmount(0);
+  setPlayerHealthLossAmount(0);
+  selectedActionRef.current = null;
+  setSelectedAction(null);
 }
 
 export function GameScreen({
+  difficulty = "normal",
   handedness,
   onGameOver,
   onQuitToTitle = () => {},
@@ -87,11 +298,28 @@ export function GameScreen({
   const isLeftHanded = handedness === "left";
   const colors = useThemeColors();
   const styles = createStyles(colors);
-  const game = useGameRun({ onGameOver, seed, vibrationEnabled });
+  const game = useGameRun({ difficulty, onGameOver, seed, vibrationEnabled });
   const disabledActions = getDisabledActions({
     hasLost: game.hasLost,
+    hasRoomEnemy: game.hasRoomEnemy,
     playerEnergy: game.playerEnergy,
   });
+  const gameLoopEntities = useMemo(
+    () => ({
+      gameLoop: {
+        elapsed: 0,
+        expired: false,
+        isTurnClockActive: game.isTurnClockActive,
+        onExpire: game.expireTurn,
+        onFrame: game.updateGameFrame,
+      },
+    }),
+    [
+      game.expireTurn,
+      game.isTurnClockActive,
+      game.updateGameFrame,
+    ],
+  );
 
   function confirmQuitToTitle() {
     Alert.alert("Quit to Title?", "Your current run will be lost.", [
@@ -107,6 +335,16 @@ export function GameScreen({
   return (
     <ScreenShell compact>
       <View style={styles.container}>
+        <GameEngine
+          key={game.turnNumber}
+          entities={gameLoopEntities}
+          renderer={() => null}
+          running={game.isGameLoopRunning()}
+          style={styles.engineLoop}
+          systems={[runGameLoop]}
+          timer={new GameLoopTimer()}
+        />
+
         <View
           style={[styles.header, isLeftHanded && styles.headerMirrored]}
           testID="game-header"
@@ -124,22 +362,16 @@ export function GameScreen({
         </View>
 
         <GameViewPanel
+          animationFrame={game.animationFrame}
           enemy={{
             ...game.currentEnemy,
             hitPoints: game.enemyHitPoints,
           }}
           enemyHealthLossAmount={game.enemyHealthLossAmount}
-          enemyHealthLossSignal={game.enemyDamageSignal}
           enemyMaxHitPoints={game.currentEnemy.hitPoints}
-          enemyRoster={game.enemies}
-          enemyAttackSignal={game.enemyAttackSignal}
-          monsterDamageSignal={game.enemyDamageSignal}
-          playerAttackSignal={game.playerAttackSignal}
-          playerDamageSignal={game.playerDamageSignal}
+          enemyRoster={game.enemyRoster}
           playerEnergyLossAmount={game.playerEnergyLossAmount}
-          playerEnergyLossSignal={game.playerEnergyLossSignal}
           playerHealthLossAmount={game.playerHealthLossAmount}
-          playerHealthLossSignal={game.playerDamageSignal}
         />
 
         <View style={styles.playerBars}>
@@ -148,7 +380,8 @@ export function GameScreen({
             color={colors.health}
             current={game.playerHealth}
             icon="heart"
-            max={PLAYER_STARTING_HEALTH}
+            max={PLAYER_MAX_HEALTH}
+            panelPosition="first"
             testID="player-health-bar"
           />
           <ResourceBar
@@ -156,12 +389,22 @@ export function GameScreen({
             color={colors.energy}
             current={game.playerEnergy}
             icon="bolt"
-            max={PLAYER_STARTING_ENERGY}
+            max={PLAYER_MAX_ENERGY}
+            panelPosition={game.hasTurnTimer ? "middle" : "last"}
             testID="player-energy-bar"
           />
+          {game.hasTurnTimer ? (
+            <ResourceBar
+              accessibilityLabel="Turn timer"
+              color="#a855f7"
+              current={game.turnTimeRemaining}
+              icon="hourglass-half"
+              max={TURN_DURATION}
+              panelPosition="last"
+              testID="turn-timer"
+            />
+          ) : null}
         </View>
-
-        <TurnTimerBar progress={game.turnProgress} />
 
         <Text accessibilityLabel="Turn status" style={styles.turnStatus}>
           {game.turnStatus}
@@ -174,13 +417,24 @@ export function GameScreen({
           ]}
           testID="game-lower-layout"
         >
-          <DungeonMapPlaceholder />
+          <DungeonMapPlaceholder
+            currentRoomId={game.currentRoomId}
+            map={game.dungeonMap}
+            werewolfRoomId={game.werewolfRoomId ?? undefined}
+          />
           <ActionControls
             disabledActions={disabledActions}
+            disabledDirections={game.disabledDirections}
+            floorItemLabel={
+              game.currentRoomItem ? ITEMS[game.currentRoomItem].label : null
+            }
+            isItemDisabled={game.isItemDisabled}
             isBusy={game.isResolving}
+            itemLabel={game.inventoryItem ? ITEMS[game.inventoryItem].label : null}
             onAction={game.selectAction}
-            onConfirmAction={game.confirmSelectedAction}
-            selectedAction={game.selectedAction}
+            onMove={game.moveToRoom}
+            onPickupItem={game.pickupItem}
+            onUseItem={game.useItem}
           />
         </View>
       </View>
@@ -189,27 +443,43 @@ export function GameScreen({
 }
 
 function useGameRun({
+  difficulty,
   onGameOver,
   seed,
   vibrationEnabled,
 }: UseGameRunOptions) {
   const enemies = useMemo(() => getSeededEnemyRoster(seed), [seed]);
+  const [level, setLevel] = useState(1);
+  const [clearedLevels, setClearedLevels] = useState(0);
+  const [dungeonMap, setDungeonMap] = useState(() =>
+    createLevelMap(seed, 1, enemies.length),
+  );
+  const [currentRoomId, setCurrentRoomId] = useState(
+    dungeonMap.startingRoomId,
+  );
+  const [inventoryItem, setInventoryItem] = useState<ItemId | null>(null);
+  const [werewolfRoomId, setWerewolfRoomId] = useState(dungeonMap.werewolfRoomId);
+  const [werewolfHitPoints, setWerewolfHitPoints] = useState(WEREWOLF.hitPoints);
+  const [hasWerewolfEncountered, setHasWerewolfEncountered] = useState(false);
   const timeoutIds = useRef<ReturnType<typeof setTimeout>[]>([]);
   const selectedActionRef = useRef<PlayerAction | null>(null);
-  const defeatedEnemiesRef = useRef(0);
-  const [enemyIndex, setEnemyIndex] = useState(0);
-  const [defeatedEnemies, setDefeatedEnemies] = useState(0);
-  const [enemyHitPoints, setEnemyHitPoints] = useState(enemies[0].hitPoints);
-  const [enemyAttackSignal, setEnemyAttackSignal] = useState(0);
-  const [enemyDamageSignal, setEnemyDamageSignal] = useState(0);
+  const clearedLevelsRef = useRef(0);
+  const [animationFrame, setAnimationFrame] =
+    useState<CombatAnimationFrame>(createCombatAnimationFrame);
+  const currentRoom = getRoom(dungeonMap, currentRoomId);
+  const currentRoomItem = getRoomItemId(currentRoom);
+  const currentRoomEnemyIndex = getRoomEnemyIndex(currentRoom);
+  const hasWerewolfInRoom =
+    werewolfHitPoints > 0 && werewolfRoomId === currentRoomId;
+  const hasRoomEnemy = hasWerewolfInRoom || currentRoomEnemyIndex !== null;
+  const [enemyHitPoints, setEnemyHitPoints] = useState(() =>
+    getRoomEnemyHitPoints(dungeonMap, dungeonMap.startingRoomId, enemies),
+  );
   const [enemyHealthLossAmount, setEnemyHealthLossAmount] = useState(0);
   const [isResolving, setIsResolving] = useState(false);
-  const [playerAttackSignal, setPlayerAttackSignal] = useState(0);
-  const [playerDamageSignal, setPlayerDamageSignal] = useState(0);
-  const [playerEnergy, setPlayerEnergy] = useState(PLAYER_STARTING_ENERGY);
+  const [playerEnergy, setPlayerEnergy] = useState(PLAYER_MAX_ENERGY);
   const [playerEnergyLossAmount, setPlayerEnergyLossAmount] = useState(0);
-  const [playerEnergyLossSignal, setPlayerEnergyLossSignal] = useState(0);
-  const [playerHealth, setPlayerHealth] = useState(PLAYER_STARTING_HEALTH);
+  const [playerHealth, setPlayerHealth] = useState(PLAYER_MAX_HEALTH);
   const [playerHealthLossAmount, setPlayerHealthLossAmount] = useState(0);
   const [selectedAction, setSelectedAction] = useState<PlayerAction | null>(
     null,
@@ -218,13 +488,37 @@ function useGameRun({
   const [turnTimeRemaining, setTurnTimeRemaining] = useState(TURN_DURATION);
 
   const hasLost = playerHealth <= 0;
-  const currentEnemy = enemies[enemyIndex];
-  const turnProgress = turnTimeRemaining / TURN_DURATION;
+  const hasTurnTimer = difficulty !== "easy";
+  const currentEnemy = hasWerewolfInRoom
+    ? WEREWOLF
+    : currentRoomEnemyIndex === null
+      ? enemies[0]
+      : enemies[currentRoomEnemyIndex % enemies.length];
+  const enemyRoster = useMemo(() => [...enemies, WEREWOLF], [enemies]);
+  const isItemDisabled =
+    isResolving ||
+    hasLost ||
+    !canUseInventoryItem({
+      currentRoomId,
+      dungeonMap,
+      hasWerewolfInRoom,
+      inventoryItem,
+      playerEnergy,
+      playerHealth,
+    });
+  const disabledDirections = getDisabledDirections({
+    dungeonMap,
+    isResolving,
+    roomId: currentRoomId,
+  });
   const turnStatus = getTurnStatus({
     currentEnemyName: currentEnemy.name,
-    defeatedEnemies,
+    hasRoomEnemy,
     hasLost,
     isResolving,
+    level,
+    roomId: currentRoomId,
+    clearedLevels,
     selectedAction,
   });
 
@@ -249,6 +543,34 @@ function useGameRun({
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   }, [vibrationEnabled]);
 
+  const advanceToNextLevel = useCallback(() => {
+    const nextClearedLevels = clearedLevelsRef.current + 1;
+    const nextLevel = level + 1;
+    const nextMap = createLevelMap(seed, nextLevel, enemies.length);
+
+    clearedLevelsRef.current = nextClearedLevels;
+    setClearedLevels(nextClearedLevels);
+    setLevel(nextLevel);
+    setDungeonMap(nextMap);
+    setCurrentRoomId(nextMap.startingRoomId);
+    setWerewolfRoomId(nextMap.werewolfRoomId);
+    setWerewolfHitPoints(WEREWOLF.hitPoints);
+    setHasWerewolfEncountered(false);
+    setEnemyHitPoints(
+      getRoomEnemyHitPoints(nextMap, nextMap.startingRoomId, enemies),
+    );
+    resetRoomFeedback({
+      selectedActionRef,
+      setEnemyHealthLossAmount,
+      setPlayerEnergyLossAmount,
+      setPlayerHealthLossAmount,
+      setSelectedAction,
+    });
+    setPlayerHealth(PLAYER_MAX_HEALTH);
+    setPlayerEnergy(PLAYER_MAX_ENERGY);
+    setTurnTimeRemaining(TURN_DURATION);
+  }, [enemies, level, seed]);
+
   const finishTurn = useCallback(() => {
     selectedActionRef.current = null;
     setSelectedAction(null);
@@ -259,12 +581,15 @@ function useGameRun({
 
   const startEnemyMove = useCallback(
     (isDefending: boolean) => {
-      setEnemyAttackSignal((signal) => signal + 1);
+      restartAnimations(setAnimationFrame, ["enemyAttackElapsed"]);
 
       if (!isDefending) {
         schedule(250, () => {
-          setPlayerHealthLossAmount(ENEMY_DAMAGE);
-          setPlayerDamageSignal((signal) => signal + 1);
+          setPlayerHealthLossAmount(COMBAT.enemyDamage);
+          restartAnimations(setAnimationFrame, [
+            "playerDamageElapsed",
+            "playerHealthLossElapsed",
+          ]);
           triggerDamageHaptic();
         });
       }
@@ -272,10 +597,10 @@ function useGameRun({
       schedule(500, () => {
         if (!isDefending) {
           setPlayerHealth((health) => {
-            const nextHealth = Math.max(0, health - ENEMY_DAMAGE);
+            const nextHealth = Math.max(0, health - COMBAT.enemyDamage);
 
             if (nextHealth <= 0) {
-              schedule(0, () => onGameOver(defeatedEnemiesRef.current));
+              schedule(0, () => onGameOver(clearedLevelsRef.current));
             }
 
             return nextHealth;
@@ -285,12 +610,23 @@ function useGameRun({
         finishTurn();
       });
     },
-    [finishTurn, onGameOver, schedule, triggerDamageHaptic],
+    [
+      finishTurn,
+      onGameOver,
+      schedule,
+      triggerDamageHaptic,
+    ],
   );
 
   const resolveTurn = useCallback(
     (action: PlayerAction) => {
       if (isResolving || hasLost) {
+        return;
+      }
+
+      if (!hasRoomEnemy) {
+        selectedActionRef.current = null;
+        setSelectedAction(null);
         return;
       }
 
@@ -310,33 +646,47 @@ function useGameRun({
         return;
       }
 
-      const damage = action === "special" ? ATTACK_DAMAGE * 2 : ATTACK_DAMAGE;
+      const damage = hasWerewolfInRoom
+        ? 0
+        : action === "special"
+          ? COMBAT.attackDamage * 2
+          : COMBAT.attackDamage;
       const healthLost = Math.min(enemyHitPoints, damage);
       const nextEnemyHealth = Math.max(0, enemyHitPoints - damage);
 
       if (action === "special") {
         setPlayerEnergyLossAmount(1);
-        setPlayerEnergyLossSignal((signal) => signal + 1);
+        restartAnimations(setAnimationFrame, ["playerEnergyLossElapsed"]);
         setPlayerEnergy((energy) => Math.max(0, energy - 1));
       }
 
-      setPlayerAttackSignal((signal) => signal + 1);
+      restartAnimations(setAnimationFrame, ["playerAttackElapsed"]);
 
       schedule(250, () => {
         setEnemyHealthLossAmount(healthLost);
-        setEnemyDamageSignal((signal) => signal + 1);
+        restartAnimations(setAnimationFrame, [
+          "enemyDamageElapsed",
+          "enemyHealthLossElapsed",
+        ]);
       });
 
       schedule(500, () => {
         setEnemyHitPoints(nextEnemyHealth);
+        if (hasWerewolfInRoom) {
+          setWerewolfHitPoints(nextEnemyHealth);
+        }
 
         if (nextEnemyHealth <= 0) {
-          const nextDefeatedEnemies = defeatedEnemiesRef.current + 1;
-          defeatedEnemiesRef.current = nextDefeatedEnemies;
-          setDefeatedEnemies(nextDefeatedEnemies);
-          const nextEnemyIndex = (enemyIndex + 1) % enemies.length;
-          setEnemyIndex(nextEnemyIndex);
-          setEnemyHitPoints(enemies[nextEnemyIndex].hitPoints);
+          if (hasWerewolfInRoom) {
+            setWerewolfHitPoints(0);
+            setEnemyHitPoints(
+              getRoomEnemyHitPoints(dungeonMap, currentRoomId, enemies),
+            );
+          } else {
+            setDungeonMap((map) => markRoomCleared(map, currentRoomId));
+            setEnemyHitPoints(0);
+          }
+
           finishTurn();
           return;
         }
@@ -345,40 +695,104 @@ function useGameRun({
       });
     },
     [
-      enemies,
       enemyHitPoints,
-      enemyIndex,
       finishTurn,
       hasLost,
+      hasRoomEnemy,
+      hasWerewolfInRoom,
       isResolving,
+      currentRoomId,
+      dungeonMap,
+      enemies,
       playerEnergy,
       schedule,
       startEnemyMove,
     ],
   );
 
-  useEffect(() => {
-    if (hasLost || isResolving) {
+  const isTurnClockActive = useCallback(
+    () => hasTurnTimer && !hasLost && !isResolving,
+    [hasLost, hasTurnTimer, isResolving],
+  );
+
+  const isGameLoopRunning = useCallback(() => !hasLost, [hasLost]);
+
+  const updateGameFrame = useCallback(
+    (delta: number, nextTurnTimeRemaining?: number) => {
+      setAnimationFrame((frame) => advanceAnimationFrame(frame, delta));
+
+      if (typeof nextTurnTimeRemaining === "number") {
+        setTurnTimeRemaining(Math.max(0, nextTurnTimeRemaining));
+      }
+    },
+    [],
+  );
+
+  const expireTurn = useCallback(() => {
+    setTurnTimeRemaining(0);
+    resolveTurn(selectedActionRef.current ?? "defend");
+  }, [resolveTurn]);
+
+  function useItem() {
+    if (isItemDisabled || !inventoryItem) {
       return;
     }
 
-    const intervalId = setInterval(() => {
-      setTurnTimeRemaining((remaining) =>
-        Math.max(0, remaining - TURN_TIMER_TICK),
+    if (inventoryItem === "health-potion") {
+      setPlayerHealth((health) =>
+        Math.min(PLAYER_MAX_HEALTH, health + PLAYER_MAX_HEALTH / 2),
       );
-    }, TURN_TIMER_TICK);
-    const timeoutId = setTimeout(() => {
-      resolveTurn(selectedActionRef.current ?? "defend");
-    }, TURN_DURATION);
+      setInventoryItem(null);
+      return;
+    }
 
-    return () => {
-      clearInterval(intervalId);
-      clearTimeout(timeoutId);
-    };
-  }, [hasLost, isResolving, resolveTurn, turnNumber]);
+    if (inventoryItem === "energy-meal") {
+      setPlayerEnergy((energy) =>
+        Math.min(PLAYER_MAX_ENERGY, energy + PLAYER_MAX_ENERGY / 2),
+      );
+      setInventoryItem(null);
+      return;
+    }
+
+    if (inventoryItem === "key") {
+      const lockedDirection = getLockedDirections(dungeonMap, currentRoomId)[0];
+
+      if (!lockedDirection) {
+        return;
+      }
+
+      setDungeonMap((map) => unlockDoor(map, currentRoomId, lockedDirection));
+      setInventoryItem(null);
+      return;
+    }
+
+    if (hasWerewolfInRoom) {
+      setWerewolfHitPoints(0);
+      setInventoryItem(null);
+      setEnemyHealthLossAmount(WEREWOLF.hitPoints);
+      restartAnimations(setAnimationFrame, [
+        "enemyDamageElapsed",
+        "enemyHealthLossElapsed",
+      ]);
+      setEnemyHitPoints(getRoomEnemyHitPoints(dungeonMap, currentRoomId, enemies));
+      triggerDamageHaptic();
+    }
+  }
+
+  function pickupItem() {
+    if (isResolving || hasLost || !currentRoomItem) {
+      return;
+    }
+
+    const nextInventoryItem = currentRoomItem;
+    const nextRoomContents = inventoryItem ? (`item-${inventoryItem}` as const) : "empty";
+
+    setDungeonMap((map) => setRoomContents(map, currentRoomId, nextRoomContents));
+    setInventoryItem(nextInventoryItem);
+  }
 
   function selectAction(action: PlayerAction) {
-    if (isResolving || hasLost) {
+    if (isResolving || hasLost || !hasRoomEnemy) {
       return;
     }
 
@@ -386,50 +800,103 @@ function useGameRun({
       return;
     }
 
-    selectedActionRef.current = action;
-    setSelectedAction(action);
+    resolveTurn(action);
   }
 
-  function confirmSelectedAction() {
-    if (!selectedAction || isResolving || hasLost) {
+  function moveToRoom(direction: Direction) {
+    if (isResolving || hasLost) {
       return;
     }
 
-    resolveTurn(selectedAction);
+    const nextRoomId = getConnectedRoomId(dungeonMap, currentRoomId, direction);
+
+    if (!nextRoomId) {
+      return;
+    }
+
+    const nextRoom = getRoom(dungeonMap, nextRoomId);
+
+    if (nextRoom?.contents === "stairs") {
+      advanceToNextLevel();
+      return;
+    }
+
+    selectedActionRef.current = null;
+    resetRoomFeedback({
+      selectedActionRef,
+      setEnemyHealthLossAmount,
+      setPlayerEnergyLossAmount,
+      setPlayerHealthLossAmount,
+      setSelectedAction,
+    });
+    const nextWerewolfRoomId =
+      hasWerewolfEncountered && werewolfHitPoints > 0
+        ? nextRoomId
+        : werewolfRoomId;
+    const nextHasWerewolf =
+      werewolfHitPoints > 0 && nextWerewolfRoomId === nextRoomId;
+
+    if (nextHasWerewolf) {
+      setHasWerewolfEncountered(true);
+    }
+
+    setWerewolfRoomId(nextWerewolfRoomId);
+    setEnemyHitPoints(
+      nextHasWerewolf
+        ? werewolfHitPoints
+        : getRoomEnemyHitPoints(dungeonMap, nextRoomId, enemies),
+    );
+    setCurrentRoomId(nextRoomId);
   }
 
   return {
-    confirmSelectedAction,
+    animationFrame,
     currentEnemy,
+    currentRoomItem,
+    currentRoomId,
+    disabledDirections,
+    dungeonMap,
     enemies,
-    enemyAttackSignal,
-    enemyDamageSignal,
+    enemyRoster,
     enemyHealthLossAmount,
     enemyHitPoints,
     hasLost,
+    hasRoomEnemy,
+    hasWerewolfInRoom,
+    hasTurnTimer,
+    inventoryItem,
+    isItemDisabled,
     isResolving,
-    playerAttackSignal,
-    playerDamageSignal,
     playerEnergy,
     playerEnergyLossAmount,
-    playerEnergyLossSignal,
     playerHealth,
     playerHealthLossAmount,
+    moveToRoom,
+    pickupItem,
     selectAction,
     selectedAction,
-    turnProgress,
+    expireTurn,
+    isGameLoopRunning,
+    isTurnClockActive,
     turnStatus,
+    turnNumber,
+    turnTimeRemaining,
+    updateGameFrame,
+    useItem,
+    werewolfRoomId,
   };
 }
 
 function getDisabledActions({
   hasLost,
+  hasRoomEnemy,
   playerEnergy,
 }: {
   hasLost: boolean;
+  hasRoomEnemy: boolean;
   playerEnergy: number;
 }) {
-  if (hasLost) {
+  if (hasLost || !hasRoomEnemy) {
     return ["attack", "defend", "special"] satisfies PlayerAction[];
   }
 
@@ -442,15 +909,21 @@ function getDisabledActions({
 
 function getTurnStatus({
   currentEnemyName,
-  defeatedEnemies,
+  clearedLevels,
+  hasRoomEnemy,
   hasLost,
   isResolving,
+  level,
+  roomId,
   selectedAction,
 }: {
   currentEnemyName: string;
-  defeatedEnemies: number;
+  clearedLevels: number;
+  hasRoomEnemy: boolean;
   hasLost: boolean;
   isResolving: boolean;
+  level: number;
+  roomId: string;
   selectedAction: PlayerAction | null;
 }) {
   if (hasLost) {
@@ -462,29 +935,14 @@ function getTurnStatus({
   }
 
   if (selectedAction) {
-    return `${actionDetails[selectedAction].label} selected | Defeated ${defeatedEnemies}`;
+    return `${actionDetails[selectedAction].label} selected | Level ${level}`;
   }
 
-  return `Facing ${currentEnemyName} | Defeated ${defeatedEnemies}`;
-}
+  if (!hasRoomEnemy) {
+    return `Room ${roomId} clear | Level ${level} | Cleared ${clearedLevels}`;
+  }
 
-function TurnTimerBar({ progress }: { progress: number }) {
-  const colors = useThemeColors();
-  const styles = createStyles(colors);
-  const fillPercent = `${Math.max(0, Math.min(100, progress * 100))}%`;
-
-  return (
-    <View
-      accessibilityLabel="Turn timer"
-      style={styles.turnTimerTrack}
-      testID="turn-timer"
-    >
-      <View
-        style={[styles.turnTimerFill, { width: fillPercent }]}
-        testID="turn-timer-fill"
-      />
-    </View>
-  );
+  return `Facing ${currentEnemyName} | Level ${level} | Room ${roomId}`;
 }
 
 function createStyles(colors: ThemeColors) {
@@ -492,6 +950,11 @@ function createStyles(colors: ThemeColors) {
     container: {
       flex: 1,
       gap: 10,
+    },
+    engineLoop: {
+      height: 0,
+      opacity: 0,
+      width: 0,
     },
     header: {
       flexDirection: "row",
@@ -515,19 +978,6 @@ function createStyles(colors: ThemeColors) {
     },
     playerBars: {
       gap: 6,
-    },
-    turnTimerTrack: {
-      alignItems: "center",
-      backgroundColor: colors.paperLight,
-      borderRadius: 999,
-      height: 10,
-      overflow: "hidden",
-      width: "100%",
-    },
-    turnTimerFill: {
-      backgroundColor: "#a855f7",
-      borderRadius: 999,
-      height: "100%",
     },
     turnStatus: {
       color: colors.fadedInk,

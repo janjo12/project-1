@@ -14,6 +14,7 @@ export default function GameRoute() {
   return (
     <ThemeProvider appearance={settings.appearance}>
       <GameScreen
+        difficulty={settings.difficulty}
         handedness={settings.handedness}
         seed={settings.seed}
         vibrationEnabled={settings.vibrationEnabled}

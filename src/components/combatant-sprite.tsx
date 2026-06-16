@@ -1,95 +1,67 @@
-import { useEffect, useRef } from "react";
-import { StyleSheet, Text } from "react-native";
-import Animated, {
-  cancelAnimation,
-  useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withSequence,
-  withTiming,
-} from "react-native-reanimated";
+import { StyleSheet, Text, View } from "react-native";
 
 type CombatantSpriteProps = {
   accessibilityLabel: string;
   attackDirection?: "left" | "right";
-  attackSignal?: number;
-  damageSignal?: number;
+  attackProgress?: number | null;
+  bounceOffset?: number;
+  damageProgress?: number | null;
   emoji: string;
 };
+
+const ATTACK_DISTANCE = 42;
 
 export function CombatantSprite({
   accessibilityLabel,
   attackDirection = "right",
-  attackSignal = 0,
-  damageSignal = 0,
+  attackProgress = null,
+  bounceOffset = 0,
+  damageProgress = null,
   emoji,
 }: CombatantSpriteProps) {
-  const attackOffset = useSharedValue(0);
-  const bounce = useSharedValue(0);
-  const opacity = useSharedValue(1);
-  const previousAttackSignal = useRef(attackSignal);
-  const previousDamageSignal = useRef(damageSignal);
-  const spriteStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-    transform: [
-      { translateX: attackOffset.value },
-      { translateY: bounce.value },
-    ],
-  }));
-
-  useEffect(() => {
-    bounce.set(withRepeat(
-      withSequence(
-        withTiming(-10, { duration: 700 }),
-        withTiming(10, { duration: 700 }),
-      ),
-      -1,
-      false,
-    ));
-
-    return () => {
-      cancelAnimation(bounce);
-    };
-  }, [bounce]);
-
-  useEffect(() => {
-    if (previousAttackSignal.current === attackSignal) {
-      return;
-    }
-
-    previousAttackSignal.current = attackSignal;
-    const attackDistance = attackDirection === "right" ? 42 : -42;
-
-    attackOffset.set(0);
-    attackOffset.set(withSequence(
-      withTiming(attackDistance, { duration: 250 }),
-      withTiming(0, { duration: 250 }),
-    ));
-  }, [attackDirection, attackOffset, attackSignal]);
-
-  useEffect(() => {
-    if (previousDamageSignal.current === damageSignal) {
-      return;
-    }
-
-    previousDamageSignal.current = damageSignal;
-
-    opacity.set(1);
-    opacity.set(withSequence(
-      withTiming(0, { duration: 62 }),
-      withTiming(1, { duration: 62 }),
-      withTiming(0, { duration: 62 }),
-      withTiming(1, { duration: 62 }),
-    ));
-  }, [damageSignal, opacity]);
+  const attackOffset = getAttackOffset(attackProgress, attackDirection);
+  const opacity = getDamageOpacity(damageProgress);
 
   return (
-    <Animated.View style={[styles.sprite, spriteStyle]}>
+    <View
+      style={[
+        styles.sprite,
+        {
+          opacity,
+          transform: [
+            { translateX: attackOffset },
+            { translateY: bounceOffset },
+          ],
+        },
+      ]}
+    >
       <Text accessibilityLabel={accessibilityLabel} style={styles.emoji}>
         {emoji}
       </Text>
-    </Animated.View>
+    </View>
   );
+}
+
+function getAttackOffset(
+  progress: number | null,
+  attackDirection: "left" | "right",
+) {
+  if (progress === null) {
+    return 0;
+  }
+
+  const direction = attackDirection === "right" ? 1 : -1;
+  const mirroredProgress = progress <= 0.5 ? progress / 0.5 : (1 - progress) / 0.5;
+
+  return direction * ATTACK_DISTANCE * mirroredProgress;
+}
+
+function getDamageOpacity(progress: number | null) {
+  if (progress === null) {
+    return 1;
+  }
+
+  return Math.floor(progress * 4) % 2 === 0 ? 0 : 1;
 }
 
 const styles = StyleSheet.create({

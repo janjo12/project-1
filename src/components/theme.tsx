@@ -9,9 +9,11 @@ export const darkColors = {
   fadedInk: "#9ca3af",
   health: "#ef4444",
   ink: "#f8fafc",
+  mapCurrentRoom: "#fca5a5",
   paper: "#111827",
   paperDark: "#020617",
   paperLight: "#1f2937",
+  resourceBorder: "#cbd5e1",
   sepia: "#38bdf8",
 };
 
@@ -21,9 +23,11 @@ export const lightColors = {
   fadedInk: "#64748b",
   health: "#dc2626",
   ink: "#0f172a",
+  mapCurrentRoom: "#991b1b",
   paper: "#f8fafc",
   paperDark: "#dbeafe",
   paperLight: "#e2e8f0",
+  resourceBorder: "#475569",
   sepia: "#0284c7",
 };
 

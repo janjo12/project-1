@@ -2,15 +2,21 @@ import { FontAwesome, Ionicons } from "@expo/vector-icons";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { type ThemeColors, useThemeColors } from "@/components/theme";
+import type { Direction } from "@/utils/dungeon-map";
 
 export type PlayerAction = "attack" | "defend" | "special";
 
 type ActionControlsProps = {
   disabledActions?: PlayerAction[];
+  disabledDirections?: Direction[];
+  floorItemLabel?: string | null;
+  isItemDisabled?: boolean;
   isBusy?: boolean;
+  itemLabel?: string | null;
   onAction: (action: PlayerAction) => void;
-  onConfirmAction: () => void;
-  selectedAction?: PlayerAction | null;
+  onPickupItem?: () => void;
+  onUseItem?: () => void;
+  onMove?: (direction: Direction) => void;
 };
 
 export const actionDetails: Record<
@@ -34,40 +40,88 @@ export const actionDetails: Record<
   },
 };
 
-const actions: PlayerAction[] = [
-  "special",
-  "defend",
-  "attack",
-];
+const actions: PlayerAction[] = ["special", "attack", "defend"];
 
 const arrowIcons = {
-  down: "arrow-down",
-  left: "arrow-back",
-  right: "arrow-forward",
-  up: "arrow-up",
+  east: "arrow-forward",
+  north: "arrow-up",
+  south: "arrow-down",
+  west: "arrow-back",
 } as const;
 
 export function ActionControls({
   disabledActions = [],
+  disabledDirections = [],
+  floorItemLabel = null,
+  isItemDisabled = true,
   isBusy = false,
+  itemLabel = null,
   onAction,
-  onConfirmAction,
-  selectedAction = null,
+  onPickupItem = () => {},
+  onUseItem = () => {},
+  onMove = () => {},
 }: ActionControlsProps) {
   const colors = useThemeColors();
   const styles = createStyles(colors);
-  const selectedActionDetails = selectedAction
-    ? actionDetails[selectedAction]
-    : null;
-  const canConfirm = Boolean(selectedActionDetails) && !isBusy;
 
   return (
     <View style={styles.container}>
-      <View style={styles.actionCluster} testID="action-button-cluster">
+      <View style={styles.floorItemSlot}>
+        {floorItemLabel ? (
+          <Pressable
+            accessibilityLabel={
+              itemLabel ? `Swap item for ${floorItemLabel}` : `Pick up ${floorItemLabel}`
+            }
+            accessibilityRole="button"
+            disabled={isBusy}
+            onPress={onPickupItem}
+            style={({ pressed }) => [
+              styles.pickupButton,
+              isBusy && styles.disabledButton,
+              pressed && styles.pressed,
+            ]}
+            testID="pickup-item-button"
+          >
+            <FontAwesome
+              color={colors.paper}
+              name="hand-paper-o"
+              size={15}
+              testID="pickup-item-icon"
+            />
+            <Text style={styles.pickupText}>
+              {itemLabel ? `Swap for ${floorItemLabel}` : `Pick Up ${floorItemLabel}`}
+            </Text>
+          </Pressable>
+        ) : null}
+      </View>
+
+      <View style={styles.actionGrid} testID="action-button-cluster">
+        <Pressable
+          accessibilityLabel="Use Item"
+          accessibilityRole="button"
+          accessibilityState={{ disabled: isBusy || isItemDisabled }}
+          disabled={isBusy || isItemDisabled}
+          onPress={onUseItem}
+          style={({ pressed }) => [
+            styles.actionButton,
+            !isBusy && !isItemDisabled && styles.activeActionButton,
+            (isBusy || isItemDisabled) && styles.disabledButton,
+            pressed && styles.pressed,
+          ]}
+          testID="use-item-button"
+        >
+          <FontAwesome
+            color={colors.ink}
+            name="shopping-bag"
+            size={14}
+            testID="use-item-icon"
+          />
+          <Text style={styles.actionText}>Use Item</Text>
+        </Pressable>
+
         {actions.map((action) => {
           const { label } = actionDetails[action];
           const isDisabled = isBusy || disabledActions.includes(action);
-          const isSelected = selectedAction === action && !isBusy;
 
           return (
             <Pressable
@@ -80,81 +134,63 @@ export function ActionControls({
               style={({ pressed }) => [
                 styles.actionButton,
                 !isBusy && !isDisabled && styles.activeActionButton,
-                isSelected && styles.selectedActionButton,
                 isDisabled && styles.disabledButton,
                 pressed && styles.pressed,
               ]}
               testID={`${action}-action-button`}
             >
+              <FontAwesome
+                color={colors.ink}
+                name={actionDetails[action].icon}
+                size={14}
+              />
               <Text style={styles.actionText}>{label}</Text>
             </Pressable>
           );
         })}
       </View>
 
-      <Pressable
-        accessibilityLabel={
-          selectedActionDetails
-            ? `End Turn: ${selectedActionDetails.label}`
-            : "Select An Action"
-        }
-        accessibilityRole="button"
-        accessibilityState={{ disabled: !canConfirm }}
-        disabled={!canConfirm}
-        onPress={onConfirmAction}
-        style={({ pressed }) => [
-          styles.confirmButton,
-          canConfirm && styles.confirmButtonActive,
-          pressed && styles.pressed,
-        ]}
-        testID="action-confirmation-button"
-      >
-        {selectedActionDetails ? (
-          <>
-            <FontAwesome
-              color={colors.paper}
-              name={selectedActionDetails.icon}
-              size={22}
-              testID="selected-action-icon"
-            />
-            <View style={styles.confirmTextGroup}>
-              <Text style={[styles.confirmTitle, styles.confirmTitleActive]}>
-                {selectedActionDetails.label}
-              </Text>
-              <Text
-                style={[
-                  styles.confirmDescription,
-                  styles.confirmDescriptionActive,
-                ]}
-              >
-                {selectedActionDetails.description}
-              </Text>
-            </View>
-          </>
-        ) : (
-          <Text style={styles.confirmTitle}>Select An Action</Text>
-        )}
-      </Pressable>
-
       <View
-        accessibilityElementsHidden
-        importantForAccessibility="no-hide-descendants"
         style={styles.dPad}
         testID="direction-controls"
       >
         <View style={styles.dPadRow}>
           <View style={styles.dPadSpacer} />
-          <ArrowButton direction="up" color={colors.ink} styles={styles} />
+          <ArrowButton
+            color={colors.ink}
+            direction="north"
+            disabled={isBusy || disabledDirections.includes("north")}
+            onMove={onMove}
+            styles={styles}
+          />
           <View style={styles.dPadSpacer} />
         </View>
         <View style={styles.dPadRow}>
-          <ArrowButton direction="left" color={colors.ink} styles={styles} />
+          <ArrowButton
+            color={colors.ink}
+            direction="west"
+            disabled={isBusy || disabledDirections.includes("west")}
+            onMove={onMove}
+            styles={styles}
+          />
           <View style={styles.dPadCenter} />
-          <ArrowButton direction="right" color={colors.ink} styles={styles} />
+          <ArrowButton
+            color={colors.ink}
+            direction="east"
+            disabled={isBusy || disabledDirections.includes("east")}
+            onMove={onMove}
+            styles={styles}
+          />
         </View>
         <View style={styles.dPadRow}>
           <View style={styles.dPadSpacer} />
-          <ArrowButton direction="down" color={colors.ink} styles={styles} />
+          <ArrowButton
+            color={colors.ink}
+            direction="south"
+            disabled={isBusy || disabledDirections.includes("south")}
+            onMove={onMove}
+            styles={styles}
+          />
           <View style={styles.dPadSpacer} />
         </View>
       </View>
@@ -164,17 +200,31 @@ export function ActionControls({
 
 type ArrowButtonProps = {
   color: string;
-  direction: "down" | "left" | "right" | "up";
+  direction: Direction;
+  disabled: boolean;
+  onMove: (direction: Direction) => void;
   styles: ReturnType<typeof createStyles>;
 };
 
-function ArrowButton({ color, direction, styles }: ArrowButtonProps) {
+function ArrowButton({
+  color,
+  direction,
+  disabled,
+  onMove,
+  styles,
+}: ArrowButtonProps) {
   return (
     <Pressable
       accessibilityLabel={`Move ${direction}`}
       accessibilityRole="button"
-      onPress={() => {}}
-      style={({ pressed }) => [styles.arrowButton, pressed && styles.pressed]}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={() => onMove(direction)}
+      style={({ pressed }) => [
+        styles.arrowButton,
+        disabled && styles.disabledButton,
+        pressed && styles.pressed,
+      ]}
     >
       <Ionicons
         color={color}
@@ -188,122 +238,105 @@ function ArrowButton({ color, direction, styles }: ArrowButtonProps) {
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  container: {
-    alignItems: "center",
-    gap: 8,
-    justifyContent: "flex-end",
-    minWidth: 132,
-    paddingBottom: 8,
-  },
-  actionCluster: {
-    alignItems: "center",
-    gap: 10,
-    justifyContent: "center",
-  },
-  actionButton: {
-    alignItems: "center",
-    backgroundColor: "transparent",
-    borderColor: colors.sepia,
-    borderRadius: 999,
-    borderWidth: 2,
-    height: 66,
-    justifyContent: "center",
-    paddingHorizontal: 6,
-    width: 66,
-  },
-  activeActionButton: {
-    backgroundColor: colors.paperLight,
-  },
-  selectedActionButton: {
-    backgroundColor: colors.sepia,
-  },
-  actionText: {
-    color: colors.ink,
-    fontSize: 13,
-    fontWeight: "700",
-    textAlign: "center",
-  },
-  disabledButton: {
-    opacity: 0.38,
-  },
-  confirmButton: {
-    alignItems: "center",
-    backgroundColor: "transparent",
-    borderColor: colors.fadedInk,
-    borderRadius: 8,
-    borderWidth: 2,
-    flexDirection: "row",
-    gap: 10,
-    justifyContent: "center",
-    minHeight: 84,
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    width: 132,
-  },
-  confirmButtonActive: {
-    backgroundColor: colors.sepia,
-    borderColor: colors.sepia,
-  },
-  confirmTextGroup: {
-    flex: 1,
-    gap: 2,
-  },
-  confirmTitle: {
-    color: colors.fadedInk,
-    fontSize: 14,
-    fontWeight: "800",
-    textAlign: "center",
-  },
-  confirmTitleActive: {
-    color: colors.paper,
-    textAlign: "left",
-  },
-  confirmDescription: {
-    color: colors.fadedInk,
-    fontSize: 11,
-    fontWeight: "700",
-    lineHeight: 14,
-  },
-  confirmDescriptionActive: {
-    color: colors.paper,
-  },
-  dPad: {
-    alignSelf: "center",
-    display: "none",
-    gap: 4,
-    height: 0,
-    opacity: 0,
-    overflow: "hidden",
-    width: 0,
-  },
-  dPadRow: {
-    flexDirection: "row",
-    gap: 4,
-  },
-  dPadSpacer: {
-    height: 42,
-    width: 42,
-  },
-  dPadCenter: {
-    backgroundColor: colors.paper,
-    borderColor: colors.fadedInk,
-    borderRadius: 6,
-    borderWidth: 2,
-    height: 42,
-    width: 42,
-  },
-  arrowButton: {
-    alignItems: "center",
-    backgroundColor: colors.paperLight,
-    borderColor: colors.ink,
-    borderRadius: 8,
-    borderWidth: 2,
-    height: 42,
-    justifyContent: "center",
-    width: 42,
-  },
-  pressed: {
-    opacity: 0.72,
-  },
+    container: {
+      alignItems: "center",
+      gap: 8,
+      justifyContent: "flex-end",
+      minWidth: 124,
+      paddingBottom: 8,
+    },
+    floorItemSlot: {
+      alignItems: "center",
+      justifyContent: "center",
+      minHeight: 40,
+      width: 124,
+    },
+    pickupButton: {
+      alignItems: "center",
+      backgroundColor: colors.sepia,
+      borderRadius: 8,
+      flexDirection: "row",
+      gap: 6,
+      justifyContent: "center",
+      minHeight: 36,
+      paddingHorizontal: 8,
+      width: 124,
+    },
+    pickupText: {
+      color: colors.paper,
+      flex: 1,
+      fontSize: 11,
+      fontWeight: "800",
+      lineHeight: 13,
+      textAlign: "center",
+    },
+    actionGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 6,
+      justifyContent: "center",
+      width: 124,
+    },
+    actionButton: {
+      alignItems: "center",
+      backgroundColor: "transparent",
+      borderColor: colors.sepia,
+      borderRadius: 999,
+      borderWidth: 2,
+      gap: 2,
+      height: 58,
+      justifyContent: "center",
+      paddingHorizontal: 4,
+      width: 58,
+    },
+    activeActionButton: {
+      backgroundColor: colors.paperLight,
+    },
+    actionText: {
+      color: colors.ink,
+      fontSize: 9,
+      fontWeight: "700",
+      lineHeight: 10,
+      textAlign: "center",
+    },
+    disabledButton: {
+      opacity: 0.38,
+    },
+    dPad: {
+      alignSelf: "center",
+      gap: 4,
+      height: 110,
+      opacity: 1,
+      width: 110,
+    },
+    dPadRow: {
+      flexDirection: "row",
+      gap: 4,
+    },
+    dPadSpacer: {
+      height: 34,
+      width: 34,
+    },
+    dPadCenter: {
+      backgroundColor: colors.paper,
+      borderColor: colors.fadedInk,
+      borderRadius: 6,
+      borderWidth: 2,
+      height: 34,
+      width: 34,
+    },
+    arrowButton: {
+      alignItems: "center",
+      backgroundColor: colors.paperLight,
+      borderColor: colors.ink,
+      borderRadius: 8,
+      borderWidth: 2,
+      height: 34,
+      justifyContent: "center",
+      width: 34,
+    },
+    pressed: {
+      opacity: 0.72,
+    },
   });
 }

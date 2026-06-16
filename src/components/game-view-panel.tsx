@@ -1,38 +1,25 @@
 import { FontAwesome } from "@expo/vector-icons";
-import { useEffect, useRef } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withSequence,
-  withTiming,
-} from "react-native-reanimated";
 
 import { CombatantSprite } from "@/components/combatant-sprite";
 import { type ThemeColors, useThemeColors } from "@/components/theme";
+import {
+  COMBAT_ANIMATION,
+  createCombatAnimationFrame,
+  type CombatAnimationFrame,
+  type Enemy,
+} from "@/entities";
 
-export type Enemy = {
-  emoji: string;
-  hitPoints: number;
-  name: string;
-};
+export type { Enemy };
 
 type GameViewPanelProps = {
+  animationFrame?: CombatAnimationFrame;
   enemy?: Enemy;
-  enemyAttackSignal?: number;
   enemyHealthLossAmount?: number;
-  enemyHealthLossSignal?: number;
   enemyMaxHitPoints?: number;
   enemyRoster?: Enemy[];
-  monsterDamageSignal?: number;
-  playerAttackSignal?: number;
-  playerDamageSignal?: number;
-  playerEnergy?: number;
   playerEnergyLossAmount?: number;
-  playerEnergyLossSignal?: number;
-  playerHealth?: number;
   playerHealthLossAmount?: number;
-  playerHealthLossSignal?: number;
 };
 
 const defaultEnemy: Enemy = {
@@ -43,22 +30,17 @@ const defaultEnemy: Enemy = {
 const PLAYER_EMOJI = "\uD83E\uDD3A";
 
 export function GameViewPanel({
+  animationFrame = createCombatAnimationFrame(),
   enemy = defaultEnemy,
-  enemyAttackSignal = 0,
   enemyHealthLossAmount = 0,
-  enemyHealthLossSignal = 0,
   enemyMaxHitPoints = enemy.hitPoints,
   enemyRoster = [defaultEnemy],
-  monsterDamageSignal = 0,
-  playerAttackSignal = 0,
-  playerDamageSignal = 0,
   playerEnergyLossAmount = 0,
-  playerEnergyLossSignal = 0,
   playerHealthLossAmount = 0,
-  playerHealthLossSignal = 0,
 }: GameViewPanelProps) {
   const colors = useThemeColors();
   const styles = createStyles(colors);
+  const bounceOffset = getBounceOffset(animationFrame.bounceElapsed);
 
   return (
     <View style={styles.panel}>
@@ -83,14 +65,24 @@ export function GameViewPanel({
             amount={enemyHealthLossAmount}
             color={colors.health}
             icon="heart"
-            signal={enemyHealthLossSignal}
+            progress={getProgress(
+              animationFrame.enemyHealthLossElapsed,
+              COMBAT_ANIMATION.resourceLossDuration,
+            )}
             testID="enemy-health-loss"
           />
           <CombatantSprite
             accessibilityLabel={enemy.name}
             attackDirection="right"
-            attackSignal={enemyAttackSignal}
-            damageSignal={monsterDamageSignal}
+            attackProgress={getProgress(
+              animationFrame.enemyAttackElapsed,
+              COMBAT_ANIMATION.attackDuration,
+            )}
+            bounceOffset={bounceOffset}
+            damageProgress={getProgress(
+              animationFrame.enemyDamageElapsed,
+              COMBAT_ANIMATION.damageDuration,
+            )}
             emoji={enemy.emoji}
           />
           <ResourceBar
@@ -108,21 +100,34 @@ export function GameViewPanel({
             amount={playerHealthLossAmount}
             color={colors.health}
             icon="heart"
-            signal={playerHealthLossSignal}
+            progress={getProgress(
+              animationFrame.playerHealthLossElapsed,
+              COMBAT_ANIMATION.resourceLossDuration,
+            )}
             testID="player-health-loss"
           />
           <FloatingResourceLoss
             amount={playerEnergyLossAmount}
             color={colors.energy}
             icon="bolt"
-            signal={playerEnergyLossSignal}
+            progress={getProgress(
+              animationFrame.playerEnergyLossElapsed,
+              COMBAT_ANIMATION.resourceLossDuration,
+            )}
             testID="player-energy-loss"
           />
           <CombatantSprite
             accessibilityLabel="Player warrior"
             attackDirection="left"
-            attackSignal={playerAttackSignal}
-            damageSignal={playerDamageSignal}
+            attackProgress={getProgress(
+              animationFrame.playerAttackElapsed,
+              COMBAT_ANIMATION.attackDuration,
+            )}
+            bounceOffset={bounceOffset}
+            damageProgress={getProgress(
+              animationFrame.playerDamageElapsed,
+              COMBAT_ANIMATION.damageDuration,
+            )}
             emoji={PLAYER_EMOJI}
           />
         </View>
@@ -135,8 +140,9 @@ type ResourceBarProps = {
   accessibilityLabel: string;
   color: string;
   current: number;
-  icon: "bolt" | "heart";
+  icon: keyof typeof FontAwesome.glyphMap;
   max: number;
+  panelPosition?: "first" | "last" | "middle" | "single";
   testID: string;
 };
 
@@ -146,17 +152,28 @@ export function ResourceBar({
   current,
   icon,
   max,
+  panelPosition = "single",
   testID,
 }: ResourceBarProps) {
   const colors = useThemeColors();
   const styles = createStyles(colors);
   const safeMax = Math.max(1, max);
-  const fillPercent = `${Math.max(0, Math.min(100, (current / safeMax) * 100))}%`;
+  const fillPercent = Math.max(0, Math.min(100, (current / safeMax) * 100));
 
   return (
     <View
       accessibilityLabel={accessibilityLabel}
-      style={styles.resourceBarRow}
+      style={[
+        styles.resourceBarRow,
+        panelPosition !== "single" && styles.connectedResourceBarRow,
+        panelPosition !== "first" &&
+          panelPosition !== "single" &&
+          styles.overlappedResourceBarRow,
+        (panelPosition === "first" || panelPosition === "single") &&
+          styles.firstResourceBarRow,
+        (panelPosition === "last" || panelPosition === "single") &&
+          styles.lastResourceBarRow,
+      ]}
       testID={testID}
     >
       <FontAwesome
@@ -171,7 +188,7 @@ export function ResourceBar({
             styles.resourceBarFill,
             {
               backgroundColor: color,
-              width: fillPercent,
+              width: `${fillPercent}%`,
             },
           ]}
           testID={`${testID}-fill`}
@@ -185,7 +202,7 @@ type FloatingResourceLossProps = {
   amount: number;
   color: string;
   icon: "bolt" | "heart";
-  signal: number;
+  progress: number | null;
   testID: string;
 };
 
@@ -193,45 +210,55 @@ function FloatingResourceLoss({
   amount,
   color,
   icon,
-  signal,
+  progress,
   testID,
 }: FloatingResourceLossProps) {
-  const opacity = useSharedValue(0);
-  const translateY = useSharedValue(0);
-  const previousSignal = useRef(signal);
   const styles = createStyles(useThemeColors());
-  const lossStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-    transform: [{ translateY: translateY.value }],
-  }));
-
-  useEffect(() => {
-    if (previousSignal.current === signal) {
-      return;
-    }
-
-    previousSignal.current = signal;
-    opacity.set(1);
-    translateY.set(0);
-    opacity.set(
-      withSequence(
-        withTiming(1, { duration: 420 }),
-        withTiming(0, { duration: 260 }),
-      ),
-    );
-    translateY.set(withTiming(-28, { duration: 680 }));
-  }, [opacity, signal, translateY]);
 
   if (amount <= 0) {
     return null;
   }
 
+  const visibleProgress = progress ?? 1;
+  const opacity =
+    progress === null
+      ? 0
+      : progress < 0.62
+        ? 1
+        : Math.max(0, 1 - (progress - 0.62) / 0.38);
+  const translateY = -28 * visibleProgress;
+
   return (
-    <Animated.View style={[styles.floatingLoss, lossStyle]} testID={testID}>
+    <View
+      style={[
+        styles.floatingLoss,
+        {
+          opacity,
+          transform: [{ translateY }],
+        },
+      ]}
+      testID={testID}
+    >
       <Text style={[styles.floatingLossText, { color }]}>- {amount}</Text>
       <FontAwesome color={color} name={icon} size={16} testID={`${testID}-icon`} />
-    </Animated.View>
+    </View>
   );
+}
+
+function getProgress(elapsed: number | null, duration: number) {
+  if (elapsed === null) {
+    return null;
+  }
+
+  return Math.max(0, Math.min(1, elapsed / duration));
+}
+
+function getBounceOffset(elapsed: number) {
+  const progress =
+    (elapsed % COMBAT_ANIMATION.bounceDuration) /
+    COMBAT_ANIMATION.bounceDuration;
+
+  return Math.sin(progress * Math.PI * 2) * COMBAT_ANIMATION.bounceDistance;
 }
 
 function createStyles(colors: ThemeColors) {
@@ -271,9 +298,30 @@ function createStyles(colors: ThemeColors) {
     },
     resourceBarRow: {
       alignItems: "center",
+      backgroundColor: colors.paper,
+      borderColor: colors.resourceBorder,
+      borderRadius: 8,
+      borderWidth: 2,
       flexDirection: "row",
       gap: 6,
+      minHeight: 24,
+      paddingHorizontal: 7,
+      paddingVertical: 5,
       width: "100%",
+    },
+    connectedResourceBarRow: {
+      borderRadius: 0,
+    },
+    overlappedResourceBarRow: {
+      marginTop: -2,
+    },
+    firstResourceBarRow: {
+      borderTopLeftRadius: 8,
+      borderTopRightRadius: 8,
+    },
+    lastResourceBarRow: {
+      borderBottomLeftRadius: 8,
+      borderBottomRightRadius: 8,
     },
     resourceBarTrack: {
       backgroundColor: colors.paperLight,

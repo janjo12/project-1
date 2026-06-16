@@ -1,4 +1,4 @@
-import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
+import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import { Alert } from "react-native";
 
 import GameRoute from "@/app/game";
@@ -14,6 +14,7 @@ const mockReplace = jest.fn();
 const mockPush = jest.fn();
 const mockSaveSettings = jest.fn();
 const mockUpdateSettings = jest.fn();
+const mockGameScreenProps = jest.fn();
 
 let mockedSettings: GameSettings = DEFAULT_GAME_SETTINGS;
 let mockedIsLoading = false;
@@ -36,6 +37,34 @@ jest.mock("@/hooks/use-game-settings", () => ({
   }),
 }));
 
+jest.mock("@/components/game-screen", () => ({
+  GameScreen: (props: {
+    difficulty?: string;
+    onGameOver: (score: number) => void;
+    onQuitToTitle?: () => void;
+  }) => {
+    const { Pressable, Text } = require("react-native");
+    const { onGameOver, onQuitToTitle } = props;
+
+    mockGameScreenProps(props);
+
+    return (
+      <>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => onGameOver(1)}
+          testID="mock-game-over-button"
+        >
+          <Text>End Run</Text>
+        </Pressable>
+        <Pressable accessibilityRole="button" onPress={onQuitToTitle}>
+          <Text>Quit to Title</Text>
+        </Pressable>
+      </>
+    );
+  },
+}));
+
 describe("routes", () => {
   let alertSpy: jest.SpyInstance;
 
@@ -45,6 +74,7 @@ describe("routes", () => {
     mockReplace.mockClear();
     mockSaveSettings.mockClear();
     mockUpdateSettings.mockClear();
+    mockGameScreenProps.mockClear();
     mockedSettings = DEFAULT_GAME_SETTINGS;
     mockedIsLoading = false;
     mockedSearchParams = {};
@@ -120,37 +150,25 @@ describe("routes", () => {
   });
 
   it("replaces the game route with game over when the player dies", () => {
-    jest.useFakeTimers();
+    mockedSettings = { ...DEFAULT_GAME_SETTINGS, difficulty: "hard" };
     const screen = render(<GameRoute />);
 
-    for (let turn = 0; turn < 14; turn += 1) {
-      fireEvent.press(screen.getByTestId("attack-action-button"));
-      fireEvent.press(screen.getByTestId("action-confirmation-button"));
-      act(() => {
-        jest.advanceTimersByTime(1000);
-      });
-    }
-    act(() => {
-      jest.advanceTimersByTime(0);
-    });
+    expect(mockGameScreenProps).toHaveBeenCalledWith(
+      expect.objectContaining({ difficulty: "hard" }),
+    );
+
+    fireEvent.press(screen.getByTestId("mock-game-over-button"));
 
     expect(mockReplace).toHaveBeenCalledWith({
       pathname: "/game-over",
-      params: { score: "4" },
+      params: { score: "1" },
     });
-
-    jest.useRealTimers();
   });
 
   it("replaces the game route with the title route when quitting", () => {
     const screen = render(<GameRoute />);
 
     fireEvent.press(screen.getByRole("button", { name: "Quit to Title" }));
-
-    expect(mockReplace).not.toHaveBeenCalled();
-
-    const alertButtons = alertSpy.mock.calls[0][2];
-    alertButtons[1].onPress();
 
     expect(mockReplace).toHaveBeenCalledWith("/");
   });
