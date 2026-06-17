@@ -1,3 +1,7 @@
+export const COMBAT = {
+  attackDamage: 1,
+};
+
 export const COMBAT_ANIMATION = {
   attackDuration: 500,
   bounceDistance: 10,

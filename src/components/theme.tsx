@@ -23,7 +23,7 @@ export const lightColors = {
   fadedInk: "#64748b",
   health: "#dc2626",
   ink: "#0f172a",
-  mapCurrentRoom: "#991b1b",
+  mapCurrentRoom: "#ef4444",
   paper: "#f8fafc",
   paperDark: "#dbeafe",
   paperLight: "#e2e8f0",

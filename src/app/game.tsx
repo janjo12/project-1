@@ -5,7 +5,7 @@ import { ThemeProvider } from "@/components/theme";
 import { useGameSettings } from "@/hooks/use-game-settings";
 
 export default function GameRoute() {
-  const { isLoading, settings } = useGameSettings();
+  const { isLoading, settings, updateSettings } = useGameSettings();
 
   if (isLoading) {
     return null;
@@ -16,7 +16,9 @@ export default function GameRoute() {
       <GameScreen
         difficulty={settings.difficulty}
         handedness={settings.handedness}
+        onSettingsChange={updateSettings}
         seed={settings.seed}
+        settings={settings}
         vibrationEnabled={settings.vibrationEnabled}
         onQuitToTitle={() => router.replace("/")}
         onGameOver={(score) =>

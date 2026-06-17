@@ -1,7 +1,7 @@
 {
-  "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
+    "jsx": "react-native",
     "types": [
       "jest"
     ],
@@ -12,7 +12,16 @@
       "@/assets/*": [
         "./assets/*"
       ]
-    }
+    },
+    "target": "ES2020",
+    "module": "esnext",
+    "lib": [
+      "ES2020"
+    ],
+    "moduleResolution": "bundler",
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "allowJs": true
   },
   "include": [
     "src/**/*.ts",
@@ -21,5 +30,6 @@
     "__tests__/**/*.tsx",
     ".expo/types/**/*.ts",
     "expo-env.d.ts"
-  ]
+  ],
+  "extends": "expo/tsconfig.base"
 }

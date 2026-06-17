@@ -1,10 +1,20 @@
-import { FontAwesome, Ionicons } from "@expo/vector-icons";
+import { FontAwesome } from "@expo/vector-icons";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { type ThemeColors, useThemeColors } from "@/components/theme";
 import type { Direction } from "@/utils/dungeon-map";
 
-export type PlayerAction = "attack" | "defend" | "special";
+export type PlayerAction =
+  | "attack"
+  | "defend"
+  | "descend"
+  | "item"
+  | "move-east"
+  | "move-north"
+  | "move-south"
+  | "move-west"
+  | "pickup-item"
+  | "special";
 
 type ActionControlsProps = {
   disabledActions?: PlayerAction[];
@@ -13,40 +23,15 @@ type ActionControlsProps = {
   isItemDisabled?: boolean;
   isBusy?: boolean;
   itemLabel?: string | null;
-  onAction: (action: PlayerAction) => void;
-  onPickupItem?: () => void;
-  onUseItem?: () => void;
-  onMove?: (direction: Direction) => void;
+  nextLevelNumber?: number | null;
+  playerAction: (action: PlayerAction) => void;
 };
-
-export const actionDetails: Record<
-  PlayerAction,
-  { description: string; icon: keyof typeof FontAwesome.glyphMap; label: string }
-> = {
-  attack: {
-    description: "Strike now. The enemy answers back.",
-    icon: "flash",
-    label: "Attack",
-  },
-  defend: {
-    description: "Brace yourself. The enemy deals no damage.",
-    icon: "shield",
-    label: "Defend",
-  },
-  special: {
-    description: "Spend 1 energy to hit twice as hard.",
-    icon: "bolt",
-    label: "Special",
-  },
-};
-
-const actions: PlayerAction[] = ["special", "attack", "defend"];
 
 const arrowIcons = {
-  east: "arrow-forward",
+  east: "arrow-right",
   north: "arrow-up",
   south: "arrow-down",
-  west: "arrow-back",
+  west: "arrow-left",
 } as const;
 
 export function ActionControls({
@@ -56,25 +41,53 @@ export function ActionControls({
   isItemDisabled = true,
   isBusy = false,
   itemLabel = null,
-  onAction,
-  onPickupItem = () => {},
-  onUseItem = () => {},
-  onMove = () => {},
+  nextLevelNumber = null,
+  playerAction,
 }: ActionControlsProps) {
   const colors = useThemeColors();
   const styles = createStyles(colors);
+  const isUseItemDisabled = isBusy || isItemDisabled;
+  const hasDescentButton = nextLevelNumber !== null;
 
   return (
     <View style={styles.container}>
       <View style={styles.floorItemSlot}>
-        {floorItemLabel ? (
+        {hasDescentButton ? (
+          <Pressable
+            accessibilityLabel={`Descend to Level ${nextLevelNumber}`}
+            accessibilityRole="button"
+            disabled={isBusy}
+            onPress={() => playerAction("descend")}
+            style={({ pressed }) => [
+              styles.pickupButton,
+              isBusy && styles.disabledButton,
+              pressed && styles.pressed,
+            ]}
+            testID="descend-button"
+          >
+            <FontAwesome
+              color={colors.paper}
+              name="arrow-down"
+              size={15}
+              testID="descend-icon"
+            />
+            <Text
+              adjustsFontSizeToFit
+              minimumFontScale={0.68}
+              numberOfLines={2}
+              style={styles.pickupText}
+            >
+              Descend to Level {nextLevelNumber}
+            </Text>
+          </Pressable>
+        ) : floorItemLabel ? (
           <Pressable
             accessibilityLabel={
               itemLabel ? `Swap item for ${floorItemLabel}` : `Pick up ${floorItemLabel}`
             }
             accessibilityRole="button"
             disabled={isBusy}
-            onPress={onPickupItem}
+            onPress={() => playerAction("pickup-item")}
             style={({ pressed }) => [
               styles.pickupButton,
               isBusy && styles.disabledButton,
@@ -88,7 +101,12 @@ export function ActionControls({
               size={15}
               testID="pickup-item-icon"
             />
-            <Text style={styles.pickupText}>
+            <Text
+              adjustsFontSizeToFit
+              minimumFontScale={0.68}
+              numberOfLines={2}
+              style={styles.pickupText}
+            >
               {itemLabel ? `Swap for ${floorItemLabel}` : `Pick Up ${floorItemLabel}`}
             </Text>
           </Pressable>
@@ -96,58 +114,38 @@ export function ActionControls({
       </View>
 
       <View style={styles.actionGrid} testID="action-button-cluster">
-        <Pressable
-          accessibilityLabel="Use Item"
-          accessibilityRole="button"
-          accessibilityState={{ disabled: isBusy || isItemDisabled }}
-          disabled={isBusy || isItemDisabled}
-          onPress={onUseItem}
-          style={({ pressed }) => [
-            styles.actionButton,
-            !isBusy && !isItemDisabled && styles.activeActionButton,
-            (isBusy || isItemDisabled) && styles.disabledButton,
-            pressed && styles.pressed,
-          ]}
+        <CircularButton
+          disabled={isUseItemDisabled}
+          icon="shopping-bag"
+          label="Use Item"
+          onPress={() => playerAction("item")}
+          styles={styles}
           testID="use-item-button"
-        >
-          <FontAwesome
-            color={colors.ink}
-            name="shopping-bag"
-            size={14}
-            testID="use-item-icon"
-          />
-          <Text style={styles.actionText}>Use Item</Text>
-        </Pressable>
-
-        {actions.map((action) => {
-          const { label } = actionDetails[action];
-          const isDisabled = isBusy || disabledActions.includes(action);
-
-          return (
-            <Pressable
-              accessibilityLabel={label}
-              accessibilityRole="button"
-              accessibilityState={{ disabled: isDisabled }}
-              disabled={isDisabled}
-              key={label}
-              onPress={() => onAction(action)}
-              style={({ pressed }) => [
-                styles.actionButton,
-                !isBusy && !isDisabled && styles.activeActionButton,
-                isDisabled && styles.disabledButton,
-                pressed && styles.pressed,
-              ]}
-              testID={`${action}-action-button`}
-            >
-              <FontAwesome
-                color={colors.ink}
-                name={actionDetails[action].icon}
-                size={14}
-              />
-              <Text style={styles.actionText}>{label}</Text>
-            </Pressable>
-          );
-        })}
+        />
+        <CircularButton
+          disabled={isBusy || disabledActions.includes("special")}
+          icon="bolt"
+          label="Special"
+          onPress={() => playerAction("special")}
+          styles={styles}
+          testID="special-action-button"
+        />
+        <CircularButton
+          disabled={isBusy || disabledActions.includes("attack")}
+          icon="flash"
+          label="Attack"
+          onPress={() => playerAction("attack")}
+          styles={styles}
+          testID="attack-action-button"
+        />
+        <CircularButton
+          disabled={isBusy || disabledActions.includes("defend")}
+          icon="shield"
+          label="Defend"
+          onPress={() => playerAction("defend")}
+          styles={styles}
+          testID="defend-action-button"
+        />
       </View>
 
       <View
@@ -160,7 +158,7 @@ export function ActionControls({
             color={colors.ink}
             direction="north"
             disabled={isBusy || disabledDirections.includes("north")}
-            onMove={onMove}
+            playerAction={playerAction}
             styles={styles}
           />
           <View style={styles.dPadSpacer} />
@@ -170,7 +168,7 @@ export function ActionControls({
             color={colors.ink}
             direction="west"
             disabled={isBusy || disabledDirections.includes("west")}
-            onMove={onMove}
+            playerAction={playerAction}
             styles={styles}
           />
           <View style={styles.dPadCenter} />
@@ -178,7 +176,7 @@ export function ActionControls({
             color={colors.ink}
             direction="east"
             disabled={isBusy || disabledDirections.includes("east")}
-            onMove={onMove}
+            playerAction={playerAction}
             styles={styles}
           />
         </View>
@@ -188,7 +186,7 @@ export function ActionControls({
             color={colors.ink}
             direction="south"
             disabled={isBusy || disabledDirections.includes("south")}
-            onMove={onMove}
+            playerAction={playerAction}
             styles={styles}
           />
           <View style={styles.dPadSpacer} />
@@ -198,11 +196,60 @@ export function ActionControls({
   );
 }
 
+type CircularButtonProps = {
+  disabled: boolean;
+  icon?: keyof typeof FontAwesome.glyphMap;
+  label?: string;
+  onPress: () => void;
+  styles: ReturnType<typeof createStyles>;
+  testID: string;
+};
+
+function CircularButton({
+  disabled,
+  icon,
+  label,
+  onPress,
+  styles,
+  testID,
+}: CircularButtonProps) {
+  const colors = useThemeColors();
+
+  return (
+    <Pressable
+      accessibilityLabel={label}
+      accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.actionButton,
+        !disabled && styles.activeActionButton,
+        disabled && styles.disabledButton,
+        pressed && styles.pressed,
+      ]}
+      testID={testID}
+    >
+      {icon ? <FontAwesome color={colors.ink} name={icon} size={14} /> : null}
+      {label ? (
+        <Text
+          adjustsFontSizeToFit
+          minimumFontScale={0.75}
+          numberOfLines={2}
+          style={styles.actionText}
+        >
+          {label}
+        </Text>
+      ) : null}
+    </Pressable>
+  );
+}
+
 type ArrowButtonProps = {
   color: string;
   direction: Direction;
   disabled: boolean;
-  onMove: (direction: Direction) => void;
+  playerAction: (action: PlayerAction) => void;
   styles: ReturnType<typeof createStyles>;
 };
 
@@ -210,7 +257,7 @@ function ArrowButton({
   color,
   direction,
   disabled,
-  onMove,
+  playerAction,
   styles,
 }: ArrowButtonProps) {
   return (
@@ -219,14 +266,14 @@ function ArrowButton({
       accessibilityRole="button"
       accessibilityState={{ disabled }}
       disabled={disabled}
-      onPress={() => onMove(direction)}
+      onPress={() => playerAction(`move-${direction}`)}
       style={({ pressed }) => [
         styles.arrowButton,
         disabled && styles.disabledButton,
         pressed && styles.pressed,
       ]}
     >
-      <Ionicons
+      <FontAwesome
         color={color}
         name={arrowIcons[direction]}
         size={24}
@@ -265,9 +312,9 @@ function createStyles(colors: ThemeColors) {
     pickupText: {
       color: colors.paper,
       flex: 1,
-      fontSize: 11,
-      fontWeight: "800",
-      lineHeight: 13,
+      fontSize: 12,
+      fontWeight: "900",
+      lineHeight: 14,
       textAlign: "center",
     },
     actionGrid: {
@@ -294,9 +341,9 @@ function createStyles(colors: ThemeColors) {
     },
     actionText: {
       color: colors.ink,
-      fontSize: 9,
-      fontWeight: "700",
-      lineHeight: 10,
+      fontSize: 11,
+      fontWeight: "900",
+      lineHeight: 12,
       textAlign: "center",
     },
     disabledButton: {

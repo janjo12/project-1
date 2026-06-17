@@ -16,7 +16,7 @@ const SETTINGS_STORAGE_KEY = "project-1:game-settings";
 
 export const DEFAULT_GAME_SETTINGS: GameSettings = {
   appearance: "system",
-  difficulty: "normal",
+  difficulty: "easy",
   handedness: "right",
   seed: "",
   vibrationEnabled: true,

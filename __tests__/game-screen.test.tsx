@@ -1,26 +1,33 @@
 import * as Haptics from "expo-haptics";
 import { act, fireEvent, render } from "@testing-library/react-native";
-import { Alert, StyleSheet } from "react-native";
+import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 
+import { AppButton } from "@/components/app-button";
 import { EndScreen } from "@/components/end-screen";
 import { GameScreen } from "@/components/game-screen";
 import { GameViewPanel } from "@/components/game-view-panel";
-import { SettingsScreen } from "@/components/settings-screen";
-import { SettingsForm } from "@/components/settings-form";
-import { StartScreen } from "@/components/start-screen";
+import { GameOptionsForm } from "@/components/game-options-form";
+import { ScreenShell } from "@/components/screen-shell";
 import { colors, lightColors, ThemeProvider } from "@/components/theme";
-import { getSeededEnemyRoster } from "@/entities";
 import {
   createSeededDungeonMap,
   getConnectedRoomId,
   getRoom,
-  getRoomEnemyIndex,
+  getRoomMonster,
+  getStairsRoom,
+  POSSIBLE_MONSTERS,
   type Direction,
 } from "@/utils/dungeon-map";
 import { DEFAULT_GAME_SETTINGS } from "@/utils/settings-storage";
 
 const TEST_SEED = "test-88";
 const TURN_DURATION = 4000;
+const reverseDirections: Record<Direction, Direction> = {
+  east: "west",
+  north: "south",
+  south: "north",
+  west: "east",
+};
 
 function getBarFillWidth(screen: ReturnType<typeof render>, testID: string) {
   return parseFloat(
@@ -43,9 +50,9 @@ function clearCurrentRoom(screen: ReturnType<typeof render>) {
 
 function moveToFirstEnemyRoom(screen: ReturnType<typeof render>) {
   followPath(screen, getPathToRoom((roomId) => {
-    const map = createSeededDungeonMap(TEST_SEED, 1, 4);
+    const map = createSeededDungeonMap(TEST_SEED, 1);
 
-    return getRoomEnemyIndex(getRoom(map, roomId)) !== null;
+    return getRoomMonster(getRoom(map, roomId)) !== null;
   }));
 }
 
@@ -56,7 +63,7 @@ function followPath(screen: ReturnType<typeof render>, path: Direction[]) {
 }
 
 function getPathToRoom(predicate: (roomId: string) => boolean) {
-  const map = createSeededDungeonMap(TEST_SEED, 1, 4);
+  const map = createSeededDungeonMap(TEST_SEED, 1);
   const queue: { path: Direction[]; roomId: string }[] = [
     { path: [], roomId: map.startingRoomId },
   ];
@@ -105,13 +112,24 @@ describe("game screens", () => {
     const handleOpenSettings = jest.fn();
 
     const screen = render(
-      <StartScreen
-        isLoading={false}
-        settings={DEFAULT_GAME_SETTINGS}
-        onOpenSettings={handleOpenSettings}
-        onSettingsChange={handleSettingsChange}
-        onStartGame={handleStartGame}
-      />,
+      <ScreenShell>
+        <View>
+          <Pressable
+            accessibilityLabel="Settings"
+            accessibilityRole="button"
+            onPress={handleOpenSettings}
+            testID="open-settings-button"
+          >
+            <Text>Settings</Text>
+          </Pressable>
+          <Text>[Title]</Text>
+          <GameOptionsForm
+            settings={DEFAULT_GAME_SETTINGS}
+            onChange={handleSettingsChange}
+          />
+          <AppButton label="Start" onPress={handleStartGame} />
+        </View>
+      </ScreenShell>,
     );
 
     fireEvent.changeText(screen.getByLabelText("Seed"), "starter-seed");
@@ -129,6 +147,9 @@ describe("game screens", () => {
 
   it("mirrors the game controls for left-handed play", () => {
     const handleQuitToTitle = jest.fn();
+    const map = createSeededDungeonMap(TEST_SEED, 1);
+    const currentRow = map.startingRoomId.match(/[A-Z]+/)![0];
+    const currentColumn = map.startingRoomId.match(/\d+/)![0];
     const { getByLabelText, getByRole, getByTestId, getByText, rerender } = render(
       <GameScreen
         handedness="right"
@@ -157,21 +178,23 @@ describe("game screens", () => {
     expect(getByText("Level 1 Map")).toBeOnTheScreen();
     expect(getByTestId("turn-timer-icon").props.color).toBe("#a855f7");
     expect(
-      StyleSheet.flatten(getByTestId("map-room-E2").props.style)
+      StyleSheet.flatten(getByTestId(`map-room-${map.startingRoomId}`).props.style)
         .backgroundColor,
     ).toBe(colors.mapCurrentRoom);
     expect(
-      StyleSheet.flatten(getByTestId("map-column-label-E").props.style).color,
+      StyleSheet.flatten(getByTestId(`map-row-label-${currentRow}`).props.style).color,
     ).toBe(colors.mapCurrentRoom);
     expect(
-      StyleSheet.flatten(getByTestId("map-row-label-2").props.style).color,
+      StyleSheet.flatten(getByTestId(`map-column-label-${currentColumn}`).props.style).color,
     ).toBe(colors.mapCurrentRoom);
     expect(getByText("A")).toBeOnTheScreen();
-    expect(getByText("12")).toBeOnTheScreen();
+    expect(getByText("L")).toBeOnTheScreen();
+    expect(getByText("6")).toBeOnTheScreen();
     expect(
       getByTestId("action-button-cluster").children
         .filter((child) => typeof child !== "string")
-        .map((child) => child.props.testID),
+        .map((child) => child.props.testID)
+        .slice(0, 4),
     ).toEqual([
       "use-item-button",
       "special-action-button",
@@ -197,13 +220,14 @@ describe("game screens", () => {
       StyleSheet.flatten(getByTestId("direction-controls").props.style).height,
     ).toBe(110);
     expect(getByTestId("move-north-icon")).toBeOnTheScreen();
-    expect(
-      getByRole("button", { name: "Move south" }).props.accessibilityState,
-    ).toEqual(expect.objectContaining({ disabled: true }));
+    expect(getByTestId("move-east-icon")).toBeOnTheScreen();
     expect(getByTestId("use-item-button")).toHaveTextContent("Use Item");
     expect(getByRole("button", { name: "Use Item" }).props.accessibilityState)
       .toEqual(expect.objectContaining({ disabled: true }));
 
+    fireEvent.press(getByRole("button", { name: "Menu" }));
+
+    expect(getByLabelText("Game menu")).toBeOnTheScreen();
     fireEvent.press(getByRole("button", { name: "Quit to Title" }));
 
     expect(handleQuitToTitle).not.toHaveBeenCalled();
@@ -225,6 +249,8 @@ describe("game screens", () => {
 
     expect(handleQuitToTitle).toHaveBeenCalledTimes(1);
 
+    fireEvent.press(getByRole("button", { name: "Back to Game" }));
+
     rerender(
       <GameScreen handedness="left" seed={TEST_SEED} onGameOver={jest.fn()} />,
     );
@@ -239,35 +265,51 @@ describe("game screens", () => {
     ).toBe("row-reverse");
   });
 
-  it("generates the same enemy order for the same seed", () => {
-    const firstRoster = getSeededEnemyRoster("starter-seed").map(
-      (enemy) => enemy.name,
+  it("defines reusable monster objects for generated maps", () => {
+    expect(POSSIBLE_MONSTERS.map((monster) => monster.name)).toEqual(
+      expect.arrayContaining(["Glitch Imp", "Werewolf"]),
     );
-    const secondRoster = getSeededEnemyRoster("starter-seed").map(
-      (enemy) => enemy.name,
-    );
-    const differentRoster = getSeededEnemyRoster("another-seed").map(
-      (enemy) => enemy.name,
-    );
-
-    expect(secondRoster).toEqual(firstRoster);
-    expect(differentRoster).not.toEqual(firstRoster);
   });
 
-  it("shows emoji combatants, enemy roster, and vector status bars", () => {
+  it("shows no enemy combatant when no enemy is provided", () => {
     const screen = render(<GameViewPanel />);
 
-    expect(screen.getByTestId("enemy-health-bar-icon").props.color).toBe(
-      colors.health,
+    expect(screen.queryByTestId("enemy-health-bar")).toBeNull();
+    expect(screen.queryByLabelText("Glitch Imp")).toBeNull();
+    expect(screen.getByLabelText("Player warrior")).toBeOnTheScreen();
+  });
+
+  it("shows explicit enemy combatants and compact enemy health", () => {
+    const screen = render(
+      <GameViewPanel
+        enemy={{
+          emoji: "\uD83D\uDC7E",
+          hitPoints: 3,
+          name: "Glitch Imp",
+        }}
+        enemyMaxHitPoints={3}
+      />,
     );
+
+    expect(screen.queryByTestId("enemy-health-bar-icon")).toBeNull();
     expect(getBarFillWidth(screen, "enemy-health-bar")).toBe(100);
+    const enemyHealthBarStyle = StyleSheet.flatten(
+      screen.getByTestId("enemy-health-bar").props.style,
+    );
+
+    expect(enemyHealthBarStyle.height).toBe(4);
+    expect(enemyHealthBarStyle.width).toBe(56);
+    expect(enemyHealthBarStyle.borderWidth).toBeUndefined();
     expect(screen.getByLabelText("Glitch Imp")).toHaveTextContent(
       "\uD83D\uDC7E",
     );
     expect(screen.getByLabelText("Player warrior")).toBeOnTheScreen();
   });
 
-  it("uses a darker current-room map highlight in light mode", () => {
+  it("uses a brighter current-room map highlight in light mode", () => {
+    const map = createSeededDungeonMap(TEST_SEED, 1);
+    const currentRow = map.startingRoomId.match(/[A-Z]+/)![0];
+    const currentColumn = map.startingRoomId.match(/\d+/)![0];
     const screen = render(
       <ThemeProvider appearance="light">
         <GameScreen
@@ -279,15 +321,15 @@ describe("game screens", () => {
     );
 
     expect(
-      StyleSheet.flatten(screen.getByTestId("map-room-E2").props.style)
+      StyleSheet.flatten(screen.getByTestId(`map-room-${map.startingRoomId}`).props.style)
         .backgroundColor,
     ).toBe(lightColors.mapCurrentRoom);
     expect(
-      StyleSheet.flatten(screen.getByTestId("map-column-label-E").props.style)
+      StyleSheet.flatten(screen.getByTestId(`map-row-label-${currentRow}`).props.style)
         .color,
     ).toBe(lightColors.mapCurrentRoom);
     expect(
-      StyleSheet.flatten(screen.getByTestId("map-row-label-2").props.style)
+      StyleSheet.flatten(screen.getByTestId(`map-column-label-${currentColumn}`).props.style)
         .color,
     ).toBe(lightColors.mapCurrentRoom);
   });
@@ -358,9 +400,12 @@ describe("game screens", () => {
     expect(getBarFillWidth(screen, "player-health-bar")).toBe(100);
   });
 
-  it("defaults to defend when the turn timer runs out with no selected action", () => {
+  it.each(["normal", "hard"] as const)(
+    "defaults to defend when the %s turn timer runs out",
+    (difficulty) => {
     const screen = render(
       <GameScreen
+        difficulty={difficulty}
         handedness="right"
         seed={TEST_SEED}
         onGameOver={jest.fn()}
@@ -375,7 +420,8 @@ describe("game screens", () => {
 
     expect(getBarFillWidth(screen, "enemy-health-bar")).toBe(100);
     expect(getBarFillWidth(screen, "player-health-bar")).toBe(100);
-  });
+    },
+  );
 
   it("does not render or expire the turn timer on easy difficulty", () => {
     const screen = render(
@@ -399,6 +445,83 @@ describe("game screens", () => {
       /Facing .+ \| Level 1 \| Room .+/,
     );
     expect(getBarFillWidth(screen, "player-health-bar")).toBe(100);
+  });
+
+  it("restarts the turn timer after a movement action", () => {
+    const screen = render(
+      <GameScreen
+        difficulty="normal"
+        handedness="right"
+        seed={TEST_SEED}
+        onGameOver={jest.fn()}
+      />,
+    );
+    const map = createSeededDungeonMap(TEST_SEED, 1);
+    const firstMoveDirection = getPathToRoom((roomId) => {
+      return roomId !== map.startingRoomId;
+    })[0]!;
+
+    act(() => {
+      jest.advanceTimersByTime(1000);
+    });
+
+    expect(getBarFillWidth(screen, "turn-timer")).toBeLessThan(100);
+
+    fireEvent.press(
+      screen.getByRole("button", { name: `Move ${firstMoveDirection}` }),
+    );
+
+    expect(getBarFillWidth(screen, "turn-timer")).toBe(100);
+  });
+
+  it("pauses and resumes the turn timer from the game menu", () => {
+    const handleSettingsChange = jest.fn();
+    const screen = render(
+      <GameScreen
+        difficulty="normal"
+        handedness="right"
+        seed={TEST_SEED}
+        settings={DEFAULT_GAME_SETTINGS}
+        onGameOver={jest.fn()}
+        onSettingsChange={handleSettingsChange}
+      />,
+    );
+
+    act(() => {
+      jest.advanceTimersByTime(1000);
+    });
+
+    const pausedWidth = getBarFillWidth(screen, "turn-timer");
+
+    fireEvent.press(screen.getByRole("button", { name: "Menu" }));
+    fireEvent(
+      screen.getByRole("switch", { name: "Dark Mode" }),
+      "valueChange",
+      true,
+    );
+    fireEvent(
+      screen.getByRole("switch", { name: "Vibration" }),
+      "valueChange",
+      false,
+    );
+
+    act(() => {
+      jest.advanceTimersByTime(TURN_DURATION);
+    });
+
+    expect(getBarFillWidth(screen, "turn-timer")).toBeCloseTo(pausedWidth, 1);
+    expect(handleSettingsChange).toHaveBeenCalledWith({ appearance: "dark" });
+    expect(handleSettingsChange).toHaveBeenCalledWith({
+      vibrationEnabled: false,
+    });
+
+    fireEvent.press(screen.getByRole("button", { name: "Back to Game" }));
+
+    act(() => {
+      jest.advanceTimersByTime(500);
+    });
+
+    expect(getBarFillWidth(screen, "turn-timer")).toBeLessThan(pausedWidth);
   });
 
   it("uses energy for a special attack that deals double damage", () => {
@@ -429,14 +552,6 @@ describe("game screens", () => {
       />,
     );
 
-    expect(screen.getByLabelText("Glitch Imp roster enemy")).toBeOnTheScreen();
-    expect(
-      screen.getByLabelText("Crypt Stumbler roster enemy"),
-    ).toBeOnTheScreen();
-    expect(screen.getByLabelText("Tiny Dragon roster enemy")).toBeOnTheScreen();
-    expect(screen.getByLabelText("Night Count roster enemy")).toBeOnTheScreen();
-    expect(screen.getByLabelText("Werewolf roster enemy")).toBeOnTheScreen();
-
     moveToFirstEnemyRoom(screen);
     expect(screen.getByLabelText("Turn status")).toHaveTextContent(
       /Facing .+ \| Level 1 \| Room .+/,
@@ -457,12 +572,59 @@ describe("game screens", () => {
         onGameOver={jest.fn()}
       />,
     );
+    const map = createSeededDungeonMap(TEST_SEED, 1);
+    const firstEnemyPath = getPathToRoom((roomId) => {
+      return getRoomMonster(getRoom(map, roomId)) !== null;
+    });
+    const firstDirection = firstEnemyPath[0]!;
+    const firstMovedRoomId = getConnectedRoomId(
+      map,
+      map.startingRoomId,
+      firstDirection,
+    );
 
-    moveToFirstEnemyRoom(screen);
+    expect(screen.getByTestId(`map-room-${map.startingRoomId}`))
+      .toBeOnTheScreen();
+    expect(screen.queryByTestId(`map-room-${getStairsRoom(map)!.id}`)).toBeNull();
+
+    fireEvent.press(
+      screen.getByRole("button", { name: `Move ${firstDirection}` }),
+    );
+
+    expect(screen.getByTestId(`map-room-${firstMovedRoomId!}`))
+      .toBeOnTheScreen();
+
+    followPath(screen, firstEnemyPath.slice(1));
 
     expect(screen.getByLabelText("Turn status")).toHaveTextContent(
       /Facing .+ \| Level 1 \| Room .+/,
     );
+  });
+
+  it("does not let enemies act after the player moves to a different room", () => {
+    const screen = render(
+      <GameScreen
+        handedness="right"
+        seed={TEST_SEED}
+        onGameOver={jest.fn()}
+      />,
+    );
+    const firstEnemyPath = getPathToRoom((roomId) => {
+      const map = createSeededDungeonMap(TEST_SEED, 1);
+
+      return getRoomMonster(getRoom(map, roomId)) !== null;
+    });
+    const returnDirection = reverseDirections[firstEnemyPath.at(-1)!];
+
+    followPath(screen, firstEnemyPath);
+    expect(screen.getByLabelText("Turn status")).toHaveTextContent(
+      /Facing .+ \| Level 1 \| Room .+/,
+    );
+
+    fireEvent.press(screen.getByRole("button", { name: `Move ${returnDirection}` }));
+    resolveTurnTimers();
+
+    expect(getBarFillWidth(screen, "player-health-bar")).toBe(100);
   });
 
   it("does not report a cleared-level score before reaching stairs", () => {
@@ -494,13 +656,13 @@ describe("game screens", () => {
       />,
     );
 
-    const map = createSeededDungeonMap(TEST_SEED, 1, 4);
+    const map = createSeededDungeonMap(TEST_SEED, 1);
 
-    followPath(screen, getPathToRoom((roomId) => roomId === map.stairsRoomId));
+    followPath(screen, getPathToRoom((roomId) => roomId === getStairsRoom(map)!.id));
 
     expect(screen.getByLabelText("Level 2 Map")).toBeOnTheScreen();
     expect(screen.getByLabelText("Turn status")).toHaveTextContent(
-      "Room A7 clear | Level 2 | Cleared 1",
+      /Room .+ clear \| Level 2 \| Cleared 1/,
     );
     expect(getBarFillWidth(screen, "player-health-bar")).toBe(100);
     expect(getBarFillWidth(screen, "player-energy-bar")).toBe(100);
@@ -522,10 +684,10 @@ describe("game screens", () => {
   });
 });
 
-describe("SettingsForm", () => {
+describe("GameOptionsForm", () => {
   it("marks the selected game setup settings", () => {
     const screen = render(
-      <SettingsForm
+      <GameOptionsForm
         settings={{
           appearance: "system",
           difficulty: "easy",
@@ -547,50 +709,5 @@ describe("SettingsForm", () => {
       colors.fadedInk,
     );
     expect(screen.getByDisplayValue("saved")).toBeOnTheScreen();
-  });
-});
-
-describe("SettingsScreen", () => {
-  it("updates appearance and vibration preferences", () => {
-    const handleSettingsChange = jest.fn();
-    const handleReturnToTitle = jest.fn();
-    const screen = render(
-      <SettingsScreen
-        settings={{
-          appearance: "dark",
-          difficulty: "easy",
-          handedness: "left",
-          seed: "saved",
-          vibrationEnabled: true,
-        }}
-        onReturnToTitle={handleReturnToTitle}
-        onSettingsChange={handleSettingsChange}
-      />,
-    );
-
-    expect(screen.getByRole("switch", { name: "Dark Mode" }).props.value).toBe(
-      true,
-    );
-    expect(screen.getByRole("switch", { name: "Vibration" }).props.value).toBe(
-      true,
-    );
-
-    fireEvent(
-      screen.getByRole("switch", { name: "Dark Mode" }),
-      "valueChange",
-      false,
-    );
-    fireEvent(
-      screen.getByRole("switch", { name: "Vibration" }),
-      "valueChange",
-      false,
-    );
-    fireEvent.press(screen.getByRole("button", { name: "Back to Title" }));
-
-    expect(handleSettingsChange).toHaveBeenCalledWith({ appearance: "light" });
-    expect(handleSettingsChange).toHaveBeenCalledWith({
-      vibrationEnabled: false,
-    });
-    expect(handleReturnToTitle).toHaveBeenCalledTimes(1);
   });
 });

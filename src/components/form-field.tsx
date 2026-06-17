@@ -3,11 +3,11 @@ import { StyleSheet, Text, View } from "react-native";
 
 import { type ThemeColors, useThemeColors } from "@/components/theme";
 
-type SettingsFieldProps = PropsWithChildren<{
+type FormFieldProps = PropsWithChildren<{
   label: string;
 }>;
 
-export function SettingsField({ children, label }: SettingsFieldProps) {
+export function FormField({ children, label }: FormFieldProps) {
   const colors = useThemeColors();
   const styles = createStyles(colors);
 

@@ -2,19 +2,19 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { type ThemeColors, useThemeColors } from "@/components/theme";
 
-type SelectableSettingOptionProps = {
+type SelectableOptionProps = {
   isSelected: boolean;
   label: string;
   onPress: () => void;
   variant: "segment" | "radio";
 };
 
-export function SelectableSettingOption({
+export function SelectableOption({
   isSelected,
   label,
   onPress,
   variant,
-}: SelectableSettingOptionProps) {
+}: SelectableOptionProps) {
   const isRadio = variant === "radio";
   const colors = useThemeColors();
   const styles = createStyles(colors);

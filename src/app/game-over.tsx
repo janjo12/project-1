@@ -8,7 +8,7 @@ import { generateRandomSeed } from "@/utils/seed";
 export default function GameOverRoute() {
   const { score } = useLocalSearchParams<{ score?: string }>();
   const { isLoading, saveSettings, settings } = useGameSettings();
-  const defeatedEnemies = Number(score);
+  const clearedLevels = Number(score);
 
   const handleReturnToTitle = async () => {
     await saveSettings({
@@ -25,7 +25,7 @@ export default function GameOverRoute() {
   return (
     <ThemeProvider appearance={settings.appearance}>
       <EndScreen
-        score={Number.isFinite(defeatedEnemies) ? String(defeatedEnemies) : "0"}
+        score={Number.isFinite(clearedLevels) ? String(clearedLevels) : "0"}
         onReturnToTitle={handleReturnToTitle}
       />
     </ThemeProvider>

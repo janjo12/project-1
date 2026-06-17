@@ -1,61 +1,74 @@
 import * as Haptics from "expo-haptics";
 import {
-  type Dispatch,
-  type RefObject,
-  type SetStateAction,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
+  type Dispatch,
+  type SetStateAction,
 } from "react";
-import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import {
   GameEngine,
   type GameEngineSystem,
   type GameEngineUpdateEventOptionType,
 } from "react-native-game-engine";
 
-import {
-  ActionControls,
-  actionDetails,
-  type PlayerAction,
-} from "@/components/action-controls";
-import { DungeonMapPlaceholder } from "@/components/dungeon-map-placeholder";
+import { ActionControls, type PlayerAction } from "@/components/action-controls";
+import { DungeonMap } from "@/components/dungeon-map";
 import { GameViewPanel, ResourceBar } from "@/components/game-view-panel";
+import { PreferenceToggles } from "@/components/preference-toggles";
 import { ScreenShell } from "@/components/screen-shell";
-import { type ThemeColors, useThemeColors } from "@/components/theme";
+import { useThemeColors, type ThemeColors } from "@/components/theme";
 import {
   advanceAnimationFrame,
   COMBAT,
   createCombatAnimationFrame,
-  getSeededEnemyRoster,
-  ITEMS,
   PLAYER,
-  WEREWOLF,
   type CombatAnimationFrame,
-  type Enemy,
 } from "@/entities";
 import {
+  addItemToRoom,
+  hasRoomStairs as checkRoomStairs,
+  createAndSaveSeededDungeonMap,
   createSeededDungeonMap,
+  damageMonsterInRoom,
   getConnectedRoomId,
+  getCurrentRoom,
+  getCurrentRoomId,
+  getGridPosition,
   getLockedDirections,
   getRoom,
-  getRoomEnemyIndex,
+  getRoomItem,
   getRoomItemId,
+  getRoomMonster,
+  moveCurrentPosition,
+  POSSIBLE_ITEMS,
+  removeItemFromRoom,
+  saveDungeonMap,
   unlockDoor,
+  updateStoredDungeonMap,
   type Direction,
-  type DungeonMap,
+  type DungeonMap as DungeonMapType,
+  type GridPosition,
   type ItemId,
+  type WorldMonster
 } from "@/utils/dungeon-map";
-import type { Difficulty, Handedness } from "@/utils/settings-storage";
+import type {
+  Difficulty,
+  GameSettings,
+  Handedness,
+} from "@/utils/settings-storage";
 
 type GameScreenProps = {
   difficulty?: Difficulty;
   handedness: Handedness;
   onGameOver: (score: number) => void;
   onQuitToTitle?: () => void;
+  onSettingsChange?: (settings: Partial<GameSettings>) => void;
   seed: string;
+  settings?: Pick<GameSettings, "appearance" | "vibrationEnabled">;
   vibrationEnabled?: boolean;
 };
 
@@ -70,6 +83,25 @@ const PLAYER_MAX_HEALTH = PLAYER.maxHealth;
 const PLAYER_MAX_ENERGY = PLAYER.maxEnergy;
 const TURN_DURATION = 4000;
 const GAME_LOOP_TICK = 100;
+const TURN_TIMEOUT_ACTION = "defend" satisfies PlayerAction;
+const moveActionDirections = {
+  "move-east": "east",
+  "move-north": "north",
+  "move-south": "south",
+  "move-west": "west",
+} satisfies Partial<Record<PlayerAction, Direction>>;
+
+function getItemLabel(itemId: ItemId | null) {
+  return itemId
+    ? (POSSIBLE_ITEMS.find((item) => item.id === itemId)?.label ?? itemId)
+    : null;
+}
+
+function isMoveAction(
+  action: PlayerAction,
+): action is keyof typeof moveActionDirections {
+  return action in moveActionDirections;
+}
 
 type GameLoopEntity = {
   elapsed: number;
@@ -77,6 +109,7 @@ type GameLoopEntity = {
   isTurnClockActive: () => boolean;
   onExpire: () => void;
   onFrame: (delta: number, turnTimeRemaining?: number) => void;
+  resetKey: number;
 };
 
 type GameLoopEntities = {
@@ -170,32 +203,8 @@ function restartAnimations(
   });
 }
 
-function createLevelMap(seed: string, level: number, enemyCount: number) {
-  return createSeededDungeonMap(seed, level, enemyCount);
-}
-
-function markRoomCleared(map: DungeonMap, roomId: string): DungeonMap {
-  return setRoomContents(map, roomId, "empty");
-}
-
-function setRoomContents(
-  map: DungeonMap,
-  roomId: string,
-  contents: DungeonMap["rooms"][number][number]["contents"],
-): DungeonMap {
-  return {
-    ...map,
-    rooms: map.rooms.map((row) =>
-      row.map((room) =>
-        room.id === roomId
-          ? {
-              ...room,
-              contents,
-            }
-          : room,
-      ),
-    ),
-  };
+function createLevelMap(seed: string, level: number, startingPosition?: GridPosition) {
+  return createSeededDungeonMap(seed, level, startingPosition);
 }
 
 function getDisabledDirections({
@@ -203,7 +212,7 @@ function getDisabledDirections({
   isResolving,
   roomId,
 }: {
-  dungeonMap: DungeonMap;
+  dungeonMap: DungeonMapType;
   isResolving: boolean;
   roomId: string;
 }) {
@@ -218,33 +227,18 @@ function getDisabledDirections({
   );
 }
 
-function getRoomEnemyHitPoints(
-  map: DungeonMap,
-  roomId: string,
-  enemies: Enemy[],
-) {
-  const room = getRoom(map, roomId);
-  const enemyIndex = getRoomEnemyIndex(room);
-
-  if (enemyIndex === null) {
-    return 0;
-  }
-
-  return enemies[enemyIndex % enemies.length].hitPoints;
-}
-
 function canUseInventoryItem({
   currentRoomId,
   dungeonMap,
-  hasWerewolfInRoom,
   inventoryItem,
+  monster,
   playerEnergy,
   playerHealth,
 }: {
   currentRoomId: string;
-  dungeonMap: DungeonMap;
-  hasWerewolfInRoom: boolean;
+  dungeonMap: DungeonMapType;
   inventoryItem: ItemId | null;
+  monster: WorldMonster | null;
   playerEnergy: number;
   playerHealth: number;
 }) {
@@ -264,27 +258,21 @@ function canUseInventoryItem({
     return getLockedDirections(dungeonMap, currentRoomId).length > 0;
   }
 
-  return hasWerewolfInRoom;
+  return Boolean(monster?.isWerewolf);
 }
 
 function resetRoomFeedback({
   setEnemyHealthLossAmount,
   setPlayerEnergyLossAmount,
   setPlayerHealthLossAmount,
-  setSelectedAction,
-  selectedActionRef,
 }: {
-  selectedActionRef: RefObject<PlayerAction | null>;
   setEnemyHealthLossAmount: Dispatch<SetStateAction<number>>;
   setPlayerEnergyLossAmount: Dispatch<SetStateAction<number>>;
   setPlayerHealthLossAmount: Dispatch<SetStateAction<number>>;
-  setSelectedAction: Dispatch<SetStateAction<PlayerAction | null>>;
 }) {
   setEnemyHealthLossAmount(0);
   setPlayerEnergyLossAmount(0);
   setPlayerHealthLossAmount(0);
-  selectedActionRef.current = null;
-  setSelectedAction(null);
 }
 
 export function GameScreen({
@@ -292,13 +280,20 @@ export function GameScreen({
   handedness,
   onGameOver,
   onQuitToTitle = () => {},
+  onSettingsChange = () => {},
   seed,
+  settings,
   vibrationEnabled = true,
 }: GameScreenProps) {
   const isLeftHanded = handedness === "left";
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const colors = useThemeColors();
   const styles = createStyles(colors);
   const game = useGameRun({ difficulty, onGameOver, seed, vibrationEnabled });
+  const pauseSettings = settings ?? {
+    appearance: "system" as const,
+    vibrationEnabled,
+  };
   const disabledActions = getDisabledActions({
     hasLost: game.hasLost,
     hasRoomEnemy: game.hasRoomEnemy,
@@ -312,11 +307,13 @@ export function GameScreen({
         isTurnClockActive: game.isTurnClockActive,
         onExpire: game.expireTurn,
         onFrame: game.updateGameFrame,
+        resetKey: game.turnNumber,
       },
     }),
     [
       game.expireTurn,
       game.isTurnClockActive,
+      game.turnNumber,
       game.updateGameFrame,
     ],
   );
@@ -339,7 +336,7 @@ export function GameScreen({
           key={game.turnNumber}
           entities={gameLoopEntities}
           renderer={() => null}
-          running={game.isGameLoopRunning()}
+          running={game.isGameLoopRunning() && !isMenuOpen}
           style={styles.engineLoop}
           systems={[runGameLoop]}
           timer={new GameLoopTimer()}
@@ -351,25 +348,23 @@ export function GameScreen({
         >
           <Pressable
             accessibilityRole="button"
-            onPress={confirmQuitToTitle}
+            onPress={() => setIsMenuOpen(true)}
             style={({ pressed }) => [
-              styles.quitButton,
+              styles.menuButton,
               pressed && styles.pressed,
             ]}
           >
-            <Text style={styles.quitButtonText}>Quit to Title</Text>
+            <Text style={styles.menuButtonText}>Menu</Text>
           </Pressable>
         </View>
 
         <GameViewPanel
           animationFrame={game.animationFrame}
-          enemy={{
-            ...game.currentEnemy,
-            hitPoints: game.enemyHitPoints,
-          }}
+          enemy={game.currentEnemy}
           enemyHealthLossAmount={game.enemyHealthLossAmount}
-          enemyMaxHitPoints={game.currentEnemy.hitPoints}
-          enemyRoster={game.enemyRoster}
+          enemyMaxHitPoints={game.currentEnemyMaxHitPoints}
+          floorItem={game.currentRoomItem}
+          floorStairs={game.roomHasStairs}
           playerEnergyLossAmount={game.playerEnergyLossAmount}
           playerHealthLossAmount={game.playerHealthLossAmount}
         />
@@ -417,28 +412,115 @@ export function GameScreen({
           ]}
           testID="game-lower-layout"
         >
-          <DungeonMapPlaceholder
+          <DungeonMap
             currentRoomId={game.currentRoomId}
             map={game.dungeonMap}
-            werewolfRoomId={game.werewolfRoomId ?? undefined}
           />
           <ActionControls
             disabledActions={disabledActions}
             disabledDirections={game.disabledDirections}
-            floorItemLabel={
-              game.currentRoomItem ? ITEMS[game.currentRoomItem].label : null
-            }
+            floorItemLabel={getItemLabel(game.currentRoomItem)}
             isItemDisabled={game.isItemDisabled}
             isBusy={game.isResolving}
-            itemLabel={game.inventoryItem ? ITEMS[game.inventoryItem].label : null}
-            onAction={game.selectAction}
-            onMove={game.moveToRoom}
-            onPickupItem={game.pickupItem}
-            onUseItem={game.useItem}
+            itemLabel={getItemLabel(game.inventoryItem)}
+            nextLevelNumber={game.roomHasStairs ? game.level + 1 : null}
+            playerAction={game.playerAction}
           />
         </View>
+
+        <PauseMenu
+          onBackToGame={() => setIsMenuOpen(false)}
+          onQuitToTitle={confirmQuitToTitle}
+          onSettingsChange={onSettingsChange}
+          settings={pauseSettings}
+          visible={isMenuOpen}
+        />
       </View>
     </ScreenShell>
+  );
+}
+
+type PauseMenuProps = {
+  onBackToGame: () => void;
+  onQuitToTitle: () => void;
+  onSettingsChange: (settings: Partial<GameSettings>) => void;
+  settings: Pick<GameSettings, "appearance" | "vibrationEnabled">;
+  visible: boolean;
+};
+
+function PauseMenu({
+  onBackToGame,
+  onQuitToTitle,
+  onSettingsChange,
+  settings,
+  visible,
+}: PauseMenuProps) {
+  const colors = useThemeColors();
+  const styles = createStyles(colors);
+
+  return (
+    <Modal
+      animationType="fade"
+      onRequestClose={onBackToGame}
+      transparent
+      visible={visible}
+    >
+      <View style={styles.pauseBackdrop}>
+        <View accessibilityLabel="Game menu" style={styles.pausePanel}>
+          <Text style={styles.pauseTitle}>Menu</Text>
+          <PreferenceToggles
+            onChange={onSettingsChange}
+            settings={settings}
+          />
+          <View style={styles.pauseActions}>
+            <PauseButton label="Back to Game" onPress={onBackToGame} />
+            <PauseButton
+              label="Quit to Title"
+              onPress={onQuitToTitle}
+              variant="danger"
+            />
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+type PauseButtonProps = {
+  label: string;
+  onPress: () => void;
+  variant?: "danger" | "primary";
+};
+
+function PauseButton({
+  label,
+  onPress,
+  variant = "primary",
+}: PauseButtonProps) {
+  const colors = useThemeColors();
+  const styles = createStyles(colors);
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.pauseButton,
+        variant === "danger" && styles.pauseDangerButton,
+        pressed && styles.pressed,
+      ]}
+    >
+      <Text
+        adjustsFontSizeToFit
+        numberOfLines={1}
+        style={[
+          styles.pauseButtonText,
+          variant === "danger" && styles.pauseDangerButtonText,
+        ]}
+      >
+        {label}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -448,61 +530,50 @@ function useGameRun({
   seed,
   vibrationEnabled,
 }: UseGameRunOptions) {
-  const enemies = useMemo(() => getSeededEnemyRoster(seed), [seed]);
   const [level, setLevel] = useState(1);
   const [clearedLevels, setClearedLevels] = useState(0);
-  const [dungeonMap, setDungeonMap] = useState(() =>
-    createLevelMap(seed, 1, enemies.length),
-  );
-  const [currentRoomId, setCurrentRoomId] = useState(
-    dungeonMap.startingRoomId,
-  );
+  const [stairRoomPosition, setStairRoomPosition] = useState<GridPosition | null>(null);
+  const [dungeonMap, setDungeonMap] = useState(() => createLevelMap(seed, 1));
   const [inventoryItem, setInventoryItem] = useState<ItemId | null>(null);
-  const [werewolfRoomId, setWerewolfRoomId] = useState(dungeonMap.werewolfRoomId);
-  const [werewolfHitPoints, setWerewolfHitPoints] = useState(WEREWOLF.hitPoints);
-  const [hasWerewolfEncountered, setHasWerewolfEncountered] = useState(false);
   const timeoutIds = useRef<ReturnType<typeof setTimeout>[]>([]);
-  const selectedActionRef = useRef<PlayerAction | null>(null);
   const clearedLevelsRef = useRef(0);
   const [animationFrame, setAnimationFrame] =
     useState<CombatAnimationFrame>(createCombatAnimationFrame);
-  const currentRoom = getRoom(dungeonMap, currentRoomId);
-  const currentRoomItem = getRoomItemId(currentRoom);
-  const currentRoomEnemyIndex = getRoomEnemyIndex(currentRoom);
-  const hasWerewolfInRoom =
-    werewolfHitPoints > 0 && werewolfRoomId === currentRoomId;
-  const hasRoomEnemy = hasWerewolfInRoom || currentRoomEnemyIndex !== null;
-  const [enemyHitPoints, setEnemyHitPoints] = useState(() =>
-    getRoomEnemyHitPoints(dungeonMap, dungeonMap.startingRoomId, enemies),
-  );
   const [enemyHealthLossAmount, setEnemyHealthLossAmount] = useState(0);
   const [isResolving, setIsResolving] = useState(false);
   const [playerEnergy, setPlayerEnergy] = useState(PLAYER_MAX_ENERGY);
   const [playerEnergyLossAmount, setPlayerEnergyLossAmount] = useState(0);
   const [playerHealth, setPlayerHealth] = useState(PLAYER_MAX_HEALTH);
   const [playerHealthLossAmount, setPlayerHealthLossAmount] = useState(0);
-  const [selectedAction, setSelectedAction] = useState<PlayerAction | null>(
-    null,
-  );
   const [turnNumber, setTurnNumber] = useState(0);
   const [turnTimeRemaining, setTurnTimeRemaining] = useState(TURN_DURATION);
 
+  const currentRoom =
+    getCurrentRoom(dungeonMap) ?? getRoom(dungeonMap, dungeonMap.startingRoomId);
+  const currentRoomId = currentRoom?.id ?? getCurrentRoomId(dungeonMap);
+  const currentRoomItem = getRoomItemId(currentRoom);
+  const currentRoomItemObject = getRoomItem(currentRoom);
+  const currentMonster = getRoomMonster(currentRoom);
   const hasLost = playerHealth <= 0;
   const hasTurnTimer = difficulty !== "easy";
-  const currentEnemy = hasWerewolfInRoom
-    ? WEREWOLF
-    : currentRoomEnemyIndex === null
-      ? enemies[0]
-      : enemies[currentRoomEnemyIndex % enemies.length];
-  const enemyRoster = useMemo(() => [...enemies, WEREWOLF], [enemies]);
+  const roomHasStairs = currentRoom ? checkRoomStairs(currentRoom) : false;
+  const currentEnemy = currentMonster
+    ? {
+        emoji: currentMonster.sprite,
+        hitPoints: currentMonster.currentHealth,
+        name: currentMonster.name,
+      }
+    : null;
+  const currentEnemyMaxHitPoints = currentMonster?.maximumHealth ?? 1;
+  const hasRoomEnemy = Boolean(currentMonster);
   const isItemDisabled =
     isResolving ||
     hasLost ||
     !canUseInventoryItem({
       currentRoomId,
       dungeonMap,
-      hasWerewolfInRoom,
       inventoryItem,
+      monster: currentMonster,
       playerEnergy,
       playerHealth,
     });
@@ -512,14 +583,13 @@ function useGameRun({
     roomId: currentRoomId,
   });
   const turnStatus = getTurnStatus({
-    currentEnemyName: currentEnemy.name,
+    currentEnemyName: currentEnemy?.name,
     hasRoomEnemy,
     hasLost,
     isResolving,
     level,
     roomId: currentRoomId,
     clearedLevels,
-    selectedAction,
   });
 
   useEffect(() => {
@@ -530,10 +600,40 @@ function useGameRun({
     };
   }, []);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    void (async () => {
+      const nextMap = await createAndSaveSeededDungeonMap(seed, level);
+
+      if (isMounted) {
+        setDungeonMap(nextMap);
+      }
+    })();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [level, seed]);
+
   const schedule = useCallback((delay: number, callback: () => void) => {
     const timeoutId = setTimeout(callback, delay);
     timeoutIds.current.push(timeoutId);
   }, []);
+
+  const commitMap = useCallback(
+    (updater: (map: DungeonMapType) => DungeonMapType) => {
+      const nextMap = updater(dungeonMap);
+
+      setDungeonMap(nextMap);
+      void updateStoredDungeonMap(updater).then((storedMap) =>
+        saveDungeonMap(storedMap ?? nextMap),
+      );
+
+      return nextMap;
+    },
+    [dungeonMap],
+  );
 
   const triggerDamageHaptic = useCallback(() => {
     if (!vibrationEnabled) {
@@ -543,49 +643,43 @@ function useGameRun({
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   }, [vibrationEnabled]);
 
-  const advanceToNextLevel = useCallback(() => {
-    const nextClearedLevels = clearedLevelsRef.current + 1;
-    const nextLevel = level + 1;
-    const nextMap = createLevelMap(seed, nextLevel, enemies.length);
+  const advanceToNextLevel = useCallback(
+    (stairRoomPosition?: GridPosition) => {
+      const nextClearedLevels = clearedLevelsRef.current + 1;
+      const nextLevel = level + 1;
+      const nextMap = createLevelMap(seed, nextLevel, stairRoomPosition);
 
-    clearedLevelsRef.current = nextClearedLevels;
-    setClearedLevels(nextClearedLevels);
-    setLevel(nextLevel);
-    setDungeonMap(nextMap);
-    setCurrentRoomId(nextMap.startingRoomId);
-    setWerewolfRoomId(nextMap.werewolfRoomId);
-    setWerewolfHitPoints(WEREWOLF.hitPoints);
-    setHasWerewolfEncountered(false);
-    setEnemyHitPoints(
-      getRoomEnemyHitPoints(nextMap, nextMap.startingRoomId, enemies),
-    );
-    resetRoomFeedback({
-      selectedActionRef,
-      setEnemyHealthLossAmount,
-      setPlayerEnergyLossAmount,
-      setPlayerHealthLossAmount,
-      setSelectedAction,
-    });
-    setPlayerHealth(PLAYER_MAX_HEALTH);
-    setPlayerEnergy(PLAYER_MAX_ENERGY);
-    setTurnTimeRemaining(TURN_DURATION);
-  }, [enemies, level, seed]);
+      clearedLevelsRef.current = nextClearedLevels;
+      setClearedLevels(nextClearedLevels);
+      setLevel(nextLevel);
+      setDungeonMap(nextMap);
+      void saveDungeonMap(nextMap);
+      resetRoomFeedback({
+        setEnemyHealthLossAmount,
+        setPlayerEnergyLossAmount,
+        setPlayerHealthLossAmount,
+      });
+      setPlayerHealth(PLAYER_MAX_HEALTH);
+      setPlayerEnergy(PLAYER_MAX_ENERGY);
+      setTurnTimeRemaining(TURN_DURATION);
+      setTurnNumber((number) => number + 1);
+    },
+    [level, seed],
+  );
 
   const finishTurn = useCallback(() => {
-    selectedActionRef.current = null;
-    setSelectedAction(null);
     setTurnTimeRemaining(TURN_DURATION);
     setIsResolving(false);
     setTurnNumber((number) => number + 1);
   }, []);
 
   const startEnemyMove = useCallback(
-    (isDefending: boolean) => {
+    (isDefending: boolean, monsterDamage: number) => {
       restartAnimations(setAnimationFrame, ["enemyAttackElapsed"]);
 
       if (!isDefending) {
         schedule(250, () => {
-          setPlayerHealthLossAmount(COMBAT.enemyDamage);
+          setPlayerHealthLossAmount(monsterDamage);
           restartAnimations(setAnimationFrame, [
             "playerDamageElapsed",
             "playerHealthLossElapsed",
@@ -597,7 +691,7 @@ function useGameRun({
       schedule(500, () => {
         if (!isDefending) {
           setPlayerHealth((health) => {
-            const nextHealth = Math.max(0, health - COMBAT.enemyDamage);
+            const nextHealth = Math.max(0, health - monsterDamage);
 
             if (nextHealth <= 0) {
               schedule(0, () => onGameOver(clearedLevelsRef.current));
@@ -618,6 +712,27 @@ function useGameRun({
     ],
   );
 
+  const finishPlayerAction = useCallback(({
+    isDefending = false,
+    mapAtEnd,
+    startedRoomId,
+  }: {
+    isDefending?: boolean;
+    mapAtEnd?: DungeonMapType;
+    startedRoomId: string;
+  }) => {
+    const roomAtEnd = getCurrentRoom(mapAtEnd ?? dungeonMap);
+    const monsterAtEnd = getRoomMonster(roomAtEnd);
+
+    if (roomAtEnd?.id === startedRoomId && monsterAtEnd) {
+      setIsResolving(true);
+      startEnemyMove(isDefending, monsterAtEnd.damage);
+      return;
+    }
+
+    finishTurn();
+  }, [dungeonMap, finishTurn, startEnemyMove]);
+
   const resolveTurn = useCallback(
     (action: PlayerAction) => {
       if (isResolving || hasLost) {
@@ -625,34 +740,37 @@ function useGameRun({
       }
 
       if (!hasRoomEnemy) {
-        selectedActionRef.current = null;
-        setSelectedAction(null);
+        if (action === TURN_TIMEOUT_ACTION) {
+          finishTurn();
+        }
         return;
       }
 
       if (action === "special" && playerEnergy <= 0) {
-        selectedActionRef.current = null;
-        setSelectedAction(null);
         return;
       }
 
-      selectedActionRef.current = null;
-      setSelectedAction(null);
       setTurnTimeRemaining(0);
       setIsResolving(true);
 
       if (action === "defend") {
-        schedule(150, () => startEnemyMove(true));
+        schedule(150, () =>
+          finishPlayerAction({ isDefending: true, startedRoomId: currentRoomId }),
+        );
         return;
       }
 
-      const damage = hasWerewolfInRoom
+      if (!currentMonster) {
+        finishTurn();
+        return;
+      }
+
+      const damage = currentMonster.isWerewolf
         ? 0
         : action === "special"
           ? COMBAT.attackDamage * 2
           : COMBAT.attackDamage;
-      const healthLost = Math.min(enemyHitPoints, damage);
-      const nextEnemyHealth = Math.max(0, enemyHitPoints - damage);
+      const healthLost = Math.min(currentMonster.currentHealth, damage);
 
       if (action === "special") {
         setPlayerEnergyLossAmount(1);
@@ -671,42 +789,27 @@ function useGameRun({
       });
 
       schedule(500, () => {
-        setEnemyHitPoints(nextEnemyHealth);
-        if (hasWerewolfInRoom) {
-          setWerewolfHitPoints(nextEnemyHealth);
-        }
+        const nextMap = commitMap((map) =>
+          damageMonsterInRoom(map, currentRoomId, currentMonster.id, damage),
+        );
 
-        if (nextEnemyHealth <= 0) {
-          if (hasWerewolfInRoom) {
-            setWerewolfHitPoints(0);
-            setEnemyHitPoints(
-              getRoomEnemyHitPoints(dungeonMap, currentRoomId, enemies),
-            );
-          } else {
-            setDungeonMap((map) => markRoomCleared(map, currentRoomId));
-            setEnemyHitPoints(0);
-          }
-
-          finishTurn();
-          return;
-        }
-
-        startEnemyMove(false);
+        finishPlayerAction({
+          mapAtEnd: nextMap,
+          startedRoomId: currentRoomId,
+        });
       });
     },
     [
-      enemyHitPoints,
+      commitMap,
+      currentMonster,
+      finishPlayerAction,
       finishTurn,
       hasLost,
       hasRoomEnemy,
-      hasWerewolfInRoom,
       isResolving,
       currentRoomId,
-      dungeonMap,
-      enemies,
       playerEnergy,
       schedule,
-      startEnemyMove,
     ],
   );
 
@@ -730,19 +833,22 @@ function useGameRun({
 
   const expireTurn = useCallback(() => {
     setTurnTimeRemaining(0);
-    resolveTurn(selectedActionRef.current ?? "defend");
+    resolveTurn(TURN_TIMEOUT_ACTION);
   }, [resolveTurn]);
 
-  function useItem() {
+  async function activateInventoryItem() {
     if (isItemDisabled || !inventoryItem) {
       return;
     }
+
+    const startedRoomId = currentRoomId;
 
     if (inventoryItem === "health-potion") {
       setPlayerHealth((health) =>
         Math.min(PLAYER_MAX_HEALTH, health + PLAYER_MAX_HEALTH / 2),
       );
       setInventoryItem(null);
+      finishPlayerAction({ startedRoomId });
       return;
     }
 
@@ -751,6 +857,7 @@ function useGameRun({
         Math.min(PLAYER_MAX_ENERGY, energy + PLAYER_MAX_ENERGY / 2),
       );
       setInventoryItem(null);
+      finishPlayerAction({ startedRoomId });
       return;
     }
 
@@ -761,38 +868,86 @@ function useGameRun({
         return;
       }
 
-      setDungeonMap((map) => unlockDoor(map, currentRoomId, lockedDirection));
+      const nextMap = commitMap((map) =>
+        unlockDoor(map, currentRoomId, lockedDirection),
+      );
       setInventoryItem(null);
+      finishPlayerAction({ mapAtEnd: nextMap, startedRoomId });
       return;
     }
 
-    if (hasWerewolfInRoom) {
-      setWerewolfHitPoints(0);
+    if (currentMonster?.isWerewolf) {
       setInventoryItem(null);
-      setEnemyHealthLossAmount(WEREWOLF.hitPoints);
+      setEnemyHealthLossAmount(currentMonster.currentHealth);
       restartAnimations(setAnimationFrame, [
         "enemyDamageElapsed",
         "enemyHealthLossElapsed",
       ]);
-      setEnemyHitPoints(getRoomEnemyHitPoints(dungeonMap, currentRoomId, enemies));
       triggerDamageHaptic();
+      const nextMap = commitMap((map) =>
+        damageMonsterInRoom(
+          map,
+          currentRoomId,
+          currentMonster.id,
+          currentMonster.currentHealth,
+        ),
+      );
+      finishPlayerAction({
+        mapAtEnd: nextMap,
+        startedRoomId,
+      });
     }
   }
 
-  function pickupItem() {
-    if (isResolving || hasLost || !currentRoomItem) {
+  async function pickupItem() {
+    if (isResolving || hasLost || !currentRoomItem || !currentRoomItemObject) {
       return;
     }
 
     const nextInventoryItem = currentRoomItem;
-    const nextRoomContents = inventoryItem ? (`item-${inventoryItem}` as const) : "empty";
 
-    setDungeonMap((map) => setRoomContents(map, currentRoomId, nextRoomContents));
+    void commitMap((map) => {
+      const mapWithoutPickedItem = removeItemFromRoom(
+        map,
+        currentRoomId,
+        currentRoomItemObject.id,
+      );
+
+      return inventoryItem
+        ? addItemToRoom(mapWithoutPickedItem, currentRoomId, inventoryItem)
+        : mapWithoutPickedItem;
+    });
     setInventoryItem(nextInventoryItem);
+    finishPlayerAction({ startedRoomId: currentRoomId });
   }
 
-  function selectAction(action: PlayerAction) {
-    if (isResolving || hasLost || !hasRoomEnemy) {
+  function playerAction(action: PlayerAction) {
+    if (isResolving || hasLost) {
+      return;
+    }
+
+    if (isMoveAction(action)) {
+      moveToRoom(moveActionDirections[action]);
+      return;
+    }
+
+    if (action === "descend") {
+      advanceToNextLevel(stairRoomPosition ?? undefined);
+      setStairRoomPosition(null);
+      return;
+    }
+
+    if (action === "item") {
+      activateInventoryItem();
+      return;
+    }
+
+    if (action === "pickup-item") {
+      pickupItem();
+      return;
+    }
+
+    if (!hasRoomEnemy) {
       return;
     }
 
@@ -803,7 +958,7 @@ function useGameRun({
     resolveTurn(action);
   }
 
-  function moveToRoom(direction: Direction) {
+  async function moveToRoom(direction: Direction) {
     if (isResolving || hasLost) {
       return;
     }
@@ -816,65 +971,50 @@ function useGameRun({
 
     const nextRoom = getRoom(dungeonMap, nextRoomId);
 
-    if (nextRoom?.contents === "stairs") {
-      advanceToNextLevel();
+    if (checkRoomStairs(nextRoom)) {
+      resetRoomFeedback({
+        setEnemyHealthLossAmount,
+        setPlayerEnergyLossAmount,
+        setPlayerHealthLossAmount,
+      });
+      void commitMap((map) => moveCurrentPosition(map, nextRoomId));
+      const stairPosition = getGridPosition(nextRoomId);
+      setStairRoomPosition(stairPosition);
+      finishTurn();
       return;
     }
 
-    selectedActionRef.current = null;
     resetRoomFeedback({
-      selectedActionRef,
       setEnemyHealthLossAmount,
       setPlayerEnergyLossAmount,
       setPlayerHealthLossAmount,
-      setSelectedAction,
     });
-    const nextWerewolfRoomId =
-      hasWerewolfEncountered && werewolfHitPoints > 0
-        ? nextRoomId
-        : werewolfRoomId;
-    const nextHasWerewolf =
-      werewolfHitPoints > 0 && nextWerewolfRoomId === nextRoomId;
-
-    if (nextHasWerewolf) {
-      setHasWerewolfEncountered(true);
-    }
-
-    setWerewolfRoomId(nextWerewolfRoomId);
-    setEnemyHitPoints(
-      nextHasWerewolf
-        ? werewolfHitPoints
-        : getRoomEnemyHitPoints(dungeonMap, nextRoomId, enemies),
-    );
-    setCurrentRoomId(nextRoomId);
+    void commitMap((map) => moveCurrentPosition(map, nextRoomId));
+    finishTurn();
   }
 
   return {
     animationFrame,
     currentEnemy,
+    currentEnemyMaxHitPoints,
     currentRoomItem,
     currentRoomId,
     disabledDirections,
     dungeonMap,
-    enemies,
-    enemyRoster,
     enemyHealthLossAmount,
-    enemyHitPoints,
     hasLost,
     hasRoomEnemy,
-    hasWerewolfInRoom,
+    roomHasStairs,
     hasTurnTimer,
     inventoryItem,
     isItemDisabled,
     isResolving,
+    level,
     playerEnergy,
     playerEnergyLossAmount,
     playerHealth,
     playerHealthLossAmount,
-    moveToRoom,
-    pickupItem,
-    selectAction,
-    selectedAction,
+    playerAction,
     expireTurn,
     isGameLoopRunning,
     isTurnClockActive,
@@ -882,8 +1022,6 @@ function useGameRun({
     turnNumber,
     turnTimeRemaining,
     updateGameFrame,
-    useItem,
-    werewolfRoomId,
   };
 }
 
@@ -915,16 +1053,14 @@ function getTurnStatus({
   isResolving,
   level,
   roomId,
-  selectedAction,
 }: {
-  currentEnemyName: string;
+  currentEnemyName?: string;
   clearedLevels: number;
   hasRoomEnemy: boolean;
   hasLost: boolean;
   isResolving: boolean;
   level: number;
   roomId: string;
-  selectedAction: PlayerAction | null;
 }) {
   if (hasLost) {
     return "You fell!";
@@ -934,15 +1070,11 @@ function getTurnStatus({
     return "Resolving turn...";
   }
 
-  if (selectedAction) {
-    return `${actionDetails[selectedAction].label} selected | Level ${level}`;
-  }
-
   if (!hasRoomEnemy) {
     return `Room ${roomId} clear | Level ${level} | Cleared ${clearedLevels}`;
   }
 
-  return `Facing ${currentEnemyName} | Level ${level} | Room ${roomId}`;
+  return `Facing ${currentEnemyName ?? "enemy"} | Level ${level} | Room ${roomId}`;
 }
 
 function createStyles(colors: ThemeColors) {
@@ -981,21 +1113,71 @@ function createStyles(colors: ThemeColors) {
     },
     turnStatus: {
       color: colors.fadedInk,
-      fontSize: 14,
-      fontWeight: "700",
-      minHeight: 20,
+      fontSize: 16,
+      fontWeight: "900",
+      minHeight: 22,
       textAlign: "center",
     },
-    quitButton: {
+    menuButton: {
       alignItems: "center",
       justifyContent: "center",
       minHeight: 36,
       paddingHorizontal: 10,
     },
-    quitButtonText: {
+    menuButtonText: {
       color: colors.ink,
-      fontSize: 13,
-      fontWeight: "700",
+      fontSize: 14,
+      fontWeight: "900",
+    },
+    pauseActions: {
+      gap: 10,
+    },
+    pauseBackdrop: {
+      alignItems: "center",
+      backgroundColor: "rgba(2, 6, 23, 0.62)",
+      flex: 1,
+      justifyContent: "center",
+      padding: 22,
+    },
+    pauseButton: {
+      alignItems: "center",
+      backgroundColor: colors.ink,
+      borderColor: colors.ink,
+      borderRadius: 10,
+      borderWidth: 2,
+      justifyContent: "center",
+      minHeight: 54,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+    },
+    pauseButtonText: {
+      color: colors.paper,
+      fontSize: 22,
+      fontWeight: "900",
+      textAlign: "center",
+    },
+    pauseDangerButton: {
+      backgroundColor: "transparent",
+      borderColor: colors.health,
+    },
+    pauseDangerButtonText: {
+      color: colors.health,
+    },
+    pausePanel: {
+      backgroundColor: colors.paper,
+      borderColor: colors.ink,
+      borderRadius: 8,
+      borderWidth: 3,
+      gap: 28,
+      maxWidth: 420,
+      padding: 22,
+      width: "100%",
+    },
+    pauseTitle: {
+      color: colors.ink,
+      fontSize: 34,
+      fontWeight: "900",
+      textAlign: "center",
     },
     pressed: {
       opacity: 0.72,

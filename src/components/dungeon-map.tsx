@@ -1,19 +1,17 @@
 import { StyleSheet, Text, View } from "react-native";
 
-import { type ThemeColors, useThemeColors } from "@/components/theme";
+import { useThemeColors, type ThemeColors } from "@/components/theme";
 import { getRoomPosition, getRooms, type DungeonMap } from "@/utils/dungeon-map";
 
-type DungeonMapPlaceholderProps = {
+type DungeonMapProps = {
   currentRoomId: string;
   map: DungeonMap;
-  werewolfRoomId?: string;
 };
 
-export function DungeonMapPlaceholder({
+export function DungeonMap({
   currentRoomId,
   map,
-  werewolfRoomId,
-}: DungeonMapPlaceholderProps) {
+}: DungeonMapProps) {
   const colors = useThemeColors();
   const styles = createStyles(colors);
   const roomMap = new Map(getRooms(map).map((room) => [room.id, room]));
@@ -23,24 +21,24 @@ export function DungeonMapPlaceholder({
     <View
       accessibilityLabel={`Level ${map.level} Map`}
       style={styles.wrapper}
-      testID="dungeon-map-placeholder"
+      testID="dungeon-map"
     >
       <Text style={styles.title}>Level {map.level} Map</Text>
       <View style={styles.columnHeaderRow}>
         <View style={styles.cornerLabel} />
-        {map.columns.map((column) => {
-          const isCurrentColumn = column === currentRoomPosition?.column;
+        {map.rows.map((columnNumber) => {
+          const isCurrentColumn = columnNumber === currentRoomPosition?.row;
 
           return (
             <Text
-              key={column}
+              key={columnNumber}
               style={[
                 styles.columnLabel,
                 isCurrentColumn && styles.currentAxisLabel,
               ]}
-              testID={`map-column-label-${column}`}
+              testID={`map-column-label-${columnNumber}`}
             >
-              {column}
+              {columnNumber}
             </Text>
           );
         })}
@@ -48,43 +46,52 @@ export function DungeonMapPlaceholder({
 
       <View style={styles.body}>
         <View style={styles.rowLabels}>
-          {map.rows.map((row) => {
-            const isCurrentRow = row === currentRoomPosition?.row;
+          {map.columns.map((rowLetter) => {
+            const isCurrentRow = rowLetter === currentRoomPosition?.column;
 
             return (
               <Text
-                key={row}
+                key={rowLetter}
                 style={[
                   styles.rowLabel,
                   isCurrentRow && styles.currentAxisLabel,
                 ]}
-                testID={`map-row-label-${row}`}
+                testID={`map-row-label-${rowLetter}`}
               >
-                {row}
+                {rowLetter}
               </Text>
             );
           })}
         </View>
         <View style={styles.grid}>
-          {map.rows.map((row) => (
-            <View key={row} style={styles.gridRow}>
-              {map.columns.map((column) => {
-                const room = roomMap.get(`${column}${row}`);
+          {map.columns.map((rowLetter) => (
+            <View key={rowLetter} style={styles.gridRow}>
+              {map.rows.map((columnNumber) => {
+                const room = roomMap.get(`${rowLetter}${columnNumber}`);
                 const isCurrentRoom = room?.id === currentRoomId;
-                const hasWerewolf = room?.id === werewolfRoomId;
+                const isRevealed = Boolean(room?.isRevealed);
+                const hasStairs = room?.contents.some(
+                  (content) => content.type === "stairs",
+                );
+                const hasWerewolf = room?.contents.some(
+                  (content) =>
+                    content.type === "monster" &&
+                    content.isWerewolf &&
+                    content.currentHealth > 0,
+                );
 
                 return (
-                  <View key={column} style={styles.gridCell}>
-                    {room ? (
+                  <View key={columnNumber} style={styles.gridCell}>
+                    {room && isRevealed ? (
                       <View
-                        accessibilityLabel={`Room ${column}${row}`}
+                        accessibilityLabel={`Room ${rowLetter}${columnNumber}`}
                         style={[
                           styles.room,
-                          room.contents === "empty" && styles.emptyRoom,
-                          room.contents === "stairs" && styles.stairsRoom,
+                          room.contents.length === 0 && styles.emptyRoom,
+                          hasStairs && styles.stairsRoom,
                           isCurrentRoom && styles.currentRoom,
                         ]}
-                        testID={`map-room-${column}${row}`}
+                        testID={`map-room-${rowLetter}${columnNumber}`}
                       >
                         {room.north === "open" ? (
                           <View style={[styles.door, styles.northDoor]} />
@@ -98,7 +105,7 @@ export function DungeonMapPlaceholder({
                         {room.west === "open" ? (
                           <View style={[styles.door, styles.westDoor]} />
                         ) : null}
-                        {room.contents === "stairs" ? (
+                        {hasStairs ? (
                           <Text style={styles.stairsIcon}>S</Text>
                         ) : null}
                         {hasWerewolf ? (
@@ -129,9 +136,9 @@ function createStyles(colors: ThemeColors) {
     },
     title: {
       color: colors.ink,
-      fontSize: 12,
+      fontSize: 14,
       fontWeight: "900",
-      lineHeight: 16,
+      lineHeight: 18,
       textAlign: "center",
     },
     columnHeaderRow: {
@@ -145,10 +152,10 @@ function createStyles(colors: ThemeColors) {
     columnLabel: {
       color: colors.fadedInk,
       flex: 1,
-      fontSize: 10,
+      fontSize: 12,
       fontVariant: ["tabular-nums"],
-      fontWeight: "800",
-      lineHeight: 14,
+      fontWeight: "900",
+      lineHeight: 15,
       textAlign: "center",
     },
     body: {
@@ -163,10 +170,10 @@ function createStyles(colors: ThemeColors) {
     rowLabel: {
       color: colors.fadedInk,
       flex: 1,
-      fontSize: 9,
+      fontSize: 11,
       fontVariant: ["tabular-nums"],
-      fontWeight: "800",
-      lineHeight: 13,
+      fontWeight: "900",
+      lineHeight: 14,
       textAlign: "right",
       textAlignVertical: "center",
     },
@@ -216,15 +223,15 @@ function createStyles(colors: ThemeColors) {
     },
     stairsIcon: {
       color: colors.paper,
-      fontSize: 9,
+      fontSize: 11,
       fontWeight: "900",
-      lineHeight: 11,
+      lineHeight: 13,
     },
     werewolfIcon: {
       color: colors.ink,
-      fontSize: 9,
+      fontSize: 11,
       fontWeight: "900",
-      lineHeight: 11,
+      lineHeight: 13,
     },
     door: {
       backgroundColor: colors.accent,
