@@ -121,6 +121,7 @@ export function GameScreen({
           enemyMaxHitPoints={game.currentEnemyMaxHitPoints}
           floorItem={game.currentRoomItemSprite}
           floorStairs={game.roomHasStairs}
+          roomSceneActors={game.roomSceneActors}
           playerEnergyLossAmount={game.playerEnergyLossAmount}
           playerHealthLossAmount={game.playerHealthLossAmount}
         />

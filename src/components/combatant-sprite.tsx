@@ -7,6 +7,7 @@ type CombatantSpriteProps = {
   bounceOffset?: number;
   damageProgress?: number | null;
   emoji: string;
+  scale?: number;
 };
 
 const ATTACK_DISTANCE = 42;
@@ -18,6 +19,7 @@ export function CombatantSprite({
   bounceOffset = 0,
   damageProgress = null,
   emoji,
+  scale = 1,
 }: CombatantSpriteProps) {
   const attackOffset = getAttackOffset(attackProgress, attackDirection);
   const opacity = getDamageOpacity(damageProgress);
@@ -31,6 +33,7 @@ export function CombatantSprite({
           transform: [
             { translateX: attackOffset },
             { translateY: bounceOffset },
+            { scale },
           ],
         },
       ]}

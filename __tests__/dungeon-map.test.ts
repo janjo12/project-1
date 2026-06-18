@@ -1,13 +1,17 @@
 import {
-  createSeededDungeonMap,
-  getConnectedRoomId,
-  getRoom,
-  getRoomMonster,
-  getRooms,
-  getStairsRoom,
-  hasRoomStairs,
-  POSSIBLE_MONSTERS,
-  type Direction,
+    createSeededDungeonMap,
+    damageMonsterInRoom,
+    getConnectedRoomId,
+    getRoomPosition,
+    getRoom,
+    getRoomItem,
+    getRoomMonster,
+    getRooms,
+    getStairsRoom,
+    hasRoomStairs,
+    mapColumns,
+    mapRows,
+    type Direction,
 } from "@/utils/dungeon-map";
 
 const directionOffsets: Record<Direction, { letter: number; number: number }> = {
@@ -26,7 +30,67 @@ function getExpectedRoomId(roomId: string, direction: Direction) {
   return `${nextLetter}${nextNumber}`;
 }
 
+function getEncounterableGuard(map: ReturnType<typeof createSeededDungeonMap>) {
+  const guard = Object.values(map.entities.doorwayGuards).find((candidate) => {
+    const monster = map.entities.monsters[candidate.monsterId];
+    const sourceRoom = getRoom(map, candidate.roomId);
+    const neighborRoom = getRoom(
+      map,
+      getExpectedRoomId(candidate.roomId, candidate.direction),
+    );
+
+    return (
+      monster &&
+      getRoomMonster(map, sourceRoom)?.id === monster.id &&
+      getRoomMonster(map, neighborRoom)?.id === monster.id
+    );
+  });
+
+  if (!guard) {
+    throw new Error("Expected at least one encounterable doorway guard");
+  }
+
+  return guard;
+}
+
 describe("dungeon map generation", () => {
+  it("uses six numbered columns and twelve lettered rows", () => {
+    const map = createSeededDungeonMap("shape-check", 1);
+
+    expect(map.rows).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(map.columns).toEqual([
+      "A",
+      "B",
+      "C",
+      "D",
+      "E",
+      "F",
+      "G",
+      "H",
+      "I",
+      "J",
+      "K",
+      "L",
+    ]);
+    expect(map.rows).toEqual(mapRows);
+    expect(map.columns).toEqual(mapColumns);
+    expect(map.rooms).toHaveLength(6);
+    expect(map.rooms[0]).toHaveLength(12);
+    expect(getRooms(map)).toHaveLength(72);
+    expect(getRoom(map, "A1")).toEqual(expect.objectContaining({ column: "A", row: 1 }));
+    expect(getRoom(map, "L6")).toEqual(expect.objectContaining({ column: "L", row: 6 }));
+    expect(getRoom(map, "A7")).toBeUndefined();
+    expect(getRoom(map, "M1")).toBeUndefined();
+  });
+
+  it("parses room ids with the new row and column bounds", () => {
+    expect(getRoomPosition("A1")).toEqual({ column: "A", row: 1 });
+    expect(getRoomPosition("L6")).toEqual({ column: "L", row: 6 });
+    expect(getRoomPosition("A7")).toBeNull();
+    expect(getRoomPosition("M1")).toBeNull();
+    expect(getRoomPosition("not-a-room")).toBeNull();
+  });
+
   it("creates identical maps and room contents for the same seed and level", () => {
     [1, 2, 3].forEach((level) => {
       const firstMap = createSeededDungeonMap("stable-seed", level);
@@ -85,10 +149,8 @@ describe("dungeon map generation", () => {
         ).length,
       0,
     );
-    const keyCount = getRooms(map).filter((room) =>
-      room.contents.some(
-        (content) => content.type === "item" && content.id === "key",
-      ),
+    const keyCount = getRooms(map).filter(
+      (room) => getRoomItem(map, room)?.itemId === "key",
     ).length;
 
     expect(keyCount).toBe(lockedDoorSides / 2);
@@ -97,23 +159,23 @@ describe("dungeon map generation", () => {
   it("creates a silver bullet exactly when a werewolf exists", () => {
     [1, 2, 3, 4].forEach((level) => {
       const map = createSeededDungeonMap("werewolf-check", level);
-      const silverBulletCount = getRooms(map).filter((room) =>
-        room.contents.some(
-          (content) => content.type === "item" && content.id === "silver-bullet",
-        ),
+      const silverBulletCount = getRooms(map).filter(
+        (room) => getRoomItem(map, room)?.itemId === "silver-bullet",
       ).length;
       const werewolfCount = getRooms(map).filter(
-        (room) => getRoomMonster(room)?.chases,
+        (room) => getRoomMonster(map, room)?.chases,
       ).length;
 
       expect(silverBulletCount).toBe(werewolfCount > 0 ? 1 : 0);
     });
   });
 
-  it("populates rooms from possible monster objects", () => {
+  it("creates doorway guards that can be encountered from either side", () => {
     const map = createSeededDungeonMap("monster-pool", 1);
-    const monsterNames = new Set(POSSIBLE_MONSTERS.map((monster) => monster.name));
-    const monster = getRooms(map).map(getRoomMonster).find(Boolean);
+    const guard = getEncounterableGuard(map);
+    const monster = map.entities.monsters[guard.monsterId];
+    const sourceRoom = getRoom(map, guard.roomId)!;
+    const neighborRoom = getRoom(map, getExpectedRoomId(guard.roomId, guard.direction))!;
 
     expect(monster).toEqual(
       expect.objectContaining({
@@ -124,6 +186,37 @@ describe("dungeon map generation", () => {
         type: "monster",
       }),
     );
-    expect(monsterNames.has(monster!.name)).toBe(true);
+    expect(getRoomMonster(map, sourceRoom)).toEqual(monster);
+    expect(getRoomMonster(map, neighborRoom)).toEqual(monster);
+  });
+
+  it("opens a guarded doorway after the guard is defeated", () => {
+    const map = createSeededDungeonMap("monster-pool", 1);
+    const guard = getEncounterableGuard(map);
+    const defeatedMap = damageMonsterInRoom(
+      map,
+      guard.roomId,
+      guard.monsterId,
+      map.entities.monsters[guard.monsterId].currentHealth,
+    );
+    const sourceRoom = getRoom(defeatedMap, guard.roomId)!;
+    const neighborRoom = getRoom(
+      defeatedMap,
+      getExpectedRoomId(guard.roomId, guard.direction),
+    )!;
+
+    expect(defeatedMap.entities.doorwayGuards[guard.monsterId]).toBeUndefined();
+    expect(getRoomMonster(defeatedMap, sourceRoom)?.id).not.toBe(guard.monsterId);
+    expect(getRoomMonster(defeatedMap, neighborRoom)?.id).not.toBe(guard.monsterId);
+    expect(sourceRoom[guard.direction]).toBe("open");
+    expect(neighborRoom[
+      guard.direction === "north"
+        ? "south"
+        : guard.direction === "south"
+          ? "north"
+          : guard.direction === "east"
+            ? "west"
+            : "east"
+    ]).toBe("open");
   });
 });

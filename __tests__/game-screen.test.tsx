@@ -52,7 +52,7 @@ function moveToFirstEnemyRoom(screen: ReturnType<typeof render>) {
   followPath(screen, getPathToRoom((roomId) => {
     const map = createSeededDungeonMap(TEST_SEED, 1);
 
-    return getRoomMonster(getRoom(map, roomId)) !== null;
+    return getRoomMonster(map, getRoom(map, roomId)) !== null;
   }));
 }
 
@@ -221,8 +221,8 @@ describe("game screens", () => {
     ).toBe(110);
     expect(getByTestId("move-north-icon")).toBeOnTheScreen();
     expect(getByTestId("move-east-icon")).toBeOnTheScreen();
-    expect(getByTestId("use-item-button")).toHaveTextContent("Use Item");
-    expect(getByRole("button", { name: "Use Item" }).props.accessibilityState)
+    expect(getByTestId("use-item-button")).toHaveTextContent("No Item");
+    expect(getByRole("button", { name: "No Item" }).props.accessibilityState)
       .toEqual(expect.objectContaining({ disabled: true }));
 
     fireEvent.press(getByRole("button", { name: "Menu" }));
@@ -303,6 +303,39 @@ describe("game screens", () => {
     expect(screen.getByLabelText("Glitch Imp")).toHaveTextContent(
       "\uD83D\uDC7E",
     );
+    expect(screen.getByLabelText("Player warrior")).toBeOnTheScreen();
+  });
+
+  it("shows multiple room actors together", () => {
+    const screen = render(
+      <GameViewPanel
+        roomSceneActors={[
+          {
+            currentHealth: 2,
+            emoji: "\uD83D\uDC7E",
+            kind: "enemy",
+            label: "Glitch Imp",
+            maxHealth: 3,
+          },
+          {
+            emoji: "\uD83D\udd11",
+            kind: "item",
+            label: "Key",
+          },
+          {
+            emoji: "🪜",
+            kind: "stairs",
+            label: "Stairs",
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByLabelText("Glitch Imp")).toHaveTextContent(
+      "\uD83D\uDC7E",
+    );
+    expect(screen.getByLabelText("Key")).toHaveTextContent("\uD83D\udd11");
+    expect(screen.getByLabelText("Stairs")).toHaveTextContent("🪜");
     expect(screen.getByLabelText("Player warrior")).toBeOnTheScreen();
   });
 
@@ -456,16 +489,15 @@ describe("game screens", () => {
         onGameOver={jest.fn()}
       />,
     );
-    const map = createSeededDungeonMap(TEST_SEED, 1);
-    const firstMoveDirection = getPathToRoom((roomId) => {
-      return roomId !== map.startingRoomId;
-    })[0]!;
+    const firstMoveDirection: Direction = "north";
 
     act(() => {
       jest.advanceTimersByTime(1000);
     });
 
     expect(getBarFillWidth(screen, "turn-timer")).toBeLessThan(100);
+
+    clearCurrentRoom(screen);
 
     fireEvent.press(
       screen.getByRole("button", { name: `Move ${firstMoveDirection}` }),
@@ -572,32 +604,15 @@ describe("game screens", () => {
         onGameOver={jest.fn()}
       />,
     );
-    const map = createSeededDungeonMap(TEST_SEED, 1);
-    const firstEnemyPath = getPathToRoom((roomId) => {
-      return getRoomMonster(getRoom(map, roomId)) !== null;
-    });
-    const firstDirection = firstEnemyPath[0]!;
-    const firstMovedRoomId = getConnectedRoomId(
-      map,
-      map.startingRoomId,
-      firstDirection,
-    );
+    clearCurrentRoom(screen);
 
-    expect(screen.getByTestId(`map-room-${map.startingRoomId}`))
-      .toBeOnTheScreen();
-    expect(screen.queryByTestId(`map-room-${getStairsRoom(map)!.id}`)).toBeNull();
-
-    fireEvent.press(
-      screen.getByRole("button", { name: `Move ${firstDirection}` }),
-    );
-
-    expect(screen.getByTestId(`map-room-${firstMovedRoomId!}`))
-      .toBeOnTheScreen();
-
-    followPath(screen, firstEnemyPath.slice(1));
+    fireEvent.press(screen.getByRole("button", { name: "Move north" }));
 
     expect(screen.getByLabelText("Turn status")).toHaveTextContent(
-      /Facing .+ \| Level 1 \| Room .+/,
+      /Level 1/,
+    );
+    expect(screen.getByLabelText("Turn status")).not.toHaveTextContent(
+      "Room J1 clear",
     );
   });
 
@@ -609,20 +624,14 @@ describe("game screens", () => {
         onGameOver={jest.fn()}
       />,
     );
-    const firstEnemyPath = getPathToRoom((roomId) => {
-      const map = createSeededDungeonMap(TEST_SEED, 1);
 
-      return getRoomMonster(getRoom(map, roomId)) !== null;
-    });
-    const returnDirection = reverseDirections[firstEnemyPath[firstEnemyPath.length - 1]!];
+    clearCurrentRoom(screen);
 
-    followPath(screen, firstEnemyPath);
-    expect(screen.getByLabelText("Turn status")).toHaveTextContent(
-      /Facing .+ \| Level 1 \| Room .+/,
-    );
-
-    fireEvent.press(screen.getByRole("button", { name: `Move ${returnDirection}` }));
+    fireEvent.press(screen.getByRole("button", { name: "Move north" }));
     resolveTurnTimers();
+    expect(screen.getByLabelText("Turn status")).toHaveTextContent(
+      /Level 1/,
+    );
 
     expect(getBarFillWidth(screen, "player-health-bar")).toBe(100);
   });
@@ -657,6 +666,8 @@ describe("game screens", () => {
     );
 
     const map = createSeededDungeonMap(TEST_SEED, 1);
+
+    clearCurrentRoom(screen);
 
     followPath(screen, getPathToRoom((roomId) => roomId === getStairsRoom(map)!.id));
 

@@ -1,50 +1,52 @@
 import * as Haptics from "expo-haptics";
 import {
-    useCallback,
-    useEffect,
-    useRef,
-    useState,
-    type Dispatch,
-    type SetStateAction,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction,
 } from "react";
 import type {
-    GameEngineSystem,
-    GameEngineUpdateEventOptionType,
+  GameEngineSystem,
+  GameEngineUpdateEventOptionType,
 } from "react-native-game-engine";
 
+import type { RoomSceneActor } from "@/components/game-view-panel";
 import {
-    advanceAnimationFrame,
-    COMBAT,
-    createCombatAnimationFrame,
-    PLAYER,
-    type CombatAnimationFrame,
+  advanceAnimationFrame,
+  COMBAT,
+  createCombatAnimationFrame,
+  PLAYER,
+  type CombatAnimationFrame,
 } from "@/entities";
 import {
-    addItemToRoom,
-    hasRoomStairs as checkRoomStairs,
-    createAndSaveSeededDungeonMap,
-    createSeededDungeonMap,
-    damageMonsterInRoom,
-    getConnectedRoomId,
-    getCurrentRoom,
-    getCurrentRoomId,
-    getGridPosition,
-    getLockedDirections,
-    getRoom,
-    getRoomItem,
-    getRoomItemId,
-    getRoomMonster,
-    moveCurrentPosition,
-    POSSIBLE_ITEMS,
-    removeItemFromRoom,
-    saveDungeonMap,
-    unlockDoor,
-    updateStoredDungeonMap,
-    type Direction,
-    type DungeonMap as DungeonMapType,
-    type GridPosition,
-    type ItemId,
-    type WorldMonster,
+  addItemToRoom,
+  hasRoomStairs as checkRoomStairs,
+  createAndSaveSeededDungeonMap,
+  createSeededDungeonMap,
+  damageMonsterInRoom,
+  getConnectedRoomId,
+  getCurrentRoom,
+  getCurrentRoomId,
+  getGridPosition,
+  getGuardedDirections,
+  getLockedDirections,
+  getRoom,
+  getRoomItem,
+  getRoomItemId,
+  getRoomMonster,
+  moveCurrentPosition,
+  POSSIBLE_ITEMS,
+  removeItemFromRoom,
+  saveDungeonMap,
+  unlockDoor,
+  updateStoredDungeonMap,
+  type Direction,
+  type DungeonMap as DungeonMapType,
+  type GridPosition,
+  type ItemId,
+  type WorldMonster,
 } from "@/utils/dungeon-map";
 import type { Difficulty } from "@/utils/settings-storage";
 
@@ -323,13 +325,89 @@ export function useGameRun({
   const currentRoom =
     getCurrentRoom(dungeonMap) ?? getRoom(dungeonMap, dungeonMap.startingRoomId);
   const currentRoomId = currentRoom?.id ?? getCurrentRoomId(dungeonMap);
-  const currentRoomItem = getRoomItemId(currentRoom);
-  const currentRoomItemObject = getRoomItem(currentRoom);
+  const currentRoomItem = getRoomItemId(dungeonMap, currentRoom);
+  const currentRoomItemObject = getRoomItem(dungeonMap, currentRoom);
   const currentRoomItemSprite = currentRoomItemObject?.sprite ?? null;
-  const currentMonster = getRoomMonster(currentRoom);
+  const currentMonster = getRoomMonster(dungeonMap, currentRoom);
+  const currentMonsterId = currentMonster?.id ?? null;
   const hasLost = playerHealth <= 0;
   const hasTurnTimer = difficulty !== "easy";
   const roomHasStairs = currentRoom ? checkRoomStairs(currentRoom) : false;
+  const roomSceneActors: RoomSceneActor[] = currentRoom
+    ? (() => {
+        const seenMonsterIds = new Set<string>();
+        const seenItemIds = new Set<string>();
+        const sceneActors: RoomSceneActor[] = [];
+
+        currentRoom.contents.forEach((content) => {
+          if (content.type === "monster") {
+            const monster = dungeonMap.entities.monsters[content.id];
+
+            if (!monster || monster.currentHealth <= 0 || seenMonsterIds.has(monster.id)) {
+              return;
+            }
+
+            seenMonsterIds.add(monster.id);
+            sceneActors.push({
+              currentHealth: monster.currentHealth,
+              emoji: monster.sprite,
+              kind: "enemy",
+              isActive: monster.id === currentMonsterId,
+              label: monster.name,
+              maxHealth: monster.maximumHealth,
+            });
+            return;
+          }
+
+          if (content.type === "item") {
+            const item = dungeonMap.entities.items[content.id];
+
+            if (!item || seenItemIds.has(item.id)) {
+              return;
+            }
+
+            seenItemIds.add(item.id);
+            sceneActors.push({
+              emoji: item.sprite ?? item.label,
+              kind: "item",
+              label: item.label,
+            });
+            return;
+          }
+
+          if (content.type === "stairs") {
+            sceneActors.push({
+              emoji: "🪜",
+              kind: "stairs",
+              label: "Stairs",
+            });
+          }
+        });
+
+        getGuardedDirections(dungeonMap, currentRoom.id).forEach((direction) => {
+          const guard = Object.values(dungeonMap.entities.doorwayGuards).find(
+            (candidate) => candidate.roomId === currentRoom.id && candidate.direction === direction,
+          );
+          const monster = guard ? dungeonMap.entities.monsters[guard.monsterId] : null;
+
+          if (!monster || monster.currentHealth <= 0 || seenMonsterIds.has(monster.id)) {
+            return;
+          }
+
+          seenMonsterIds.add(monster.id);
+          sceneActors.push({
+            currentHealth: monster.currentHealth,
+            emoji: monster.sprite,
+            kind: "enemy",
+            isActive: monster.id === currentMonsterId,
+            label: monster.name,
+            maxHealth: monster.maximumHealth,
+          });
+        });
+
+        return sceneActors;
+      })()
+    : [];
   const currentEnemy = currentMonster
     ? {
         emoji: currentMonster.sprite,
@@ -503,7 +581,7 @@ export function useGameRun({
       startedRoomId: string;
     }) => {
       const roomAtEnd = getCurrentRoom(mapAtEnd ?? dungeonMap);
-      const monsterAtEnd = getRoomMonster(roomAtEnd);
+        const monsterAtEnd = getRoomMonster(mapAtEnd ?? dungeonMap, roomAtEnd);
 
       if (roomAtEnd?.id === startedRoomId && monsterAtEnd) {
         setIsResolving(true);
@@ -783,6 +861,7 @@ export function useGameRun({
     currentRoomItemLabel,
     currentRoomItemSprite,
     currentRoomId,
+    roomSceneActors,
     disabledDirections,
     dungeonMap,
     enemyHealthLossAmount,

@@ -4,15 +4,24 @@ import { StyleSheet, Text, View } from "react-native";
 import { CombatantSprite } from "@/components/combatant-sprite";
 import { useThemeColors, type ThemeColors } from "@/components/theme";
 import {
-  COMBAT_ANIMATION,
-  createCombatAnimationFrame,
-  type CombatAnimationFrame,
+    COMBAT_ANIMATION,
+    createCombatAnimationFrame,
+    type CombatAnimationFrame,
 } from "@/entities";
 
 export type Enemy = {
   emoji: string;
   hitPoints: number;
   name: string;
+};
+
+export type RoomSceneActor = {
+  currentHealth?: number;
+  emoji: string;
+  kind: "enemy" | "item" | "stairs";
+  label: string;
+  isActive?: boolean;
+  maxHealth?: number;
 };
 
 type GameViewPanelProps = {
@@ -22,6 +31,7 @@ type GameViewPanelProps = {
   enemyMaxHitPoints?: number;
   floorItem?: string | null;
   floorStairs?: boolean;
+  roomSceneActors?: RoomSceneActor[];
   playerEnergyLossAmount?: number;
   playerHealthLossAmount?: number;
 };
@@ -35,113 +45,198 @@ export function GameViewPanel({
   enemyMaxHitPoints = enemy?.hitPoints ?? 1,
   floorItem = null,
   floorStairs = false,
+  roomSceneActors,
   playerEnergyLossAmount = 0,
   playerHealthLossAmount = 0,
 }: GameViewPanelProps) {
   const colors = useThemeColors();
   const styles = createStyles(colors);
   const bounceOffset = getBounceOffset(animationFrame.bounceElapsed);
+  const visibleActors = roomSceneActors ?? createLegacySceneActors({
+    enemy,
+    enemyMaxHitPoints,
+    floorItem,
+    floorStairs,
+  });
+  const sceneScale = getSceneScale(visibleActors.length + 1);
 
   return (
     <View style={styles.panel}>
-
       <View style={styles.sceneBox}>
-        {enemy ? (
-          <View style={styles.combatantSlot}>
+        <View style={styles.sceneActorsGrid}>
+          {visibleActors.map((actor, index) => (
+            <View
+              key={`${actor.kind}-${actor.label}-${index}`}
+              style={[styles.sceneActorSlot, { width: getSceneSlotWidth(visibleActors.length) }]}
+            >
+              {actor.kind === "enemy" ? (
+                <View style={styles.sceneEnemySlot}>
+                  {actor.isActive ?? true ? (
+                    <FloatingResourceLoss
+                      amount={enemyHealthLossAmount}
+                      color={colors.health}
+                      icon="heart"
+                      progress={getProgress(
+                        animationFrame.enemyHealthLossElapsed,
+                        COMBAT_ANIMATION.resourceLossDuration,
+                      )}
+                      testID="enemy-health-loss"
+                    />
+                  ) : null}
+                  <View
+                    style={{
+                      transform: [{ translateY: bounceOffset }],
+                    }}
+                  >
+                    <CombatantSprite
+                      accessibilityLabel={actor.label}
+                      attackDirection="right"
+                      attackProgress={
+                        actor.isActive ?? true
+                          ? getProgress(
+                              animationFrame.enemyAttackElapsed,
+                              COMBAT_ANIMATION.attackDuration,
+                            )
+                          : null
+                      }
+                      damageProgress={
+                        actor.isActive ?? true
+                          ? getProgress(
+                              animationFrame.enemyDamageElapsed,
+                              COMBAT_ANIMATION.damageDuration,
+                            )
+                          : null
+                      }
+                      emoji={actor.emoji}
+                      scale={sceneScale}
+                    />
+                    <EnemyHealthBar
+                      accessibilityLabel="Enemy health"
+                      color={colors.health}
+                      current={actor.currentHealth ?? enemy?.hitPoints ?? 1}
+                      max={actor.maxHealth ?? enemyMaxHitPoints}
+                      testID="enemy-health-bar"
+                    />
+                  </View>
+                </View>
+              ) : actor.kind === "stairs" ? (
+                <SceneEmojiSprite
+                  accessibilityLabel={actor.label}
+                  emoji={actor.emoji}
+                  scale={sceneScale}
+                />
+              ) : (
+                <SceneEmojiSprite
+                  accessibilityLabel={actor.label}
+                  emoji={actor.emoji}
+                  scale={sceneScale}
+                />
+              )}
+            </View>
+          ))}
+
+          <View style={[styles.sceneActorSlot, { width: getSceneSlotWidth(visibleActors.length) }]}>
             <FloatingResourceLoss
-              amount={enemyHealthLossAmount}
+              amount={playerHealthLossAmount}
               color={colors.health}
               icon="heart"
               progress={getProgress(
-                animationFrame.enemyHealthLossElapsed,
+                animationFrame.playerHealthLossElapsed,
                 COMBAT_ANIMATION.resourceLossDuration,
               )}
-              testID="enemy-health-loss"
+              testID="player-health-loss"
             />
-            <View
-              style={{
-                transform: [{ translateY: bounceOffset }],
-              }}
-            >
-              <CombatantSprite
-                accessibilityLabel={enemy.name}
-                attackDirection="right"
-                attackProgress={getProgress(
-                  animationFrame.enemyAttackElapsed,
-                  COMBAT_ANIMATION.attackDuration,
-                )}
-                damageProgress={getProgress(
-                  animationFrame.enemyDamageElapsed,
-                  COMBAT_ANIMATION.damageDuration,
-                )}
-                emoji={enemy.emoji}
-              />
-              <EnemyHealthBar
-                accessibilityLabel="Enemy health"
-                color={colors.health}
-                current={enemy.hitPoints}
-                max={enemyMaxHitPoints}
-                testID="enemy-health-bar"
-              />
-            </View>
+            <FloatingResourceLoss
+              amount={playerEnergyLossAmount}
+              color={colors.energy}
+              icon="bolt"
+              progress={getProgress(
+                animationFrame.playerEnergyLossElapsed,
+                COMBAT_ANIMATION.resourceLossDuration,
+              )}
+              testID="player-energy-loss"
+            />
+            <CombatantSprite
+              accessibilityLabel="Player warrior"
+              attackDirection="left"
+              attackProgress={getProgress(
+                animationFrame.playerAttackElapsed,
+                COMBAT_ANIMATION.attackDuration,
+              )}
+              bounceOffset={bounceOffset}
+              damageProgress={getProgress(
+                animationFrame.playerDamageElapsed,
+                COMBAT_ANIMATION.damageDuration,
+              )}
+              emoji={PLAYER_EMOJI}
+              scale={sceneScale}
+            />
           </View>
-        ) : null}
-
-        {floorStairs ? (
-          <View style={styles.combatantSlot}>
-            <Text style={styles.sprite} accessibilityLabel="Stairs">
-              🪜
-            </Text>
-          </View>
-        ) : null}
-
-        {floorItem && !enemy ? (
-          <View style={styles.combatantSlot}>
-            <Text style={styles.sprite} accessibilityLabel="Floor item">
-              {floorItem}
-            </Text>
-          </View>
-        ) : null}
-
-        <View style={styles.combatantSlot}>
-          <FloatingResourceLoss
-            amount={playerHealthLossAmount}
-            color={colors.health}
-            icon="heart"
-            progress={getProgress(
-              animationFrame.playerHealthLossElapsed,
-              COMBAT_ANIMATION.resourceLossDuration,
-            )}
-            testID="player-health-loss"
-          />
-          <FloatingResourceLoss
-            amount={playerEnergyLossAmount}
-            color={colors.energy}
-            icon="bolt"
-            progress={getProgress(
-              animationFrame.playerEnergyLossElapsed,
-              COMBAT_ANIMATION.resourceLossDuration,
-            )}
-            testID="player-energy-loss"
-          />
-          <CombatantSprite
-            accessibilityLabel="Player warrior"
-            attackDirection="left"
-            attackProgress={getProgress(
-              animationFrame.playerAttackElapsed,
-              COMBAT_ANIMATION.attackDuration,
-            )}
-            bounceOffset={bounceOffset}
-            damageProgress={getProgress(
-              animationFrame.playerDamageElapsed,
-              COMBAT_ANIMATION.damageDuration,
-            )}
-            emoji={PLAYER_EMOJI}
-          />
         </View>
       </View>
     </View>
   );
+}
+
+function createLegacySceneActors({
+  enemy,
+  enemyMaxHitPoints,
+  floorItem,
+  floorStairs,
+}: Pick<GameViewPanelProps, "enemy" | "enemyMaxHitPoints" | "floorItem" | "floorStairs">) {
+  const actors: RoomSceneActor[] = [];
+
+  if (enemy) {
+    actors.push({
+      currentHealth: enemy.hitPoints,
+      emoji: enemy.emoji,
+      kind: "enemy",
+      label: enemy.name,
+      maxHealth: enemyMaxHitPoints ?? enemy.hitPoints,
+    });
+  }
+
+  if (floorStairs) {
+    actors.push({
+      emoji: "🪜",
+      kind: "stairs",
+      label: "Stairs",
+    });
+  }
+
+  if (floorItem && !enemy) {
+    actors.push({
+      emoji: floorItem,
+      kind: "item",
+      label: "Floor item",
+    });
+  }
+
+  return actors;
+}
+
+function getSceneScale(actorCount: number) {
+  if (actorCount <= 2) {
+    return 1;
+  }
+
+  if (actorCount === 3) {
+    return 0.92;
+  }
+
+  if (actorCount === 4) {
+    return 0.84;
+  }
+
+  if (actorCount === 5) {
+    return 0.78;
+  }
+
+  return 0.72;
+}
+
+function getSceneSlotWidth(actorCount: number) {
+  return Math.max(72, 112 - Math.max(0, actorCount - 1) * 8);
 }
 
 type EnemyHealthBarProps = {
@@ -317,18 +412,31 @@ function createStyles(colors: ThemeColors) {
     sceneBox: {
       alignItems: "center",
       backgroundColor: "transparent",
-      gap: 10,
+      gap: 8,
       justifyContent: "center",
-      minHeight: 210,
+      minHeight: 224,
       padding: 14,
     },
-    combatantSlot: {
+    sceneActorsGrid: {
       alignItems: "center",
-      gap: 5,
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+      justifyContent: "center",
+      width: "100%",
+    },
+    sceneActorSlot: {
+      alignItems: "center",
+      gap: 4,
       justifyContent: "center",
       minHeight: 54,
       position: "relative",
-      width: "100%",
+    },
+    sceneEnemySlot: {
+      alignItems: "center",
+      gap: 5,
+      justifyContent: "center",
+      position: "relative",
     },
     enemyHealthBarTrack: {
       backgroundColor: "rgba(239, 68, 68, 0.18)",
@@ -396,4 +504,24 @@ function createStyles(colors: ThemeColors) {
       fontSize: 64,
     },
   });
+}
+
+function SceneEmojiSprite({
+  accessibilityLabel,
+  emoji,
+  scale,
+}: {
+  accessibilityLabel: string;
+  emoji: string;
+  scale: number;
+}) {
+  const styles = createStyles(useThemeColors());
+
+  return (
+    <View style={{ transform: [{ scale }] }}>
+      <Text accessibilityLabel={accessibilityLabel} style={styles.sprite}>
+        {emoji}
+      </Text>
+    </View>
+  );
 }

@@ -1,11 +1,16 @@
 import { StyleSheet, Text, View } from "react-native";
 
 import { useThemeColors, type ThemeColors } from "@/components/theme";
-import { getRoomPosition, getRooms, type DungeonMap } from "@/utils/dungeon-map";
+import {
+    getRoomMonster,
+    getRoomPosition,
+    getRooms,
+    type DungeonMap as DungeonMapType,
+} from "@/utils/dungeon-map";
 
 type DungeonMapProps = {
   currentRoomId: string;
-  map: DungeonMap;
+  map: DungeonMapType;
 };
 
 export function DungeonMap({
@@ -70,15 +75,18 @@ export function DungeonMap({
                 const room = roomMap.get(`${rowLetter}${columnNumber}`);
                 const isCurrentRoom = room?.id === currentRoomId;
                 const isRevealed = Boolean(room?.isRevealed);
+                const hasNorthLock = room?.north === "locked";
+                const hasEastLock = room?.east === "locked";
+                const hasSouthLock = room?.south === "locked";
+                const hasWestLock = room?.west === "locked";
+                const hasNorthGuard = room?.north === "guarded";
+                const hasEastGuard = room?.east === "guarded";
+                const hasSouthGuard = room?.south === "guarded";
+                const hasWestGuard = room?.west === "guarded";
                 const hasStairs = room?.contents.some(
                   (content) => content.type === "stairs",
                 );
-                const hasWerewolf = room?.contents.some(
-                  (content) =>
-                    content.type === "monster" &&
-                    content.chases &&
-                    content.currentHealth > 0,
-                );
+                const hasWerewolf = Boolean(getRoomMonster(map, room)?.chases);
 
                 return (
                   <View key={columnNumber} style={styles.gridCell}>
@@ -95,14 +103,38 @@ export function DungeonMap({
                         {room.north === "open" ? (
                           <View style={[styles.door, styles.northDoor]} />
                         ) : null}
+                        {hasNorthLock ? (
+                          <Text style={[styles.lockIcon, styles.northLock]}>🔒</Text>
+                        ) : null}
+                        {hasNorthGuard ? (
+                          <Text style={[styles.guardIcon, styles.northGuard]}>❌</Text>
+                        ) : null}
                         {room.east === "open" ? (
                           <View style={[styles.door, styles.eastDoor]} />
+                        ) : null}
+                        {hasEastLock ? (
+                          <Text style={[styles.lockIcon, styles.eastLock]}>🔒</Text>
+                        ) : null}
+                        {hasEastGuard ? (
+                          <Text style={[styles.guardIcon, styles.eastGuard]}>❌</Text>
                         ) : null}
                         {room.south === "open" ? (
                           <View style={[styles.door, styles.southDoor]} />
                         ) : null}
+                        {hasSouthLock ? (
+                          <Text style={[styles.lockIcon, styles.southLock]}>🔒</Text>
+                        ) : null}
+                        {hasSouthGuard ? (
+                          <Text style={[styles.guardIcon, styles.southGuard]}>❌</Text>
+                        ) : null}
                         {room.west === "open" ? (
                           <View style={[styles.door, styles.westDoor]} />
+                        ) : null}
+                        {hasWestLock ? (
+                          <Text style={[styles.lockIcon, styles.westLock]}>🔒</Text>
+                        ) : null}
+                        {hasWestGuard ? (
+                          <Text style={[styles.guardIcon, styles.westGuard]}>❌</Text>
                         ) : null}
                         {hasStairs ? (
                           <Text style={styles.stairsIcon}>🪜</Text>
@@ -218,6 +250,20 @@ function createStyles(colors: ThemeColors) {
       fontWeight: "900",
       lineHeight: 13,
     },
+    lockIcon: {
+      color: colors.paper,
+      fontSize: 9,
+      fontWeight: "900",
+      lineHeight: 11,
+      position: "absolute",
+    },
+    guardIcon: {
+      color: "#dc2626",
+      fontSize: 10,
+      fontWeight: "900",
+      lineHeight: 12,
+      position: "absolute",
+    },
     werewolfIcon: {
       color: colors.ink,
       fontSize: 11,
@@ -234,11 +280,35 @@ function createStyles(colors: ThemeColors) {
       top: -7,
       width: "30%",
     },
+    northLock: {
+      left: "32%",
+      top: -3,
+      width: "36%",
+      textAlign: "center",
+    },
+    northGuard: {
+      left: "32%",
+      top: -3,
+      width: "36%",
+      textAlign: "center",
+    },
     eastDoor: {
       height: "40%",
       right: -7,
       top: "35%",
       width: 7,
+    },
+    eastLock: {
+      right: -4,
+      textAlign: "center",
+      top: "32%",
+      width: 12,
+    },
+    eastGuard: {
+      right: -4,
+      textAlign: "center",
+      top: "32%",
+      width: 12,
     },
     southDoor: {
       bottom: -6,
@@ -246,11 +316,35 @@ function createStyles(colors: ThemeColors) {
       left: "35%",
       width: "30%",
     },
+    southLock: {
+      bottom: -2,
+      left: "32%",
+      textAlign: "center",
+      width: "36%",
+    },
+    southGuard: {
+      bottom: -2,
+      left: "32%",
+      textAlign: "center",
+      width: "36%",
+    },
     westDoor: {
       height: "40%",
       left: -7,
       top: "35%",
       width: 7,
+    },
+    westLock: {
+      left: -4,
+      textAlign: "center",
+      top: "32%",
+      width: 12,
+    },
+    westGuard: {
+      left: -4,
+      textAlign: "center",
+      top: "32%",
+      width: 12,
     },
   });
 }

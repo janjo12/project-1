@@ -17,6 +17,7 @@ export type WorldMonster = {
 
 export type WorldItem = {
   id: ItemId;
+  itemId?: ItemId;
   sprite?: string;
   label: string;
   type: "item";
@@ -28,7 +29,29 @@ export type WorldStairs = {
   type: "stairs";
 };
 
-export type RoomContents = (WorldMonster | WorldItem | WorldStairs)[];
+export type RoomMonsterRef = {
+  id: string;
+  type: "monster";
+};
+
+export type RoomItemRef = {
+  id: string;
+  type: "item";
+};
+
+export type RoomStairsRef = {
+  id: "stairs";
+  label?: string;
+  type: "stairs";
+};
+
+export type DoorwayGuard = {
+  direction: Direction;
+  monsterId: string;
+  roomId: string;
+};
+
+export type RoomContents = (RoomMonsterRef | RoomItemRef | RoomStairsRef)[];
 
 export type GridPosition = {
   column: string;
@@ -50,6 +73,11 @@ export type DungeonMapJson = DungeonRoom[][];
 
 export type DungeonMap = {
   columns: string[];
+  entities: {
+    items: Record<string, WorldItem>;
+    doorwayGuards: Record<string, DoorwayGuard>;
+    monsters: Record<string, WorldMonster>;
+  };
   level: number;
   rooms: DungeonMapJson;
   rows: number[];
@@ -144,11 +172,16 @@ export function getGridPosition(roomId: string): GridPosition | null {
   if (!match) {
     return null;
   }
-
-  return {
+  const position = {
     column: match[1],
     row: Number(match[2]),
   };
+
+  if (!mapColumns.includes(position.column) || !mapRows.includes(position.row)) {
+    return null;
+  }
+
+  return position;
 }
 
 function getNeighbor(position: GridPosition, direction: Direction) {
@@ -350,31 +383,82 @@ function createWerewolf(roomId: string) {
   } satisfies WorldMonster;
 }
 
-function createItem(itemId: ItemId) {
-  return { ...POSSIBLE_ITEMS.find((item) => item.id === itemId)! };
+function getNeighborRoom(rooms: DungeonMapJson, roomId: string, direction: Direction) {
+  const room = findRoomInGrid(rooms, roomId);
+  const neighbor = room ? getNeighbor(room, direction) : null;
+
+  return neighbor ? findRoomInGrid(rooms, getRoomId(neighbor)) : null;
+}
+
+function getDoorwayGuardPlacement(
+  map: DungeonMap,
+  roomId: string,
+  direction: Direction,
+) {
+  return Object.values(map.entities.doorwayGuards).find((guard) =>
+    (guard.roomId === roomId && guard.direction === direction) ||
+    (() => {
+      const neighborRoom = getNeighborRoom(map.rooms, roomId, direction);
+
+      return Boolean(
+        neighborRoom &&
+          guard.roomId === neighborRoom.id &&
+          guard.direction === oppositeDirections[direction],
+      );
+    })(),
+  );
+}
+
+function createItem(itemId: ItemId, id: string) {
+  const baseItem = POSSIBLE_ITEMS.find((item) => item.id === itemId)!;
+
+  return {
+    ...baseItem,
+    id,
+    itemId,
+  } satisfies WorldItem;
+}
+
+function placeDoorwayGuard(
+  map: DungeonMap,
+  roomId: string,
+  direction: Direction,
+  monster: WorldMonster,
+) {
+  map.entities.monsters[monster.id] = monster;
+  map.entities.doorwayGuards[monster.id] = {
+    direction,
+    monsterId: monster.id,
+    roomId,
+  };
+  setConnectionBoundary(map.rooms, roomId, direction, "guarded");
 }
 
 function placeItem(
-  rooms: DungeonMapJson,
+  map: DungeonMap,
   candidateRoomIds: string[],
   itemId: ItemId,
   random: () => number,
 ) {
   const candidates = candidateRoomIds
-    .map((roomId) => findRoomInGrid(rooms, roomId))
+    .map((roomId) => findRoomInGrid(map.rooms, roomId))
     .filter((room): room is DungeonRoom =>
       Boolean(
         room &&
-          room.contents.some(
-            (content) => content.type === "monster" && !content.chases,
-          ),
+          !room.isCurrentPosition &&
+          !room.contents.some((content) => content.type === "stairs"),
       ),
     );
   const room = candidates[Math.floor(random() * candidates.length)];
 
   if (room) {
-    room.contents = room.contents.filter((content) => content.type !== "monster");
-    room.contents.push(createItem(itemId));
+    const nextItem = createItem(
+      itemId,
+      `${itemId}:${room.id}:${Math.floor(random() * 1_000_000)}`,
+    );
+
+    map.entities.items[nextItem.id] = nextItem;
+    room.contents.push({ id: nextItem.id, type: "item" } satisfies RoomItemRef);
     return true;
   }
 
@@ -387,6 +471,11 @@ export function createDungeonMap(
   startingPosition?: GridPosition,
 ): DungeonMap {
   const rooms = createEmptyGrid();
+  const entities = {
+    items: {} as Record<string, WorldItem>,
+    doorwayGuards: {} as Record<string, DoorwayGuard>,
+    monsters: {} as Record<string, WorldMonster>,
+  };
   const finalStartingPosition = startingPosition ?? {
     column: mapColumns[Math.floor(random() * mapColumns.length)],
     row: mapRows[Math.floor(random() * mapRows.length)],
@@ -456,6 +545,47 @@ export function createDungeonMap(
     });
   });
 
+  const doorwayConnections = [...allRoomIds].flatMap((roomId) => {
+    const room = findRoomInGrid(rooms, roomId);
+
+    if (!room) {
+      return [] as { direction: Direction; roomId: string }[];
+    }
+
+    return (Object.keys(directionDeltas) as Direction[])
+      .filter((direction) => {
+        const nextRoomId = getConnectedRoomIdFromRooms(rooms, roomId, direction);
+
+        return (
+          room[direction] === "open" &&
+          nextRoomId !== null &&
+          roomId.localeCompare(nextRoomId) < 0
+        );
+      })
+      .map((direction) => ({ direction, roomId }));
+  });
+  const doorwayGuardCount = Math.min(
+    doorwayConnections.length,
+    Math.max(0, allRoomIds.size - 2),
+  );
+
+  shuffle(doorwayConnections, random)
+    .slice(0, doorwayGuardCount)
+    .forEach((connection, index) => {
+      const monster = createMonster(
+        index,
+        `${connection.roomId}:${connection.direction}`,
+        random,
+      );
+
+      placeDoorwayGuard(
+        { columns: mapColumns, entities, level, rooms, rows: mapRows, startingRoomId },
+        connection.roomId,
+        connection.direction,
+        monster,
+      );
+    });
+
   const stairsCandidates = [...allRoomIds].filter(
     (roomId) => roomId !== startingRoomId,
   );
@@ -477,11 +607,11 @@ export function createDungeonMap(
     }
 
     if (roomId === stairsRoomId) {
-      room.contents = [{ id: "stairs", label: "Stairs", type: "stairs" }];
+      room.contents = [
+        { id: "stairs", label: "Stairs", type: "stairs" } satisfies RoomStairsRef,
+      ];
       return;
     }
-
-    room.contents = [createMonster(Math.floor(random() * 4), roomId, random)];
   });
 
   const lockableConnections = [...allRoomIds].flatMap((roomId) => {
@@ -511,13 +641,15 @@ export function createDungeonMap(
     const reachableRoomIds = [
       ...getReachableRoomIds(rooms, startingRoomId, connection),
     ];
-    const reachableEnemyCount = reachableRoomIds.filter((roomId) =>
-      findRoomInGrid(rooms, roomId)?.contents.some(
-        (content) => content.type === "monster",
-      ),
-    ).length;
 
-    if (reachableEnemyCount > 1 && placeItem(rooms, reachableRoomIds, "key", random)) {
+    if (
+      placeItem(
+        { columns: mapColumns, entities, level, rooms, rows: mapRows, startingRoomId },
+        reachableRoomIds,
+        "key",
+        random,
+      )
+    ) {
       setConnectionBoundary(
         rooms,
         connection.roomId,
@@ -529,11 +661,15 @@ export function createDungeonMap(
 
   const werewolfCandidateRooms = [...allRoomIds].filter((roomId) => {
     const room = findRoomInGrid(rooms, roomId);
+    const guardedDirections = (Object.keys(directionDeltas) as Direction[]).filter(
+      (direction) => Boolean(getDoorwayGuardPlacement({ columns: mapColumns, entities, level, rooms, rows: mapRows, startingRoomId }, roomId, direction)),
+    );
 
     return Boolean(
       room &&
         room.id !== startingRoomId &&
         !room.contents.some((content) => content.type === "stairs") &&
+        guardedDirections.length === 0 &&
         getReachableRoomIds(rooms, startingRoomId).has(room.id),
     );
   });
@@ -551,24 +687,46 @@ export function createDungeonMap(
       (roomId) => roomId !== werewolfRoomId,
     );
 
-    if (werewolfRoom && placeItem(rooms, silverBulletRoomIds, "silver-bullet", random)) {
+    if (
+      werewolfRoom &&
+      placeItem(
+        { columns: mapColumns, entities, level, rooms, rows: mapRows, startingRoomId },
+        silverBulletRoomIds,
+        "silver-bullet",
+        random,
+      )
+    ) {
+      const werewolf = createWerewolf(werewolfRoomId);
+
+      entities.monsters[werewolf.id] = werewolf;
       werewolfRoom.contents = [
         ...werewolfRoom.contents.filter((content) => content.type !== "monster"),
-        createWerewolf(werewolfRoomId),
+        { id: werewolf.id, type: "monster" } satisfies RoomMonsterRef,
       ];
     }
   }
 
   if (random() < 0.35) {
-    placeItem(rooms, reachableRoomIds, "health-potion", random);
+    placeItem(
+      { columns: mapColumns, entities, level, rooms, rows: mapRows, startingRoomId },
+      reachableRoomIds,
+      "health-potion",
+      random,
+    );
   }
 
   if (random() < 0.35) {
-    placeItem(rooms, reachableRoomIds, "energy-meal", random);
+    placeItem(
+      { columns: mapColumns, entities, level, rooms, rows: mapRows, startingRoomId },
+      reachableRoomIds,
+      "energy-meal",
+      random,
+    );
   }
 
   return {
     columns: mapColumns,
+    entities,
     level,
     rooms,
     rows: mapRows,
@@ -679,21 +837,54 @@ export function getLockedDirections(map: DungeonMap, roomId: string) {
   return directions.filter((direction) => room[direction] === "locked");
 }
 
-export function getRoomMonster(room: DungeonRoom | undefined) {
-  return room?.contents.find(
-    (content): content is WorldMonster =>
-      content.type === "monster" && content.currentHealth > 0,
-  ) ?? null;
+export function getGuardedDirections(map: DungeonMap, roomId: string) {
+  const room = getRoom(map, roomId);
+  const directions: Direction[] = ["north", "east", "south", "west"];
+
+  if (!room) {
+    return [];
+  }
+
+  return directions.filter((direction) => room[direction] === "guarded");
 }
 
-export function getRoomItem(room: DungeonRoom | undefined) {
-  return room?.contents.find(
-    (content): content is WorldItem => content.type === "item",
-  ) ?? null;
+function getMonsterFromRoom(map: DungeonMap, room: DungeonRoom | undefined) {
+  const monsterId = room?.contents.find((content) => content.type === "monster")?.id;
+
+  return monsterId ? map.entities.monsters[monsterId] ?? null : null;
 }
 
-export function getRoomItemId(room: DungeonRoom | undefined) {
-  return getRoomItem(room)?.id ?? null;
+export function getRoomMonster(map: DungeonMap, room: DungeonRoom | undefined) {
+  const roomMonster = getMonsterFromRoom(map, room);
+
+  if (roomMonster && roomMonster.currentHealth > 0) {
+    return roomMonster;
+  }
+
+  if (!room) {
+    return null;
+  }
+
+  const guardedMonster = (Object.keys(directionDeltas) as Direction[])
+    .map((direction) => getDoorwayGuardPlacement(map, room.id, direction))
+    .map((guard) => (guard ? map.entities.monsters[guard.monsterId] ?? null : null))
+    .find((monster): monster is WorldMonster => Boolean(monster));
+
+  return guardedMonster && guardedMonster.currentHealth > 0 ? guardedMonster : null;
+}
+
+function getItemFromRoom(map: DungeonMap, room: DungeonRoom | undefined) {
+  const itemId = room?.contents.find((content) => content.type === "item")?.id;
+
+  return itemId ? map.entities.items[itemId] ?? null : null;
+}
+
+export function getRoomItem(map: DungeonMap, room: DungeonRoom | undefined) {
+  return getItemFromRoom(map, room);
+}
+
+export function getRoomItemId(map: DungeonMap, room: DungeonRoom | undefined) {
+  return getRoomItem(map, room)?.itemId ?? null;
 }
 
 export function hasRoomStairs(room: DungeonRoom | undefined) {
@@ -750,31 +941,71 @@ export function damageMonsterInRoom(
   monsterId: string,
   damage: number,
 ) {
-  return {
+  const nextMonster = map.entities.monsters[monsterId];
+
+  if (!nextMonster) {
+    return map;
+  }
+
+  const nextHealth = Math.max(0, nextMonster.currentHealth - damage);
+  const nextMap: DungeonMap = {
     ...map,
-    rooms: map.rooms.map((row) =>
-      row.map((room) =>
-        room.id === roomId
-          ? {
-              ...room,
-              contents: room.contents.map((content) =>
-                content.type === "monster" && content.id === monsterId
-                  ? {
-                      ...content,
-                      currentHealth: Math.max(0, content.currentHealth - damage),
-                    }
-                  : content,
-              ),
-            }
-          : room,
-      ),
-    ),
+    entities: {
+      ...map.entities,
+      monsters: {
+        ...map.entities.monsters,
+        [monsterId]: {
+          ...nextMonster,
+          currentHealth: nextHealth,
+        },
+      },
+    },
+  };
+
+  const doorwayGuard = nextMap.entities.doorwayGuards[monsterId];
+
+  if (!doorwayGuard || nextHealth > 0) {
+    return nextMap;
+  }
+
+  const sourceRoom = getRoom(nextMap, doorwayGuard.roomId);
+  const neighbor = sourceRoom ? getNeighbor(sourceRoom, doorwayGuard.direction) : null;
+
+  const nextRooms = nextMap.rooms.map((row) =>
+    row.map((room) => {
+      if (room.id === doorwayGuard.roomId) {
+        return { ...room, [doorwayGuard.direction]: "open" };
+      }
+
+      if (neighbor && room.id === getRoomId(neighbor)) {
+        return { ...room, [oppositeDirections[doorwayGuard.direction]]: "open" };
+      }
+
+      return room;
+    }),
+  );
+
+  const { [monsterId]: _removedGuard, ...remainingDoorwayGuards } = nextMap.entities.doorwayGuards;
+
+  return {
+    ...nextMap,
+    entities: {
+      ...nextMap.entities,
+      doorwayGuards: remainingDoorwayGuards,
+    },
+    rooms: nextRooms,
   };
 }
 
 export function removeItemFromRoom(map: DungeonMap, roomId: string, itemId: ItemId) {
   return {
     ...map,
+    entities: {
+      ...map.entities,
+      items: Object.fromEntries(
+        Object.entries(map.entities.items).filter(([, item]) => item.id !== itemId),
+      ),
+    },
     rooms: map.rooms.map((row) =>
       row.map((room) =>
         room.id === roomId
@@ -791,12 +1022,30 @@ export function removeItemFromRoom(map: DungeonMap, roomId: string, itemId: Item
 }
 
 export function addItemToRoom(map: DungeonMap, roomId: string, itemId: ItemId) {
+  const nextItem = createItem(
+    itemId,
+    `${itemId}:${roomId}:${Date.now()}:${Math.floor(Math.random() * 1_000_000)}`,
+  );
+
   return {
     ...map,
+    entities: {
+      ...map.entities,
+      items: {
+        ...map.entities.items,
+        [nextItem.id]: nextItem,
+      },
+    },
     rooms: map.rooms.map((row) =>
       row.map((room) =>
         room.id === roomId
-          ? { ...room, contents: [...room.contents, createItem(itemId)] }
+          ? {
+              ...room,
+              contents: [
+                ...room.contents,
+                { id: nextItem.id, type: "item" } satisfies RoomItemRef,
+              ],
+            }
           : room,
       ),
     ),
@@ -808,7 +1057,8 @@ export function getActiveRooms(map: DungeonMap) {
     (room) =>
       room.isRevealed ||
       room.contents.length > 0 ||
-      getOpenDirections(map, room.id).length > 0,
+      getOpenDirections(map, room.id).length > 0 ||
+      getGuardedDirections(map, room.id).length > 0,
   );
 }
 
