@@ -4,9 +4,9 @@ import { StyleSheet, Text, View } from "react-native";
 import { CombatantSprite } from "@/components/combatant-sprite";
 import { useThemeColors, type ThemeColors } from "@/components/theme";
 import {
-    COMBAT_ANIMATION,
-    createCombatAnimationFrame,
-    type CombatAnimationFrame,
+  COMBAT_ANIMATION,
+  createCombatAnimationFrame,
+  type CombatAnimationFrame,
 } from "@/entities";
 
 export type Enemy = {
@@ -319,14 +319,14 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: "transparent",
       gap: 10,
       justifyContent: "center",
-      minHeight: 230,
+      minHeight: 210,
       padding: 14,
     },
     combatantSlot: {
       alignItems: "center",
       gap: 5,
       justifyContent: "center",
-      minHeight: 92,
+      minHeight: 54,
       position: "relative",
       width: "100%",
     },
@@ -335,6 +335,8 @@ function createStyles(colors: ThemeColors) {
       height: 4,
       overflow: "hidden",
       width: 56,
+      top: 3,
+      left: 7,
     },
     enemyHealthBarFill: {
       height: "100%",

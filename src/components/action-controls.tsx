@@ -23,6 +23,7 @@ type ActionControlsProps = {
   isItemDisabled?: boolean;
   isBusy?: boolean;
   itemLabel?: string | null;
+  itemSprite?: string | null;
   nextLevelNumber?: number | null;
   playerAction: (action: PlayerAction) => void;
 };
@@ -41,6 +42,7 @@ export function ActionControls({
   isItemDisabled = true,
   isBusy = false,
   itemLabel = null,
+  itemSprite = null,
   nextLevelNumber = null,
   playerAction,
 }: ActionControlsProps) {
@@ -116,8 +118,8 @@ export function ActionControls({
       <View style={styles.actionGrid} testID="action-button-cluster">
         <CircularButton
           disabled={isUseItemDisabled}
-          icon="shopping-bag"
-          label="Use Item"
+          sprite={itemSprite}
+          label={itemLabel ? `${itemLabel}` : "No Item"}
           onPress={() => playerAction("item")}
           styles={styles}
           testID="use-item-button"
@@ -200,6 +202,7 @@ type CircularButtonProps = {
   disabled: boolean;
   icon?: keyof typeof FontAwesome.glyphMap;
   label?: string;
+  sprite?: string | null;
   onPress: () => void;
   styles: ReturnType<typeof createStyles>;
   testID: string;
@@ -209,6 +212,7 @@ function CircularButton({
   disabled,
   icon,
   label,
+  sprite,
   onPress,
   styles,
   testID,
@@ -230,7 +234,13 @@ function CircularButton({
       ]}
       testID={testID}
     >
-      {icon ? <FontAwesome color={colors.ink} name={icon} size={14} /> : null}
+      {sprite ? (
+        <Text style={styles.actionSprite} testID={`${testID}-sprite`}>
+          {sprite}
+        </Text>
+      ) : icon ? (
+        <FontAwesome color={colors.ink} name={icon} size={14} />
+      ) : null}
       {label ? (
         <Text
           adjustsFontSizeToFit
@@ -341,10 +351,14 @@ function createStyles(colors: ThemeColors) {
     },
     actionText: {
       color: colors.ink,
-      fontSize: 11,
+      fontSize: 13,
       fontWeight: "900",
       lineHeight: 12,
       textAlign: "center",
+    },
+    actionSprite: {
+      fontSize: 16,
+      lineHeight: 18,
     },
     disabledButton: {
       opacity: 0.38,

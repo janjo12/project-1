@@ -1,14 +1,14 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export type Direction = "east" | "north" | "south" | "west";
-export type ItemId = "energy-meal" | "health-potion" | "key" | "silver-bullet";
-export type RoomBoundary = "locked" | "obstacle" | "open" | "wall";
+export type ItemId = string;
+export type RoomBoundary = "locked" | "guarded" | "open" | "wall";
 
 export type WorldMonster = {
   currentHealth: number;
   damage: number;
   id: string;
-  isWerewolf?: boolean;
+  chases?: boolean;
   maximumHealth: number;
   name: string;
   sprite: string;
@@ -17,6 +17,7 @@ export type WorldMonster = {
 
 export type WorldItem = {
   id: ItemId;
+  sprite?: string;
   label: string;
   type: "item";
 };
@@ -102,7 +103,7 @@ export const POSSIBLE_MONSTERS: Omit<WorldMonster, "currentHealth" | "id">[] = [
   },
   {
     damage: 1,
-    isWerewolf: true,
+    chases: true,
     maximumHealth: 1,
     name: "Werewolf",
     sprite: "\uD83D\uDC3A",
@@ -111,10 +112,10 @@ export const POSSIBLE_MONSTERS: Omit<WorldMonster, "currentHealth" | "id">[] = [
 ];
 
 export const POSSIBLE_ITEMS: WorldItem[] = [
-  { id: "energy-meal", label: "Energy Meal", type: "item" },
-  { id: "health-potion", label: "Health Potion", type: "item" },
-  { id: "key", label: "Key", type: "item" },
-  { id: "silver-bullet", label: "Silver Bullet", type: "item" },
+  { id: "energy-meal", sprite: "🍔", label: "Energy Meal", type: "item" },
+  { id: "health-potion", sprite: "🧪", label: "Health Potion", type: "item" },
+  { id: "key", sprite: "🗝️", label: "Key", type: "item" },
+  { id: "silver-bullet", sprite: "🔫",label: "Silver Bullet", type: "item" },
 ];
 
 const MAP_STORAGE_KEY = "project-1:dungeon-map";
@@ -329,7 +330,7 @@ function getConnectedRoomIdFromRooms(
 }
 
 function createMonster(index: number, roomId: string, random: () => number) {
-  const monsters = POSSIBLE_MONSTERS.filter((monster) => !monster.isWerewolf);
+  const monsters = POSSIBLE_MONSTERS.filter((monster) => !monster.chases);
   const monster = monsters[index % monsters.length];
 
   return {
@@ -340,7 +341,7 @@ function createMonster(index: number, roomId: string, random: () => number) {
 }
 
 function createWerewolf(roomId: string) {
-  const werewolf = POSSIBLE_MONSTERS.find((monster) => monster.isWerewolf)!;
+  const werewolf = POSSIBLE_MONSTERS.find((monster) => monster.chases)!;
 
   return {
     ...werewolf,
@@ -365,7 +366,7 @@ function placeItem(
       Boolean(
         room &&
           room.contents.some(
-            (content) => content.type === "monster" && !content.isWerewolf,
+            (content) => content.type === "monster" && !content.chases,
           ),
       ),
     );
@@ -391,14 +392,14 @@ export function createDungeonMap(
     row: mapRows[Math.floor(random() * mapRows.length)],
   };
   const startingRoomId = getRoomId(finalStartingPosition);
-  const activeRoomIds = new Set([startingRoomId]);
-  const roomTarget = 10 + Math.floor(random() * 5);
+  const allRoomIds = new Set([startingRoomId]);
+  const totalRooms = Math.min(72, 7 + level + Math.floor(random() * 5)); //7 + level + 0-4, to a max of 72 (the whole map)
 
-  while (activeRoomIds.size < roomTarget) {
-    const frontier = shuffle([...activeRoomIds], random);
+  while (allRoomIds.size < totalRooms) {
+    const shuffledRooms = shuffle([...allRoomIds], random);
     let addedRoom = false;
 
-    for (const roomId of frontier) {
+    for (const roomId of shuffledRooms) {
       const room = findRoomInGrid(rooms, roomId);
 
       if (!room) {
@@ -414,12 +415,12 @@ export function createDungeonMap(
         const neighbor = getNeighbor(room, direction);
         const neighborId = neighbor ? getRoomId(neighbor) : null;
 
-        if (!neighborId || activeRoomIds.has(neighborId)) {
+        if (!neighborId || allRoomIds.has(neighborId)) {
           continue;
         }
 
         openConnection(rooms, roomId, direction);
-        activeRoomIds.add(neighborId);
+        allRoomIds.add(neighborId);
         addedRoom = true;
         break;
       }
@@ -434,7 +435,7 @@ export function createDungeonMap(
     }
   }
 
-  [...activeRoomIds].forEach((roomId) => {
+  [...allRoomIds].forEach((roomId) => {
     const room = findRoomInGrid(rooms, roomId);
 
     if (!room) {
@@ -447,7 +448,7 @@ export function createDungeonMap(
       const neighbor = getNeighbor(room, direction);
       const neighborId = neighbor ? getRoomId(neighbor) : null;
 
-      if (!neighborId || !activeRoomIds.has(neighborId) || random() > 0.25) {
+      if (!neighborId || !allRoomIds.has(neighborId) || random() > 0.25) {
         return;
       }
 
@@ -455,14 +456,14 @@ export function createDungeonMap(
     });
   });
 
-  const stairsCandidates = [...activeRoomIds].filter(
+  const stairsCandidates = [...allRoomIds].filter(
     (roomId) => roomId !== startingRoomId,
   );
   const stairsRoomId =
     stairsCandidates[Math.floor(random() * stairsCandidates.length)] ??
     startingRoomId;
 
-  [...activeRoomIds].forEach((roomId) => {
+  [...allRoomIds].forEach((roomId) => {
     const room = findRoomInGrid(rooms, roomId);
 
     if (!room) {
@@ -483,7 +484,7 @@ export function createDungeonMap(
     room.contents = [createMonster(Math.floor(random() * 4), roomId, random)];
   });
 
-  const lockableConnections = [...activeRoomIds].flatMap((roomId) => {
+  const lockableConnections = [...allRoomIds].flatMap((roomId) => {
     const room = findRoomInGrid(rooms, roomId);
 
     if (!room) {
@@ -526,7 +527,7 @@ export function createDungeonMap(
     }
   }
 
-  const werewolfCandidateRooms = [...activeRoomIds].filter((roomId) => {
+  const werewolfCandidateRooms = [...allRoomIds].filter((roomId) => {
     const room = findRoomInGrid(rooms, roomId);
 
     return Boolean(

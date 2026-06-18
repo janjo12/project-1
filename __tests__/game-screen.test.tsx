@@ -1,12 +1,12 @@
-import * as Haptics from "expo-haptics";
 import { act, fireEvent, render } from "@testing-library/react-native";
+import * as Haptics from "expo-haptics";
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { AppButton } from "@/components/app-button";
 import { EndScreen } from "@/components/end-screen";
+import { GameOptionsForm } from "@/components/game-options-form";
 import { GameScreen } from "@/components/game-screen";
 import { GameViewPanel } from "@/components/game-view-panel";
-import { GameOptionsForm } from "@/components/game-options-form";
 import { ScreenShell } from "@/components/screen-shell";
 import { colors, lightColors, ThemeProvider } from "@/components/theme";
 import {
@@ -614,7 +614,7 @@ describe("game screens", () => {
 
       return getRoomMonster(getRoom(map, roomId)) !== null;
     });
-    const returnDirection = reverseDirections[firstEnemyPath.at(-1)!];
+    const returnDirection = reverseDirections[firstEnemyPath[firstEnemyPath.length - 1]!];
 
     followPath(screen, firstEnemyPath);
     expect(screen.getByLabelText("Turn status")).toHaveTextContent(
@@ -659,6 +659,9 @@ describe("game screens", () => {
     const map = createSeededDungeonMap(TEST_SEED, 1);
 
     followPath(screen, getPathToRoom((roomId) => roomId === getStairsRoom(map)!.id));
+
+    expect(screen.getByTestId("descend-button")).toBeOnTheScreen();
+    fireEvent.press(screen.getByTestId("descend-button"));
 
     expect(screen.getByLabelText("Level 2 Map")).toBeOnTheScreen();
     expect(screen.getByLabelText("Turn status")).toHaveTextContent(

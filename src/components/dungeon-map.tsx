@@ -76,7 +76,7 @@ export function DungeonMap({
                 const hasWerewolf = room?.contents.some(
                   (content) =>
                     content.type === "monster" &&
-                    content.isWerewolf &&
+                    content.chases &&
                     content.currentHealth > 0,
                 );
 
@@ -88,7 +88,6 @@ export function DungeonMap({
                         style={[
                           styles.room,
                           room.contents.length === 0 && styles.emptyRoom,
-                          hasStairs && styles.stairsRoom,
                           isCurrentRoom && styles.currentRoom,
                         ]}
                         testID={`map-room-${rowLetter}${columnNumber}`}
@@ -106,10 +105,10 @@ export function DungeonMap({
                           <View style={[styles.door, styles.westDoor]} />
                         ) : null}
                         {hasStairs ? (
-                          <Text style={styles.stairsIcon}>S</Text>
+                          <Text style={styles.stairsIcon}>🪜</Text>
                         ) : null}
                         {hasWerewolf ? (
-                          <Text style={styles.werewolfIcon}>W</Text>
+                          <Text style={styles.werewolfIcon}>🐺</Text>
                         ) : null}
                       </View>
                     ) : null}
@@ -152,7 +151,7 @@ function createStyles(colors: ThemeColors) {
     columnLabel: {
       color: colors.fadedInk,
       flex: 1,
-      fontSize: 12,
+      fontSize: 17,
       fontVariant: ["tabular-nums"],
       fontWeight: "900",
       lineHeight: 15,
@@ -170,7 +169,7 @@ function createStyles(colors: ThemeColors) {
     rowLabel: {
       color: colors.fadedInk,
       flex: 1,
-      fontSize: 11,
+      fontSize: 16,
       fontVariant: ["tabular-nums"],
       fontWeight: "900",
       lineHeight: 14,
@@ -198,28 +197,20 @@ function createStyles(colors: ThemeColors) {
     },
     room: {
       alignItems: "center",
-      backgroundColor: colors.paperLight,
-      borderColor: colors.sepia,
-      borderRadius: 3,
-      borderWidth: 1,
-      height: "58%",
+      backgroundColor: colors.ink,
+      height: "60%",
       justifyContent: "center",
       position: "relative",
-      width: "58%",
+      width: "60%",
     },
     emptyRoom: {
-      backgroundColor: colors.paper,
+      backgroundColor: colors.ink,
     },
     currentRoom: {
       backgroundColor: colors.mapCurrentRoom,
-      borderColor: colors.mapCurrentRoom,
-      borderWidth: 2,
     },
     currentAxisLabel: {
       color: colors.mapCurrentRoom,
-    },
-    stairsRoom: {
-      backgroundColor: colors.sepia,
     },
     stairsIcon: {
       color: colors.paper,
@@ -234,32 +225,32 @@ function createStyles(colors: ThemeColors) {
       lineHeight: 13,
     },
     door: {
-      backgroundColor: colors.accent,
+      backgroundColor: colors.ink,
       position: "absolute",
     },
     northDoor: {
-      height: 5,
+      height: 7,
       left: "35%",
-      top: -3,
+      top: -7,
       width: "30%",
     },
     eastDoor: {
-      height: "30%",
-      right: -3,
+      height: "40%",
+      right: -7,
       top: "35%",
-      width: 5,
+      width: 7,
     },
     southDoor: {
-      bottom: -3,
-      height: 5,
+      bottom: -6,
+      height: 7,
       left: "35%",
       width: "30%",
     },
     westDoor: {
-      height: "30%",
-      left: -3,
+      height: "40%",
+      left: -7,
       top: "35%",
-      width: 5,
+      width: 7,
     },
   });
 }

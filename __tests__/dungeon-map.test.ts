@@ -103,7 +103,7 @@ describe("dungeon map generation", () => {
         ),
       ).length;
       const werewolfCount = getRooms(map).filter(
-        (room) => getRoomMonster(room)?.isWerewolf,
+        (room) => getRoomMonster(room)?.chases,
       ).length;
 
       expect(silverBulletCount).toBe(werewolfCount > 0 ? 1 : 0);
