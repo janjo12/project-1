@@ -2,10 +2,10 @@ import { StyleSheet, Text, View } from "react-native";
 
 import { useThemeColors, type ThemeColors } from "@/components/theme";
 import {
-    getRoomMonster,
-    getRoomPosition,
-    getRooms,
-    type DungeonMap as DungeonMapType,
+  getRoomMonster,
+  getRoomPosition,
+  getRooms,
+  type DungeonMap as DungeonMapType,
 } from "@/utils/dungeon-map";
 
 type DungeonMapProps = {
@@ -281,33 +281,28 @@ function createStyles(colors: ThemeColors) {
       width: "30%",
     },
     northLock: {
-      left: "32%",
-      top: -3,
-      width: "36%",
+      top: -11,
+      width: 12,
       textAlign: "center",
     },
     northGuard: {
-      left: "32%",
-      top: -3,
-      width: "36%",
+      top: -11,
+      width: 12,
       textAlign: "center",
     },
     eastDoor: {
       height: "40%",
       right: -7,
-      top: "35%",
       width: 7,
     },
     eastLock: {
-      right: -4,
+      right: -13,
       textAlign: "center",
-      top: "32%",
       width: 12,
     },
     eastGuard: {
-      right: -4,
+      right: -13,
       textAlign: "center",
-      top: "32%",
       width: 12,
     },
     southDoor: {
@@ -317,33 +312,28 @@ function createStyles(colors: ThemeColors) {
       width: "30%",
     },
     southLock: {
-      bottom: -2,
-      left: "32%",
+      bottom: -11,
       textAlign: "center",
-      width: "36%",
+      width: 12,
     },
     southGuard: {
-      bottom: -2,
-      left: "32%",
+      bottom: -11,
       textAlign: "center",
-      width: "36%",
+      width: 12,
     },
     westDoor: {
       height: "40%",
       left: -7,
-      top: "35%",
       width: 7,
     },
     westLock: {
-      left: -4,
+      left: -11,
       textAlign: "center",
-      top: "32%",
       width: 12,
     },
     westGuard: {
-      left: -4,
+      left: -13,
       textAlign: "center",
-      top: "32%",
       width: 12,
     },
   });

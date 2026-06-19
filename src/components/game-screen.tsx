@@ -10,17 +10,17 @@ import { ScreenShell } from "@/components/screen-shell";
 import type { ThemeColors } from "@/components/theme";
 import { useThemeColors } from "@/components/theme";
 import {
-    GameLoopTimer,
-    PLAYER_MAX_ENERGY,
-    PLAYER_MAX_HEALTH,
-    runGameLoop,
-    TURN_DURATION,
-    useGameRun,
+  GameLoopTimer,
+  PLAYER_MAX_ENERGY,
+  PLAYER_MAX_HEALTH,
+  runGameLoop,
+  TURN_DURATION,
+  useGameRun,
 } from "@/hooks/use-game-run";
 import type {
-    Difficulty,
-    GameSettings,
-    Handedness,
+  Difficulty,
+  GameSettings,
+  Handedness,
 } from "@/utils/settings-storage";
 
 type GameScreenProps = {
