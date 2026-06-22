@@ -12,7 +12,11 @@ import type {
   GameEngineUpdateEventOptionType,
 } from "react-native-game-engine";
 
-import type { RoomSceneActor } from "@/components/game-view-panel";
+import type {
+  RoomDoorways,
+  RoomSceneActor,
+  ScenePosition,
+} from "@/components/game-view-panel";
 import {
   advanceAnimationFrame,
   COMBAT,
@@ -29,6 +33,7 @@ import {
   getConnectedRoomId,
   getCurrentRoom,
   getCurrentRoomId,
+  getDoorwayGuardPlacement,
   getGridPosition,
   getGuardedDirections,
   getLockedDirections,
@@ -74,6 +79,20 @@ const moveActionDirections = {
   "move-south": "south",
   "move-west": "west",
 } satisfies Partial<Record<PlayerAction, Direction>>;
+
+const directionScenePositions = {
+  east: "right",
+  north: "top",
+  south: "bottom",
+  west: "left",
+} satisfies Record<Direction, ScenePosition>;
+
+const playerEntryPositions = {
+  east: "left",
+  north: "bottom",
+  south: "top",
+  west: "right",
+} satisfies Record<Direction, ScenePosition>;
 
 type UseGameRunOptions = {
   difficulty: Difficulty;
@@ -319,6 +338,8 @@ export function useGameRun({
   const [playerEnergyLossAmount, setPlayerEnergyLossAmount] = useState(0);
   const [playerHealth, setPlayerHealth] = useState(PLAYER_MAX_HEALTH);
   const [playerHealthLossAmount, setPlayerHealthLossAmount] = useState(0);
+  const [playerScenePosition, setPlayerScenePosition] =
+    useState<ScenePosition>("center");
   const [turnNumber, setTurnNumber] = useState(0);
   const [turnTimeRemaining, setTurnTimeRemaining] = useState(TURN_DURATION);
 
@@ -333,6 +354,19 @@ export function useGameRun({
   const hasLost = playerHealth <= 0;
   const hasTurnTimer = difficulty !== "easy";
   const roomHasStairs = currentRoom ? checkRoomStairs(currentRoom) : false;
+  const roomDoorways: RoomDoorways = currentRoom
+    ? {
+        bottom: currentRoom.south,
+        left: currentRoom.west,
+        right: currentRoom.east,
+        top: currentRoom.north,
+      }
+    : {
+        bottom: "wall",
+        left: "wall",
+        right: "wall",
+        top: "wall",
+      };
   const roomSceneActors: RoomSceneActor[] = currentRoom
     ? (() => {
         const seenMonsterIds = new Set<string>();
@@ -350,11 +384,12 @@ export function useGameRun({
             seenMonsterIds.add(monster.id);
             sceneActors.push({
               currentHealth: monster.currentHealth,
-              emoji: monster.sprite,
+              sprite: monster.sprite,
               kind: "enemy",
               isActive: monster.id === currentMonsterId,
               label: monster.name,
               maxHealth: monster.maximumHealth,
+              position: "center",
             });
             return;
           }
@@ -368,25 +403,29 @@ export function useGameRun({
 
             seenItemIds.add(item.id);
             sceneActors.push({
-              emoji: item.sprite ?? item.label,
+              sprite: item.sprite ?? item.label,
               kind: "item",
               label: item.label,
+              position: "center",
             });
             return;
           }
 
           if (content.type === "stairs") {
             sceneActors.push({
-              emoji: "🪜",
+              sprite: "\uD83E\uDE9C",
               kind: "stairs",
               label: "Stairs",
+              position: "center",
             });
           }
         });
 
         getGuardedDirections(dungeonMap, currentRoom.id).forEach((direction) => {
-          const guard = Object.values(dungeonMap.entities.doorwayGuards).find(
-            (candidate) => candidate.roomId === currentRoom.id && candidate.direction === direction,
+          const guard = getDoorwayGuardPlacement(
+            dungeonMap,
+            currentRoom.id,
+            direction,
           );
           const monster = guard ? dungeonMap.entities.monsters[guard.monsterId] : null;
 
@@ -397,11 +436,12 @@ export function useGameRun({
           seenMonsterIds.add(monster.id);
           sceneActors.push({
             currentHealth: monster.currentHealth,
-            emoji: monster.sprite,
+            sprite: monster.sprite,
             kind: "enemy",
             isActive: monster.id === currentMonsterId,
             label: monster.name,
             maxHealth: monster.maximumHealth,
+            position: directionScenePositions[direction],
           });
         });
 
@@ -410,7 +450,7 @@ export function useGameRun({
     : [];
   const currentEnemy = currentMonster
     ? {
-        emoji: currentMonster.sprite,
+        sprite: currentMonster.sprite,
         hitPoints: currentMonster.currentHealth,
         name: currentMonster.name,
       }
@@ -524,6 +564,7 @@ export function useGameRun({
       });
       setPlayerHealth(PLAYER_MAX_HEALTH);
       setPlayerEnergy(PLAYER_MAX_ENERGY);
+      setPlayerScenePosition("center");
       setTurnTimeRemaining(TURN_DURATION);
       setTurnNumber((number) => number + 1);
     },
@@ -581,7 +622,7 @@ export function useGameRun({
       startedRoomId: string;
     }) => {
       const roomAtEnd = getCurrentRoom(mapAtEnd ?? dungeonMap);
-        const monsterAtEnd = getRoomMonster(mapAtEnd ?? dungeonMap, roomAtEnd);
+      const monsterAtEnd = getRoomMonster(mapAtEnd ?? dungeonMap, roomAtEnd);
 
       if (roomAtEnd?.id === startedRoomId && monsterAtEnd) {
         setIsResolving(true);
@@ -838,6 +879,7 @@ export function useGameRun({
         setPlayerHealthLossAmount,
       });
       void commitMap((map) => moveCurrentPosition(map, nextRoomId));
+      setPlayerScenePosition(playerEntryPositions[direction]);
       const stairPosition = getGridPosition(nextRoomId);
       nextLevelStartingPositionRef.current = stairPosition;
       finishTurn();
@@ -850,6 +892,7 @@ export function useGameRun({
       setPlayerHealthLossAmount,
     });
     void commitMap((map) => moveCurrentPosition(map, nextRoomId));
+    setPlayerScenePosition(playerEntryPositions[direction]);
     finishTurn();
   }
 
@@ -861,6 +904,7 @@ export function useGameRun({
     currentRoomItemLabel,
     currentRoomItemSprite,
     currentRoomId,
+    roomDoorways,
     roomSceneActors,
     disabledDirections,
     dungeonMap,
@@ -879,6 +923,7 @@ export function useGameRun({
     playerEnergyLossAmount,
     playerHealth,
     playerHealthLossAmount,
+    playerScenePosition,
     playerAction,
     expireTurn,
     isGameLoopRunning,

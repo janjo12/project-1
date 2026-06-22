@@ -390,7 +390,7 @@ function getNeighborRoom(rooms: DungeonMapJson, roomId: string, direction: Direc
   return neighbor ? findRoomInGrid(rooms, getRoomId(neighbor)) : null;
 }
 
-function getDoorwayGuardPlacement(
+export function getDoorwayGuardPlacement(
   map: DungeonMap,
   roomId: string,
   direction: Direction,

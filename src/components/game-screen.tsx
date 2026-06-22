@@ -121,6 +121,8 @@ export function GameScreen({
           enemyMaxHitPoints={game.currentEnemyMaxHitPoints}
           floorItem={game.currentRoomItemSprite}
           floorStairs={game.roomHasStairs}
+          playerPosition={game.playerScenePosition}
+          roomDoorways={game.roomDoorways}
           roomSceneActors={game.roomSceneActors}
           playerEnergyLossAmount={game.playerEnergyLossAmount}
           playerHealthLossAmount={game.playerHealthLossAmount}
@@ -217,7 +219,7 @@ function getDisabledActions({
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  container: {
+    container: {
       flex: 1,
       gap: 10,
     },
@@ -266,56 +268,6 @@ function createStyles(colors: ThemeColors) {
       color: colors.ink,
       fontSize: 14,
       fontWeight: "900",
-    },
-    pauseActions: {
-      gap: 10,
-    },
-    pauseBackdrop: {
-      alignItems: "center",
-      backgroundColor: "rgba(2, 6, 23, 0.62)",
-      flex: 1,
-      justifyContent: "center",
-      padding: 22,
-    },
-    pauseButton: {
-      alignItems: "center",
-      backgroundColor: colors.ink,
-      borderColor: colors.ink,
-      borderRadius: 10,
-      borderWidth: 2,
-      justifyContent: "center",
-      minHeight: 54,
-      paddingHorizontal: 14,
-      paddingVertical: 10,
-    },
-    pauseButtonText: {
-      color: colors.paper,
-      fontSize: 22,
-      fontWeight: "900",
-      textAlign: "center",
-    },
-    pauseDangerButton: {
-      backgroundColor: "transparent",
-      borderColor: colors.health,
-    },
-    pauseDangerButtonText: {
-      color: colors.health,
-    },
-    pausePanel: {
-      backgroundColor: colors.paper,
-      borderColor: colors.ink,
-      borderRadius: 8,
-      borderWidth: 3,
-      gap: 28,
-      maxWidth: 420,
-      padding: 22,
-      width: "100%",
-    },
-    pauseTitle: {
-      color: colors.ink,
-      fontSize: 34,
-      fontWeight: "900",
-      textAlign: "center",
     },
     pressed: {
       opacity: 0.72,

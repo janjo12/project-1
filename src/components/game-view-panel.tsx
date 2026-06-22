@@ -1,25 +1,31 @@
 import { FontAwesome } from "@expo/vector-icons";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View, type ViewStyle } from "react-native";
 
 import { CombatantSprite } from "@/components/combatant-sprite";
 import { useThemeColors, type ThemeColors } from "@/components/theme";
 import {
-    COMBAT_ANIMATION,
-    createCombatAnimationFrame,
-    type CombatAnimationFrame,
+  COMBAT_ANIMATION,
+  createCombatAnimationFrame,
+  type CombatAnimationFrame,
 } from "@/entities";
 
 export type Enemy = {
-  emoji: string;
+  sprite: string;
   hitPoints: number;
   name: string;
 };
 
+export type ScenePosition = "top" | "bottom" | "left" | "right" | "center";
+type DoorPosition = Exclude<ScenePosition, "center">;
+type DoorState = "guarded" | "locked" | "open" | "wall";
+export type RoomDoorways = Record<DoorPosition, DoorState>;
+
 export type RoomSceneActor = {
   currentHealth?: number;
-  emoji: string;
+  sprite: string;
   kind: "enemy" | "item" | "stairs";
   label: string;
+  position?: ScenePosition;
   isActive?: boolean;
   maxHealth?: number;
 };
@@ -31,12 +37,24 @@ type GameViewPanelProps = {
   enemyMaxHitPoints?: number;
   floorItem?: string | null;
   floorStairs?: boolean;
+  playerPosition?: ScenePosition;
+  roomDoorways?: RoomDoorways;
   roomSceneActors?: RoomSceneActor[];
   playerEnergyLossAmount?: number;
   playerHealthLossAmount?: number;
 };
 
-const PLAYER_EMOJI = "\uD83E\uDD3A";
+const PLAYER_SPRITE = "\uD83E\uDD3A";
+const STAIRS_SPRITE = "\uD83E\uDE9C";
+const DOOR_GUARD_ICON = "\u274C";
+const DOOR_LOCK_ICON = "\uD83D\uDD12";
+const SCENE_SPRITE_HALF_SIZE = 32;
+const defaultRoomDoorways: RoomDoorways = {
+  bottom: "wall",
+  left: "wall",
+  right: "wall",
+  top: "wall",
+};
 
 export function GameViewPanel({
   animationFrame = createCombatAnimationFrame(),
@@ -45,6 +63,8 @@ export function GameViewPanel({
   enemyMaxHitPoints = enemy?.hitPoints ?? 1,
   floorItem = null,
   floorStairs = false,
+  playerPosition = "center",
+  roomDoorways = defaultRoomDoorways,
   roomSceneActors,
   playerEnergyLossAmount = 0,
   playerHealthLossAmount = 0,
@@ -52,7 +72,7 @@ export function GameViewPanel({
   const colors = useThemeColors();
   const styles = createStyles(colors);
   const bounceOffset = getBounceOffset(animationFrame.bounceElapsed);
-  const visibleActors = roomSceneActors ?? createLegacySceneActors({
+  const visibleActors = roomSceneActors ?? createSceneActors({
     enemy,
     enemyMaxHitPoints,
     floorItem,
@@ -63,14 +83,19 @@ export function GameViewPanel({
   return (
     <View style={styles.panel}>
       <View style={styles.sceneBox}>
-        <View style={styles.sceneActorsGrid}>
+        <View style={styles.sceneArea}>
+          <RoomWalls doorways={roomDoorways} />
+
           {visibleActors.map((actor, index) => (
             <View
               key={`${actor.kind}-${actor.label}-${index}`}
-              style={[styles.sceneActorSlot, { width: getSceneSlotWidth(visibleActors.length) }]}
+              style={[
+                styles.sceneActorPosition,
+                getActorPosition(actor.position ?? "center"),
+              ]}
             >
               {actor.kind === "enemy" ? (
-                <View style={styles.sceneEnemySlot}>
+                <View style={styles.sceneActorContent}>
                   {actor.isActive ?? true ? (
                     <FloatingResourceLoss
                       amount={enemyHealthLossAmount}
@@ -107,7 +132,7 @@ export function GameViewPanel({
                             )
                           : null
                       }
-                      emoji={actor.emoji}
+                      sprite={actor.sprite}
                       scale={sceneScale}
                     />
                     <EnemyHealthBar
@@ -119,23 +144,22 @@ export function GameViewPanel({
                     />
                   </View>
                 </View>
-              ) : actor.kind === "stairs" ? (
-                <SceneEmojiSprite
-                  accessibilityLabel={actor.label}
-                  emoji={actor.emoji}
-                  scale={sceneScale}
-                />
               ) : (
-                <SceneEmojiSprite
+                <SceneSprite
                   accessibilityLabel={actor.label}
-                  emoji={actor.emoji}
+                  sprite={actor.sprite}
                   scale={sceneScale}
                 />
               )}
             </View>
           ))}
 
-          <View style={[styles.sceneActorSlot, { width: getSceneSlotWidth(visibleActors.length) }]}>
+          <View
+            style={[
+              styles.sceneActorPosition,
+              getActorPosition(playerPosition),
+            ]}
+          >
             <FloatingResourceLoss
               amount={playerHealthLossAmount}
               color={colors.health}
@@ -168,7 +192,7 @@ export function GameViewPanel({
                 animationFrame.playerDamageElapsed,
                 COMBAT_ANIMATION.damageDuration,
               )}
-              emoji={PLAYER_EMOJI}
+              sprite={PLAYER_SPRITE}
               scale={sceneScale}
             />
           </View>
@@ -178,7 +202,7 @@ export function GameViewPanel({
   );
 }
 
-function createLegacySceneActors({
+function createSceneActors({
   enemy,
   enemyMaxHitPoints,
   floorItem,
@@ -189,7 +213,7 @@ function createLegacySceneActors({
   if (enemy) {
     actors.push({
       currentHealth: enemy.hitPoints,
-      emoji: enemy.emoji,
+      sprite: enemy.sprite,
       kind: "enemy",
       label: enemy.name,
       maxHealth: enemyMaxHitPoints ?? enemy.hitPoints,
@@ -198,17 +222,19 @@ function createLegacySceneActors({
 
   if (floorStairs) {
     actors.push({
-      emoji: "🪜",
+      sprite: STAIRS_SPRITE,
       kind: "stairs",
       label: "Stairs",
+      position: "center",
     });
   }
 
   if (floorItem && !enemy) {
     actors.push({
-      emoji: floorItem,
+      sprite: floorItem,
       kind: "item",
       label: "Floor item",
+      position: "center",
     });
   }
 
@@ -233,10 +259,6 @@ function getSceneScale(actorCount: number) {
   }
 
   return 0.72;
-}
-
-function getSceneSlotWidth(actorCount: number) {
-  return Math.max(72, 112 - Math.max(0, actorCount - 1) * 8);
 }
 
 type EnemyHealthBarProps = {
@@ -417,26 +439,22 @@ function createStyles(colors: ThemeColors) {
       minHeight: 224,
       padding: 14,
     },
-    sceneActorsGrid: {
-      alignItems: "center",
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: 8,
-      justifyContent: "center",
+    sceneArea: {
+      borderColor: "#ffffff",
+      borderWidth: 5,
+      overflow: "visible",
       width: "100%",
-    },
-    sceneActorSlot: {
-      alignItems: "center",
-      gap: 4,
-      justifyContent: "center",
-      minHeight: 54,
+      height: 220,
       position: "relative",
     },
-    sceneEnemySlot: {
+    sceneActorPosition: {
+      position: "absolute",
       alignItems: "center",
-      gap: 5,
       justifyContent: "center",
-      position: "relative",
+    },
+    sceneActorContent: {
+      alignItems: "center",
+      justifyContent: "center",
     },
     enemyHealthBarTrack: {
       backgroundColor: "rgba(239, 68, 68, 0.18)",
@@ -503,16 +521,102 @@ function createStyles(colors: ThemeColors) {
     sprite: {
       fontSize: 64,
     },
+    doorwayGap: {
+      alignItems: "center",
+      backgroundColor: colors.paper,
+      justifyContent: "center",
+      position: "absolute",
+      zIndex: 3,
+    },
+    horizontalDoorwayGap: {
+      height: 12,
+      left: "42%",
+      width: "16%",
+    },
+    verticalDoorwayGap: {
+      height: "20%",
+      top: "40%",
+      width: 12,
+    },
+    topDoorwayGap: {
+      top: -7,
+    },
+    bottomDoorwayGap: {
+      bottom: -7,
+    },
+    leftDoorwayGap: {
+      left: -7,
+    },
+    rightDoorwayGap: {
+      right: -7,
+    },
+    doorwayIcon: {
+      fontSize: 17,
+      fontWeight: "900",
+      lineHeight: 20,
+      textAlign: "center",
+    },
+    guardedDoorwayIcon: {
+      color: "#dc2626",
+    },
+    lockedDoorwayIcon: {
+      color: "#ffffff",
+    },
   });
 }
 
-function SceneEmojiSprite({
+function RoomWalls({ doorways }: { doorways: RoomDoorways }) {
+  const styles = createStyles(useThemeColors());
+  const positions: DoorPosition[] = ["top", "right", "bottom", "left"];
+
+  return (
+    <>
+      {positions.map((position) => {
+        const state = doorways[position];
+
+        if (state === "wall") {
+          return null;
+        }
+
+        return (
+          <View
+            accessibilityLabel={`${position} ${state} doorway`}
+            key={position}
+            style={[
+              styles.doorwayGap,
+              position === "top" || position === "bottom"
+                ? styles.horizontalDoorwayGap
+                : styles.verticalDoorwayGap,
+              position === "top" && styles.topDoorwayGap,
+              position === "bottom" && styles.bottomDoorwayGap,
+              position === "left" && styles.leftDoorwayGap,
+              position === "right" && styles.rightDoorwayGap,
+            ]}
+          >
+            {state === "guarded" ? (
+              <Text style={[styles.doorwayIcon, styles.guardedDoorwayIcon]}>
+                {DOOR_GUARD_ICON}
+              </Text>
+            ) : null}
+            {state === "locked" ? (
+              <Text style={[styles.doorwayIcon, styles.lockedDoorwayIcon]}>
+                {DOOR_LOCK_ICON}
+              </Text>
+            ) : null}
+          </View>
+        );
+      })}
+    </>
+  );
+}
+
+function SceneSprite({
   accessibilityLabel,
-  emoji,
+  sprite,
   scale,
 }: {
   accessibilityLabel: string;
-  emoji: string;
+  sprite: string;
   scale: number;
 }) {
   const styles = createStyles(useThemeColors());
@@ -520,8 +624,50 @@ function SceneEmojiSprite({
   return (
     <View style={{ transform: [{ scale }] }}>
       <Text accessibilityLabel={accessibilityLabel} style={styles.sprite}>
-        {emoji}
+        {sprite}
       </Text>
     </View>
   );
+}
+
+function getActorPosition(position: ScenePosition): ViewStyle {
+  switch (position) {
+    case "top":
+      return {
+        top: 10,
+        left: "50%",
+        transform: [{ translateX: -SCENE_SPRITE_HALF_SIZE }],
+      };
+
+    case "bottom":
+      return {
+        bottom: 10,
+        left: "50%",
+        transform: [{ translateX: -SCENE_SPRITE_HALF_SIZE }],
+      };
+
+    case "left":
+      return {
+        left: 10,
+        top: "50%",
+        transform: [{ translateY: -SCENE_SPRITE_HALF_SIZE }],
+      };
+
+    case "right":
+      return {
+        right: 10,
+        top: "50%",
+        transform: [{ translateY: -SCENE_SPRITE_HALF_SIZE }],
+      };
+
+    case "center":
+      return {
+        left: "50%",
+        top: "50%",
+        transform: [
+          { translateX: -SCENE_SPRITE_HALF_SIZE },
+          { translateY: -SCENE_SPRITE_HALF_SIZE },
+        ],
+      };
+  }
 }

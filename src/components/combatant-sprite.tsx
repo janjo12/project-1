@@ -6,7 +6,7 @@ type CombatantSpriteProps = {
   attackProgress?: number | null;
   bounceOffset?: number;
   damageProgress?: number | null;
-  emoji: string;
+  sprite: string;
   scale?: number;
 };
 
@@ -18,7 +18,7 @@ export function CombatantSprite({
   attackProgress = null,
   bounceOffset = 0,
   damageProgress = null,
-  emoji,
+  sprite,
   scale = 1,
 }: CombatantSpriteProps) {
   const attackOffset = getAttackOffset(attackProgress, attackDirection);
@@ -38,8 +38,8 @@ export function CombatantSprite({
         },
       ]}
     >
-      <Text accessibilityLabel={accessibilityLabel} style={styles.emoji}>
-        {emoji}
+      <Text accessibilityLabel={accessibilityLabel} style={styles.sprite}>
+        {sprite}
       </Text>
     </View>
   );
@@ -71,8 +71,6 @@ const styles = StyleSheet.create({
   sprite: {
     alignItems: "center",
     justifyContent: "center",
-  },
-  emoji: {
     fontSize: 54,
     lineHeight: 62,
   },
