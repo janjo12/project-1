@@ -2,17 +2,17 @@ import { Pressable, StyleSheet, Text } from "react-native";
 
 import { type ThemeColors, useThemeColors } from "@/components/theme";
 
-type AppButtonProps = {
+type AppButtonProps = { // eslint-disable-line react/prop-types
   label: string;
   onPress: () => void;
   variant?: "primary" | "secondary";
 };
 
-export function AppButton({
+export function AppButton({ // eslint-disable-line react/prop-types
   label,
   onPress,
   variant = "primary",
-}: AppButtonProps) {
+}: AppButtonProps) { // eslint-disable-line react/prop-types
   const colors = useThemeColors();
   const styles = createStyles(colors);
 

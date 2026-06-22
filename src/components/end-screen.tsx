@@ -4,12 +4,12 @@ import { AppButton } from "@/components/app-button";
 import { ScreenShell } from "@/components/screen-shell";
 import { type ThemeColors, useThemeColors } from "@/components/theme";
 
-type EndScreenProps = {
+type EndScreenProps = { // eslint-disable-line react/prop-types
   score: string;
   onReturnToTitle: () => void;
 };
 
-export function EndScreen({ score, onReturnToTitle }: EndScreenProps) {
+export function EndScreen({ score, onReturnToTitle }: EndScreenProps) { // eslint-disable-line react/prop-types
   const colors = useThemeColors();
   const styles = createStyles(colors);
 

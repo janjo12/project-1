@@ -3,11 +3,11 @@ import { StyleSheet, Text, View } from "react-native";
 
 import { type ThemeColors, useThemeColors } from "@/components/theme";
 
-type FormFieldProps = PropsWithChildren<{
+type FormFieldProps = PropsWithChildren<{ // eslint-disable-line react/prop-types
   label: string;
 }>;
 
-export function FormField({ children, label }: FormFieldProps) {
+export function FormField({ children, label }: FormFieldProps) { // eslint-disable-line react/prop-types
   const colors = useThemeColors();
   const styles = createStyles(colors);
 

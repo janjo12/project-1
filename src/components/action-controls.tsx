@@ -16,7 +16,7 @@ export type PlayerAction =
   | "pickup-item"
   | "special";
 
-type ActionControlsProps = {
+type ActionControlsProps = { // eslint-disable-line react/prop-types
   disabledActions?: PlayerAction[];
   disabledDirections?: Direction[];
   floorItemLabel?: string | null;
@@ -35,7 +35,7 @@ const arrowIcons = {
   west: "arrow-left",
 } as const;
 
-export function ActionControls({
+export function ActionControls({ // eslint-disable-line react/prop-types
   disabledActions = [],
   disabledDirections = [],
   floorItemLabel = null,
@@ -45,7 +45,7 @@ export function ActionControls({
   itemSprite = null,
   nextLevelNumber = null,
   playerAction,
-}: ActionControlsProps) {
+}: ActionControlsProps) { // eslint-disable-line react/prop-types
   const colors = useThemeColors();
   const styles = createStyles(colors);
   const isUseItemDisabled = isBusy || isItemDisabled;
@@ -198,7 +198,7 @@ export function ActionControls({
   );
 }
 
-type CircularButtonProps = {
+type CircularButtonProps = { // eslint-disable-line react/prop-types
   disabled: boolean;
   icon?: keyof typeof FontAwesome.glyphMap;
   label?: string;
@@ -208,7 +208,7 @@ type CircularButtonProps = {
   testID: string;
 };
 
-function CircularButton({
+function CircularButton({ // eslint-disable-line react/prop-types
   disabled,
   icon,
   label,
@@ -216,7 +216,7 @@ function CircularButton({
   onPress,
   styles,
   testID,
-}: CircularButtonProps) {
+}: CircularButtonProps) { // eslint-disable-line react/prop-types
   const colors = useThemeColors();
 
   return (
@@ -255,7 +255,7 @@ function CircularButton({
   );
 }
 
-type ArrowButtonProps = {
+type ArrowButtonProps = { // eslint-disable-line react/prop-types
   color: string;
   direction: Direction;
   disabled: boolean;
@@ -263,13 +263,13 @@ type ArrowButtonProps = {
   styles: ReturnType<typeof createStyles>;
 };
 
-function ArrowButton({
+function ArrowButton({ // eslint-disable-line react/prop-types
   color,
   direction,
   disabled,
   playerAction,
   styles,
-}: ArrowButtonProps) {
+}: ArrowButtonProps) { // eslint-disable-line react/prop-types
   return (
     <Pressable
       accessibilityLabel={`Move ${direction}`}

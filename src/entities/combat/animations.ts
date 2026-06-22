@@ -1,8 +1,4 @@
-export const COMBAT = {
-  attackDamage: 1,
-};
-
-export const COMBAT_ANIMATION = {
+export const COMBAT_ANIMATION = { // in milliseconds
   attackDuration: 500,
   bounceDistance: 10,
   bounceDuration: 1400,
@@ -21,7 +17,7 @@ export type CombatAnimationFrame = {
   playerHealthLossElapsed: number | null;
 };
 
-export function createCombatAnimationFrame(): CombatAnimationFrame {
+export function createCombatAnimationFrame(): CombatAnimationFrame { // this is used to create a new animation frame with all elapsed times set to 0 or null
   return {
     bounceElapsed: 0,
     enemyAttackElapsed: null,
@@ -38,7 +34,7 @@ function advanceElapsed(
   elapsed: number | null,
   delta: number,
   duration: number,
-) {
+) { // this is used to advance the elapsed time of an animation frame by a given delta, and return null if the animation has completed
   if (elapsed === null) {
     return null;
   }
@@ -55,7 +51,7 @@ function advanceElapsed(
 export function advanceAnimationFrame(
   frame: CombatAnimationFrame,
   delta: number,
-): CombatAnimationFrame {
+): CombatAnimationFrame { // this is used to advance the elapsed time of an animation frame by a given delta, and return a new animation frame with the updated elapsed times
   return {
     bounceElapsed:
       (frame.bounceElapsed + delta) % COMBAT_ANIMATION.bounceDuration,

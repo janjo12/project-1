@@ -1,7 +1,9 @@
+//#region imports
 import { PreferenceToggles } from "@/components/preference-toggles";
 import { useThemeColors, type ThemeColors } from "@/components/theme";
 import type { GameSettings } from "@/utils/settings-storage";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+//#endregion
 
 type PauseMenuProps = {
   onBackToGame: () => void;

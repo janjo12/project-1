@@ -9,7 +9,7 @@ import {
   type CombatAnimationFrame,
 } from "@/entities";
 
-export type Enemy = {
+export type Enemy = { // eslint-disable-line react/prop-types
   sprite: string;
   hitPoints: number;
   name: string;
@@ -20,7 +20,7 @@ type DoorPosition = Exclude<ScenePosition, "center">;
 type DoorState = "guarded" | "locked" | "open" | "wall";
 export type RoomDoorways = Record<DoorPosition, DoorState>;
 
-export type RoomSceneActor = {
+export type RoomSceneActor = { // eslint-disable-line react/prop-types
   currentHealth?: number;
   sprite: string;
   kind: "enemy" | "item" | "stairs";
@@ -30,13 +30,14 @@ export type RoomSceneActor = {
   maxHealth?: number;
 };
 
-type GameViewPanelProps = {
+type GameViewPanelProps = { // eslint-disable-line react/prop-types
   animationFrame?: CombatAnimationFrame;
   enemy?: Enemy | null;
   enemyHealthLossAmount?: number;
   enemyMaxHitPoints?: number;
   floorItem?: string | null;
   floorStairs?: boolean;
+  hardTurnCounter?: number | null;
   playerPosition?: ScenePosition;
   roomDoorways?: RoomDoorways;
   roomSceneActors?: RoomSceneActor[];
@@ -56,19 +57,20 @@ const defaultRoomDoorways: RoomDoorways = {
   top: "wall",
 };
 
-export function GameViewPanel({
+export function GameViewPanel({ // eslint-disable-line react/prop-types
   animationFrame = createCombatAnimationFrame(),
   enemy = null,
   enemyHealthLossAmount = 0,
   enemyMaxHitPoints = enemy?.hitPoints ?? 1,
   floorItem = null,
   floorStairs = false,
+  hardTurnCounter = null,
   playerPosition = "center",
   roomDoorways = defaultRoomDoorways,
   roomSceneActors,
   playerEnergyLossAmount = 0,
   playerHealthLossAmount = 0,
-}: GameViewPanelProps) {
+}: GameViewPanelProps) { // eslint-disable-line react/prop-types
   const colors = useThemeColors();
   const styles = createStyles(colors);
   const bounceOffset = getBounceOffset(animationFrame.bounceElapsed);
@@ -83,6 +85,16 @@ export function GameViewPanel({
   return (
     <View style={styles.panel}>
       <View style={styles.sceneBox}>
+        {hardTurnCounter !== null ? (
+          <Text
+            accessibilityLabel="Hard mode turns remaining"
+            style={styles.turnCounter}
+            testID="hard-turn-counter"
+          >
+            Turns {hardTurnCounter}
+          </Text>
+        ) : null}
+
         <View style={styles.sceneArea}>
           <RoomWalls doorways={roomDoorways} />
 
@@ -202,7 +214,7 @@ export function GameViewPanel({
   );
 }
 
-function createSceneActors({
+function createSceneActors({ // eslint-disable-line react/prop-types
   enemy,
   enemyMaxHitPoints,
   floorItem,
@@ -241,7 +253,7 @@ function createSceneActors({
   return actors;
 }
 
-function getSceneScale(actorCount: number) {
+function getSceneScale(actorCount: number) { // this function determines the scale of the scene sprites based on the number of actors present in the scene. It returns a scale factor that is used to adjust the size of the sprites to ensure they fit well within the scene area.
   if (actorCount <= 2) {
     return 1;
   }
@@ -261,7 +273,7 @@ function getSceneScale(actorCount: number) {
   return 0.72;
 }
 
-type EnemyHealthBarProps = {
+type EnemyHealthBarProps = { // eslint-disable-line react/prop-types
   accessibilityLabel: string;
   color: string;
   current: number;
@@ -269,13 +281,13 @@ type EnemyHealthBarProps = {
   testID: string;
 };
 
-function EnemyHealthBar({
+function EnemyHealthBar({ // eslint-disable-line react/prop-types
   accessibilityLabel,
   color,
   current,
   max,
   testID,
-}: EnemyHealthBarProps) {
+}: EnemyHealthBarProps) { // eslint-disable-line react/prop-types
   const styles = createStyles(useThemeColors());
   const safeMax = Math.max(1, max);
   const fillPercent = Math.max(0, Math.min(100, (current / safeMax) * 100));
@@ -300,7 +312,7 @@ function EnemyHealthBar({
   );
 }
 
-type ResourceBarProps = {
+type ResourceBarProps = { // eslint-disable-line react/prop-types
   accessibilityLabel: string;
   color: string;
   current: number;
@@ -310,7 +322,7 @@ type ResourceBarProps = {
   testID: string;
 };
 
-export function ResourceBar({
+export function ResourceBar({ // eslint-disable-line react/prop-types
   accessibilityLabel,
   color,
   current,
@@ -318,7 +330,7 @@ export function ResourceBar({
   max,
   panelPosition = "single",
   testID,
-}: ResourceBarProps) {
+}: ResourceBarProps) { // eslint-disable-line react/prop-types
   const colors = useThemeColors();
   const styles = createStyles(colors);
   const safeMax = Math.max(1, max);
@@ -362,7 +374,7 @@ export function ResourceBar({
   );
 }
 
-type FloatingResourceLossProps = {
+type FloatingResourceLossProps = { // eslint-disable-line react/prop-types
   amount: number;
   color: string;
   icon: "bolt" | "heart";
@@ -370,13 +382,13 @@ type FloatingResourceLossProps = {
   testID: string;
 };
 
-function FloatingResourceLoss({
+function FloatingResourceLoss({ // eslint-disable-line react/prop-types
   amount,
   color,
   icon,
   progress,
   testID,
-}: FloatingResourceLossProps) {
+}: FloatingResourceLossProps) { // eslint-disable-line react/prop-types
   const styles = createStyles(useThemeColors());
 
   if (amount <= 0) {
@@ -389,7 +401,7 @@ function FloatingResourceLoss({
       ? 0
       : progress < 0.62
         ? 1
-        : Math.max(0, 1 - (progress - 0.62) / 0.38);
+        : Math.max(0, 1 - (progress - 0.62) / 0.38); // fade out after 62% of the animation duration
   const translateY = -28 * visibleProgress;
 
   return (
@@ -409,7 +421,7 @@ function FloatingResourceLoss({
   );
 }
 
-function getProgress(elapsed: number | null, duration: number) {
+function getProgress(elapsed: number | null, duration: number) { // this function calculates the progress of an animation based on the elapsed time and the total duration of the animation. It returns a value between 0 and 1, representing the percentage of the animation that has completed. If the elapsed time is null, it returns null, indicating that there is no progress to report.
   if (elapsed === null) {
     return null;
   }
@@ -417,7 +429,7 @@ function getProgress(elapsed: number | null, duration: number) {
   return Math.max(0, Math.min(1, elapsed / duration));
 }
 
-function getBounceOffset(elapsed: number) {
+function getBounceOffset(elapsed: number) { // this function calculates the vertical offset for a bouncing animation effect based on the elapsed time. It uses a sine wave to create a smooth up-and-down motion, which is commonly used in animations to simulate bouncing.
   const progress =
     (elapsed % COMBAT_ANIMATION.bounceDuration) /
     COMBAT_ANIMATION.bounceDuration;
@@ -425,7 +437,7 @@ function getBounceOffset(elapsed: number) {
   return Math.sin(progress * Math.PI * 2) * COMBAT_ANIMATION.bounceDistance;
 }
 
-function RoomWalls({ doorways }: { doorways: RoomDoorways }) {
+function RoomWalls({ doorways }: { doorways: RoomDoorways }) { // this component renders the walls of a room in a game view, including any doorways that may be present. It takes a prop called `doorways`, which is an object that specifies the state of each doorway (top, right, bottom, left) as either "guarded", "locked", "open", or "wall". The component uses this information to display the appropriate visual representation for each doorway, such as icons for guarded or locked doorways, and adjusts the layout accordingly.
   const styles = createStyles(useThemeColors());
   const positions: DoorPosition[] = ["top", "right", "bottom", "left"];
 
@@ -470,11 +482,11 @@ function RoomWalls({ doorways }: { doorways: RoomDoorways }) {
   );
 }
 
-function SceneSprite({
+function SceneSprite({ // eslint-disable-line react/prop-types
   accessibilityLabel,
   sprite,
   scale,
-}: {
+}: { // eslint-disable-line react/prop-types
   accessibilityLabel: string;
   sprite: string;
   scale: number;
@@ -490,7 +502,7 @@ function SceneSprite({
   );
 }
 
-function getActorPosition(position: ScenePosition): ViewStyle {
+function getActorPosition(position: ScenePosition): ViewStyle { // this function calculates the style properties needed to position an actor (such as a player or enemy) within a scene based on the specified position. It returns an object containing CSS-like properties that can be applied to a React Native View component to place the actor at the correct location in the scene, such as top, bottom, left, right, or center.
   switch (position) {
     case "top":
       return {
@@ -627,6 +639,14 @@ function createStyles(colors: ThemeColors) {
     },
     sprite: {
       fontSize: 64,
+    },
+    turnCounter: {
+      color: "#ffffff",
+      fontSize: 18,
+      fontVariant: ["tabular-nums"],
+      fontWeight: "900",
+      lineHeight: 22,
+      textAlign: "center",
     },
     doorwayGap: {
       alignItems: "center",

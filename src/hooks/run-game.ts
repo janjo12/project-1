@@ -1,3 +1,4 @@
+//#region imports
 import * as Haptics from "expo-haptics";
 import {
   useCallback,
@@ -19,7 +20,6 @@ import type {
 } from "@/components/game-view-panel";
 import {
   advanceAnimationFrame,
-  COMBAT,
   createCombatAnimationFrame,
   PLAYER,
   type CombatAnimationFrame,
@@ -54,9 +54,12 @@ import {
   type WorldMonster,
 } from "@/utils/dungeon-map";
 import type { Difficulty } from "@/utils/settings-storage";
+//#endregion
 
+//#region constants and types
 export const PLAYER_MAX_HEALTH = PLAYER.maxHealth;
 export const PLAYER_MAX_ENERGY = PLAYER.maxEnergy;
+export const HARD_TURN_LIMIT = 30;
 export const TURN_DURATION = 4000;
 
 type PlayerAction =
@@ -113,8 +116,10 @@ type GameLoopEntity = {
 type GameLoopEntities = {
   gameLoop: GameLoopEntity;
 };
+//#endregion
 
-export class GameLoopTimer {
+//#region game loop and system
+export class GameLoopTimer { // this is a custom timer class that can be started and stopped, and allows subscribers to be notified of the elapsed time at regular intervals
   private currentTime = 0;
   private intervalId: ReturnType<typeof setInterval> | null = null;
   private subscribers: ((time: number) => void)[] = [];
@@ -155,7 +160,7 @@ export class GameLoopTimer {
 export const runGameLoop: GameEngineSystem = (
   entities: GameLoopEntities,
   { time }: GameEngineUpdateEventOptionType,
-) => {
+) => { // this is the main game loop system that advances the game state based on the elapsed time and turn timer
   const loop = entities.gameLoop;
 
   if (!loop) {
@@ -185,7 +190,9 @@ export const runGameLoop: GameEngineSystem = (
 
   return entities;
 };
+//#endregion
 
+//#region helper functions
 function restartAnimations(
   setFrame: Dispatch<SetStateAction<CombatAnimationFrame>>,
   animationKeys: (keyof Omit<CombatAnimationFrame, "bounceElapsed">)[],
@@ -316,19 +323,21 @@ function getTurnStatus({
 
   return `Facing ${currentEnemyName ?? "enemy"} | Level ${level} | Room ${roomId}`;
 }
+//#endregion
 
-export function useGameRun({
+export function useRunGame({
   difficulty,
   onGameOver,
   seed,
   vibrationEnabled,
-}: UseGameRunOptions) {
+}: UseGameRunOptions) { // this is the main hook that manages the game state and logic, including the player's stats, current room and monster, inventory, animations, and turn resolution
   const [level, setLevel] = useState(1);
   const [clearedLevels, setClearedLevels] = useState(0);
   const [dungeonMap, setDungeonMap] = useState(() => createLevelMap(seed, 1));
   const [inventoryItem, setInventoryItem] = useState<ItemId | null>(null);
   const timeoutIds = useRef<ReturnType<typeof setTimeout>[]>([]);
   const clearedLevelsRef = useRef(0);
+  const hardTurnGameOverScheduledRef = useRef(false);
   const nextLevelStartingPositionRef = useRef<GridPosition | null>(null);
   const [animationFrame, setAnimationFrame] =
     useState<CombatAnimationFrame>(createCombatAnimationFrame);
@@ -340,6 +349,7 @@ export function useGameRun({
   const [playerHealthLossAmount, setPlayerHealthLossAmount] = useState(0);
   const [playerScenePosition, setPlayerScenePosition] =
     useState<ScenePosition>("center");
+  const [turnCounter, setTurnCounter] = useState(HARD_TURN_LIMIT);
   const [turnNumber, setTurnNumber] = useState(0);
   const [turnTimeRemaining, setTurnTimeRemaining] = useState(TURN_DURATION);
 
@@ -351,7 +361,8 @@ export function useGameRun({
   const currentRoomItemSprite = currentRoomItemObject?.sprite ?? null;
   const currentMonster = getRoomMonster(dungeonMap, currentRoom);
   const currentMonsterId = currentMonster?.id ?? null;
-  const hasLost = playerHealth <= 0;
+  const hasHardTurnCounter = difficulty === "hard";
+  const hasLost = playerHealth <= 0 || (hasHardTurnCounter && turnCounter <= 0);
   const hasTurnTimer = difficulty !== "easy";
   const roomHasStairs = currentRoom ? checkRoomStairs(currentRoom) : false;
   const roomDoorways: RoomDoorways = currentRoom
@@ -565,6 +576,8 @@ export function useGameRun({
       setPlayerHealth(PLAYER_MAX_HEALTH);
       setPlayerEnergy(PLAYER_MAX_ENERGY);
       setPlayerScenePosition("center");
+      setTurnCounter(HARD_TURN_LIMIT);
+      hardTurnGameOverScheduledRef.current = false;
       setTurnTimeRemaining(TURN_DURATION);
       setTurnNumber((number) => number + 1);
     },
@@ -575,7 +588,20 @@ export function useGameRun({
     setTurnTimeRemaining(TURN_DURATION);
     setIsResolving(false);
     setTurnNumber((number) => number + 1);
-  }, []);
+
+    if (difficulty === "hard") {
+      setTurnCounter((counter) => {
+        const nextCounter = Math.max(0, counter - 1);
+
+        if (nextCounter <= 0 && !hardTurnGameOverScheduledRef.current) {
+          hardTurnGameOverScheduledRef.current = true;
+          schedule(0, () => onGameOver(clearedLevelsRef.current));
+        }
+
+        return nextCounter;
+      });
+    }
+  }, [difficulty, onGameOver, schedule]);
 
   const startEnemyMove = useCallback(
     (isDefending: boolean, monsterDamage: number) => {
@@ -670,8 +696,8 @@ export function useGameRun({
       const damage = currentMonster.chases
         ? 0
         : action === "special"
-          ? COMBAT.attackDamage * 2
-          : COMBAT.attackDamage;
+          ? 2
+          : 1;
       const healthLost = Math.min(currentMonster.currentHealth, damage);
 
       if (action === "special") {
@@ -913,6 +939,7 @@ export function useGameRun({
     hasRoomEnemy,
     roomHasStairs,
     hasTurnTimer,
+    hardTurnCounter: hasHardTurnCounter ? turnCounter : null,
     inventoryItem,
     inventoryItemLabel,
     inventoryItemSprite,

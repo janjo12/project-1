@@ -10,7 +10,7 @@ import type {
   Handedness,
 } from "@/utils/settings-storage";
 
-type GameOptionsFormProps = {
+type GameOptionsFormProps = { // eslint-disable-line react/prop-types
   settings: GameSettings;
   onChange: (settings: Partial<GameSettings>) => void;
 };

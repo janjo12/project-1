@@ -1,8 +1,7 @@
 export {
   advanceAnimationFrame,
-  COMBAT,
   COMBAT_ANIMATION,
-  createCombatAnimationFrame,
+  createCombatAnimationFrame
 } from "./combat/animations";
 export type { CombatAnimationFrame } from "./combat/animations";
 

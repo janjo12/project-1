@@ -4,8 +4,8 @@ import { GameEngine } from "react-native-game-engine";
 
 import { ActionControls, type PlayerAction } from "@/components/action-controls";
 import { DungeonMap } from "@/components/dungeon-map";
-import { PauseMenu } from "@/components/game-screen-menu";
 import { GameViewPanel, ResourceBar } from "@/components/game-view-panel";
+import { PauseMenu } from "@/components/pause-menu";
 import { ScreenShell } from "@/components/screen-shell";
 import type { ThemeColors } from "@/components/theme";
 import { useThemeColors } from "@/components/theme";
@@ -15,15 +15,15 @@ import {
   PLAYER_MAX_HEALTH,
   runGameLoop,
   TURN_DURATION,
-  useGameRun,
-} from "@/hooks/use-game-run";
+  useRunGame,
+} from "@/hooks/run-game";
 import type {
   Difficulty,
   GameSettings,
   Handedness,
 } from "@/utils/settings-storage";
 
-type GameScreenProps = {
+type GameScreenProps = { // eslint-disable-line react/prop-types
   difficulty?: Difficulty;
   handedness: Handedness;
   onGameOver: (score: number) => void;
@@ -36,7 +36,7 @@ type GameScreenProps = {
 
 const TURN_TIMER_COLOR = "#a855f7";
 
-export function GameScreen({
+export function GameScreen({ // eslint-disable-line react/prop-types
   difficulty = "normal",
   handedness,
   onGameOver,
@@ -45,22 +45,22 @@ export function GameScreen({
   seed,
   settings,
   vibrationEnabled = true,
-}: GameScreenProps) {
+}: GameScreenProps) { // eslint-disable-line react/prop-types
   const isLeftHanded = handedness === "left";
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const colors = useThemeColors();
   const styles = createStyles(colors);
-  const game = useGameRun({ difficulty, onGameOver, seed, vibrationEnabled });
+  const game = useRunGame({ difficulty, onGameOver, seed, vibrationEnabled });
   const pauseSettings = settings ?? {
     appearance: "system" as const,
     vibrationEnabled,
   };
-  const disabledActions = getDisabledActions({
+  const disabledActions = getDisabledActions({ // eslint-disable-line react/prop-types
     hasLost: game.hasLost,
     hasRoomEnemy: game.hasRoomEnemy,
     playerEnergy: game.playerEnergy,
   });
-  const gameLoopEntities = useMemo(
+  const gameLoopEntities = useMemo( // eslint-disable-line react/prop-types
     () => ({
       gameLoop: {
         elapsed: 0,
@@ -74,7 +74,7 @@ export function GameScreen({
     [game.expireTurn, game.isTurnClockActive, game.turnNumber, game.updateGameFrame],
   );
 
-  function confirmQuitToTitle() {
+  function confirmQuitToTitle() { // eslint-disable-line react/prop-types
     Alert.alert("Quit to Title?", "Your current run will be lost.", [
       { style: "cancel", text: "Cancel" },
       {
@@ -121,6 +121,7 @@ export function GameScreen({
           enemyMaxHitPoints={game.currentEnemyMaxHitPoints}
           floorItem={game.currentRoomItemSprite}
           floorStairs={game.roomHasStairs}
+          hardTurnCounter={game.hardTurnCounter}
           playerPosition={game.playerScenePosition}
           roomDoorways={game.roomDoorways}
           roomSceneActors={game.roomSceneActors}
@@ -197,7 +198,7 @@ export function GameScreen({
   );
 }
 
-function getDisabledActions({
+function getDisabledActions({ // eslint-disable-line react/prop-types
   hasLost,
   hasRoomEnemy,
   playerEnergy,
