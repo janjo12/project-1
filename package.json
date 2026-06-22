@@ -50,8 +50,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "test": "jest --runInBand --runTestsByPath __tests__/dungeon-map.test.ts __tests__/game-screen.test.tsx __tests__/routes.test.tsx __tests__/seed.test.ts __tests__/settings-storage.test.ts",
-    "test:watch": "jest --runInBand --watchAll --runTestsByPath __tests__/dungeon-map.test.ts __tests__/game-screen.test.tsx __tests__/routes.test.tsx __tests__/seed.test.ts __tests__/settings-storage.test.ts"
+    "test": "jest --runInBand",
+    "test:watch": "jest --runInBand --watchAll"
   },
   "private": true
 }

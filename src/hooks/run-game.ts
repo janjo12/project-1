@@ -36,6 +36,7 @@ import {
   getDoorwayGuardPlacement,
   getGridPosition,
   getGuardedDirections,
+  getActiveRooms,
   getLockedDirections,
   getRoom,
   getRoomItem,
@@ -60,7 +61,7 @@ import type { Difficulty } from "@/utils/settings-storage";
 export const PLAYER_MAX_HEALTH = PLAYER.maxHealth;
 export const PLAYER_MAX_ENERGY = PLAYER.maxEnergy;
 export const HARD_TURN_LIMIT = 30;
-export const TURN_DURATION = 4000;
+export const TURN_DURATION = 6000;
 
 type PlayerAction =
   | "attack"
@@ -111,6 +112,7 @@ type GameLoopEntity = {
   onExpire: () => void;
   onFrame: (delta: number, turnTimeRemaining?: number) => void;
   resetKey: number;
+  turnDuration: number;
 };
 
 type GameLoopEntities = {
@@ -170,12 +172,13 @@ export const runGameLoop: GameEngineSystem = (
   const delta = Math.max(0, time.delta || GAME_LOOP_TICK);
   let turnTimeRemaining: number | undefined;
   let didExpire = false;
+  const turnDuration = Math.max(1, loop.turnDuration);
 
   if (loop.isTurnClockActive() && !loop.expired) {
-    loop.elapsed = Math.min(TURN_DURATION, loop.elapsed + delta);
-    turnTimeRemaining = TURN_DURATION - loop.elapsed;
+    loop.elapsed = Math.min(turnDuration, loop.elapsed + delta);
+    turnTimeRemaining = turnDuration - loop.elapsed;
 
-    if (loop.elapsed >= TURN_DURATION) {
+    if (loop.elapsed >= turnDuration) {
       loop.expired = true;
       didExpire = true;
       turnTimeRemaining = 0;
@@ -206,6 +209,39 @@ function restartAnimations(
 
     return nextFrame;
   });
+}
+
+export function getHardTurnLimit({ // the hard turn limit is determined by the number of active rooms in the level, multiplied by a factor (in this case, 3)
+  difficulty,
+  map,
+  level,
+  seed,
+}: {
+  difficulty: Difficulty;
+  map: DungeonMapType;
+  level: number;
+  seed: string;
+}) {
+  void level;
+  void seed;
+
+  if (difficulty !== "hard") {
+    return HARD_TURN_LIMIT;
+  }
+
+  return Math.max(1, getActiveRooms(map).length * 3);
+}
+
+export function getTurnDuration({ // the turn duration is determined by the difficulty and level, with a minimum of 2000ms
+  difficulty,
+  level,
+}: {
+  difficulty: Difficulty;
+  level: number;
+}) {
+  const startingDuration = difficulty === "hard" ? 5000 : TURN_DURATION;
+
+  return Math.max(2000, startingDuration - (level - 1) * 30);
 }
 
 function createLevelMap(seed: string, level: number, startingPosition?: GridPosition) {
@@ -331,9 +367,16 @@ export function useRunGame({
   seed,
   vibrationEnabled,
 }: UseGameRunOptions) { // this is the main hook that manages the game state and logic, including the player's stats, current room and monster, inventory, animations, and turn resolution
+  const initialDungeonMapRef = useRef<DungeonMapType | null>(null);
   const [level, setLevel] = useState(1);
   const [clearedLevels, setClearedLevels] = useState(0);
-  const [dungeonMap, setDungeonMap] = useState(() => createLevelMap(seed, 1));
+  const [dungeonMap, setDungeonMap] = useState(() => {
+    const map = createLevelMap(seed, 1);
+
+    initialDungeonMapRef.current = map;
+
+    return map;
+  });
   const [inventoryItem, setInventoryItem] = useState<ItemId | null>(null);
   const timeoutIds = useRef<ReturnType<typeof setTimeout>[]>([]);
   const clearedLevelsRef = useRef(0);
@@ -349,9 +392,18 @@ export function useRunGame({
   const [playerHealthLossAmount, setPlayerHealthLossAmount] = useState(0);
   const [playerScenePosition, setPlayerScenePosition] =
     useState<ScenePosition>("center");
-  const [turnCounter, setTurnCounter] = useState(HARD_TURN_LIMIT);
+  const [turnCounter, setTurnCounter] = useState(() =>
+    getHardTurnLimit({
+      difficulty,
+      level: 1,
+      map: initialDungeonMapRef.current ?? createLevelMap(seed, 1),
+      seed,
+    }),
+  );
   const [turnNumber, setTurnNumber] = useState(0);
-  const [turnTimeRemaining, setTurnTimeRemaining] = useState(TURN_DURATION);
+  const [turnTimeRemaining, setTurnTimeRemaining] = useState(() =>
+    getTurnDuration({ difficulty, level: 1 }),
+  );
 
   const currentRoom =
     getCurrentRoom(dungeonMap) ?? getRoom(dungeonMap, dungeonMap.startingRoomId);
@@ -364,6 +416,7 @@ export function useRunGame({
   const hasHardTurnCounter = difficulty === "hard";
   const hasLost = playerHealth <= 0 || (hasHardTurnCounter && turnCounter <= 0);
   const hasTurnTimer = difficulty !== "easy";
+  const turnDuration = getTurnDuration({ difficulty, level });
   const roomHasStairs = currentRoom ? checkRoomStairs(currentRoom) : false;
   const roomDoorways: RoomDoorways = currentRoom
     ? {
@@ -521,13 +574,21 @@ export function useRunGame({
 
       if (isMounted) {
         setDungeonMap(nextMap);
+        setTurnCounter(
+          getHardTurnLimit({
+            difficulty,
+            level,
+            map: nextMap,
+            seed,
+          }),
+        );
       }
     })();
 
     return () => {
       isMounted = false;
     };
-  }, [level, seed]);
+  }, [difficulty, level, seed]);
 
   const schedule = useCallback((delay: number, callback: () => void) => {
     const timeoutId = setTimeout(callback, delay);
@@ -561,6 +622,7 @@ export function useRunGame({
       const nextClearedLevels = clearedLevelsRef.current + 1;
       const nextLevel = level + 1;
       const nextMap = createLevelMap(seed, nextLevel, startingPosition);
+      const nextTurnDuration = getTurnDuration({ difficulty, level: nextLevel });
 
       nextLevelStartingPositionRef.current = startingPosition ?? null;
       clearedLevelsRef.current = nextClearedLevels;
@@ -576,16 +638,23 @@ export function useRunGame({
       setPlayerHealth(PLAYER_MAX_HEALTH);
       setPlayerEnergy(PLAYER_MAX_ENERGY);
       setPlayerScenePosition("center");
-      setTurnCounter(HARD_TURN_LIMIT);
+      setTurnCounter(
+        getHardTurnLimit({
+          difficulty,
+          level: nextLevel,
+          map: nextMap,
+          seed,
+        }),
+      );
       hardTurnGameOverScheduledRef.current = false;
-      setTurnTimeRemaining(TURN_DURATION);
+      setTurnTimeRemaining(nextTurnDuration);
       setTurnNumber((number) => number + 1);
     },
-    [level, seed],
+    [difficulty, level, seed],
   );
 
   const finishTurn = useCallback(() => {
-    setTurnTimeRemaining(TURN_DURATION);
+    setTurnTimeRemaining(turnDuration);
     setIsResolving(false);
     setTurnNumber((number) => number + 1);
 
@@ -601,7 +670,7 @@ export function useRunGame({
         return nextCounter;
       });
     }
-  }, [difficulty, onGameOver, schedule]);
+  }, [difficulty, onGameOver, schedule, turnDuration]);
 
   const startEnemyMove = useCallback(
     (isDefending: boolean, monsterDamage: number) => {
@@ -956,6 +1025,7 @@ export function useRunGame({
     isGameLoopRunning,
     isTurnClockActive,
     turnStatus,
+    turnDuration,
     turnNumber,
     turnTimeRemaining,
     updateGameFrame,

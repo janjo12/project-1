@@ -1,3 +1,4 @@
+//#region imports
 import { FontAwesome } from "@expo/vector-icons";
 import { StyleSheet, Text, View, type ViewStyle } from "react-native";
 
@@ -8,7 +9,9 @@ import {
   createCombatAnimationFrame,
   type CombatAnimationFrame,
 } from "@/entities";
+//#endregion
 
+//#region types
 export type Enemy = { // eslint-disable-line react/prop-types
   sprite: string;
   hitPoints: number;
@@ -44,6 +47,7 @@ type GameViewPanelProps = { // eslint-disable-line react/prop-types
   playerEnergyLossAmount?: number;
   playerHealthLossAmount?: number;
 };
+//#endregion
 
 const PLAYER_SPRITE = "\uD83E\uDD3A";
 const STAIRS_SPRITE = "\uD83E\uDE9C";
@@ -57,7 +61,7 @@ const defaultRoomDoorways: RoomDoorways = {
   top: "wall",
 };
 
-export function GameViewPanel({ // eslint-disable-line react/prop-types
+export function GameViewPanel({
   animationFrame = createCombatAnimationFrame(),
   enemy = null,
   enemyHealthLossAmount = 0,
@@ -70,7 +74,7 @@ export function GameViewPanel({ // eslint-disable-line react/prop-types
   roomSceneActors,
   playerEnergyLossAmount = 0,
   playerHealthLossAmount = 0,
-}: GameViewPanelProps) { // eslint-disable-line react/prop-types
+}: GameViewPanelProps) {
   const colors = useThemeColors();
   const styles = createStyles(colors);
   const bounceOffset = getBounceOffset(animationFrame.bounceElapsed);
@@ -91,7 +95,7 @@ export function GameViewPanel({ // eslint-disable-line react/prop-types
             style={styles.turnCounter}
             testID="hard-turn-counter"
           >
-            Turns {hardTurnCounter}
+            Reach the Stairs in {hardTurnCounter} Turns
           </Text>
         ) : null}
 

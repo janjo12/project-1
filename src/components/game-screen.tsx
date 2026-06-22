@@ -14,7 +14,6 @@ import {
   PLAYER_MAX_ENERGY,
   PLAYER_MAX_HEALTH,
   runGameLoop,
-  TURN_DURATION,
   useRunGame,
 } from "@/hooks/run-game";
 import type {
@@ -69,9 +68,16 @@ export function GameScreen({ // eslint-disable-line react/prop-types
         onExpire: game.expireTurn,
         onFrame: game.updateGameFrame,
         resetKey: game.turnNumber,
+        turnDuration: game.turnDuration,
       },
     }),
-    [game.expireTurn, game.isTurnClockActive, game.turnNumber, game.updateGameFrame],
+    [
+      game.expireTurn,
+      game.isTurnClockActive,
+      game.turnDuration,
+      game.turnNumber,
+      game.updateGameFrame,
+    ],
   );
 
   function confirmQuitToTitle() { // eslint-disable-line react/prop-types
@@ -154,7 +160,7 @@ export function GameScreen({ // eslint-disable-line react/prop-types
               color={TURN_TIMER_COLOR}
               current={game.turnTimeRemaining}
               icon="hourglass-half"
-              max={TURN_DURATION}
+              max={game.turnDuration}
               panelPosition="last"
               testID="turn-timer"
             />
