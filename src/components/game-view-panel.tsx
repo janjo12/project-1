@@ -425,6 +425,113 @@ function getBounceOffset(elapsed: number) {
   return Math.sin(progress * Math.PI * 2) * COMBAT_ANIMATION.bounceDistance;
 }
 
+function RoomWalls({ doorways }: { doorways: RoomDoorways }) {
+  const styles = createStyles(useThemeColors());
+  const positions: DoorPosition[] = ["top", "right", "bottom", "left"];
+
+  return (
+    <>
+      {positions.map((position) => {
+        const state = doorways[position];
+
+        if (state === "wall") {
+          return null;
+        }
+
+        return (
+          <View
+            accessibilityLabel={`${position} ${state} doorway`}
+            key={position}
+            style={[
+              styles.doorwayGap,
+              position === "top" || position === "bottom"
+                ? styles.horizontalDoorwayGap
+                : styles.verticalDoorwayGap,
+              position === "top" && styles.topDoorwayGap,
+              position === "bottom" && styles.bottomDoorwayGap,
+              position === "left" && styles.leftDoorwayGap,
+              position === "right" && styles.rightDoorwayGap,
+            ]}
+          >
+            {state === "guarded" ? (
+              <Text style={[styles.doorwayIcon, styles.guardedDoorwayIcon]}>
+                {DOOR_GUARD_ICON}
+              </Text>
+            ) : null}
+            {state === "locked" ? (
+              <Text style={[styles.doorwayIcon, styles.lockedDoorwayIcon]}>
+                {DOOR_LOCK_ICON}
+              </Text>
+            ) : null}
+          </View>
+        );
+      })}
+    </>
+  );
+}
+
+function SceneSprite({
+  accessibilityLabel,
+  sprite,
+  scale,
+}: {
+  accessibilityLabel: string;
+  sprite: string;
+  scale: number;
+}) {
+  const styles = createStyles(useThemeColors());
+
+  return (
+    <View style={{ transform: [{ scale }] }}>
+      <Text accessibilityLabel={accessibilityLabel} style={styles.sprite}>
+        {sprite}
+      </Text>
+    </View>
+  );
+}
+
+function getActorPosition(position: ScenePosition): ViewStyle {
+  switch (position) {
+    case "top":
+      return {
+        top: 10,
+        left: "50%",
+        transform: [{ translateX: -SCENE_SPRITE_HALF_SIZE }],
+      };
+
+    case "bottom":
+      return {
+        bottom: 10,
+        left: "50%",
+        transform: [{ translateX: -SCENE_SPRITE_HALF_SIZE }],
+      };
+
+    case "left":
+      return {
+        left: 10,
+        top: "50%",
+        transform: [{ translateY: -SCENE_SPRITE_HALF_SIZE }],
+      };
+
+    case "right":
+      return {
+        right: 10,
+        top: "50%",
+        transform: [{ translateY: -SCENE_SPRITE_HALF_SIZE }],
+      };
+
+    case "center":
+      return {
+        left: "50%",
+        top: "50%",
+        transform: [
+          { translateX: -SCENE_SPRITE_HALF_SIZE },
+          { translateY: -SCENE_SPRITE_HALF_SIZE },
+        ],
+      };
+  }
+}
+
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     panel: {
@@ -563,111 +670,4 @@ function createStyles(colors: ThemeColors) {
       color: "#ffffff",
     },
   });
-}
-
-function RoomWalls({ doorways }: { doorways: RoomDoorways }) {
-  const styles = createStyles(useThemeColors());
-  const positions: DoorPosition[] = ["top", "right", "bottom", "left"];
-
-  return (
-    <>
-      {positions.map((position) => {
-        const state = doorways[position];
-
-        if (state === "wall") {
-          return null;
-        }
-
-        return (
-          <View
-            accessibilityLabel={`${position} ${state} doorway`}
-            key={position}
-            style={[
-              styles.doorwayGap,
-              position === "top" || position === "bottom"
-                ? styles.horizontalDoorwayGap
-                : styles.verticalDoorwayGap,
-              position === "top" && styles.topDoorwayGap,
-              position === "bottom" && styles.bottomDoorwayGap,
-              position === "left" && styles.leftDoorwayGap,
-              position === "right" && styles.rightDoorwayGap,
-            ]}
-          >
-            {state === "guarded" ? (
-              <Text style={[styles.doorwayIcon, styles.guardedDoorwayIcon]}>
-                {DOOR_GUARD_ICON}
-              </Text>
-            ) : null}
-            {state === "locked" ? (
-              <Text style={[styles.doorwayIcon, styles.lockedDoorwayIcon]}>
-                {DOOR_LOCK_ICON}
-              </Text>
-            ) : null}
-          </View>
-        );
-      })}
-    </>
-  );
-}
-
-function SceneSprite({
-  accessibilityLabel,
-  sprite,
-  scale,
-}: {
-  accessibilityLabel: string;
-  sprite: string;
-  scale: number;
-}) {
-  const styles = createStyles(useThemeColors());
-
-  return (
-    <View style={{ transform: [{ scale }] }}>
-      <Text accessibilityLabel={accessibilityLabel} style={styles.sprite}>
-        {sprite}
-      </Text>
-    </View>
-  );
-}
-
-function getActorPosition(position: ScenePosition): ViewStyle {
-  switch (position) {
-    case "top":
-      return {
-        top: 10,
-        left: "50%",
-        transform: [{ translateX: -SCENE_SPRITE_HALF_SIZE }],
-      };
-
-    case "bottom":
-      return {
-        bottom: 10,
-        left: "50%",
-        transform: [{ translateX: -SCENE_SPRITE_HALF_SIZE }],
-      };
-
-    case "left":
-      return {
-        left: 10,
-        top: "50%",
-        transform: [{ translateY: -SCENE_SPRITE_HALF_SIZE }],
-      };
-
-    case "right":
-      return {
-        right: 10,
-        top: "50%",
-        transform: [{ translateY: -SCENE_SPRITE_HALF_SIZE }],
-      };
-
-    case "center":
-      return {
-        left: "50%",
-        top: "50%",
-        transform: [
-          { translateX: -SCENE_SPRITE_HALF_SIZE },
-          { translateY: -SCENE_SPRITE_HALF_SIZE },
-        ],
-      };
-  }
 }

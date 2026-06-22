@@ -1,5 +1,8 @@
+//#region imports
 import AsyncStorage from "@react-native-async-storage/async-storage";
+//#endregion
 
+//#region types
 export type Direction = "east" | "north" | "south" | "west";
 export type ItemId = string;
 export type RoomBoundary = "locked" | "guarded" | "open" | "wall";
@@ -83,7 +86,9 @@ export type DungeonMap = {
   rows: number[];
   startingRoomId: string;
 };
+//#endregion
 
+//#region constant declarations
 export const mapColumns = [
   "A",
   "B",
@@ -103,29 +108,29 @@ export const mapRows = Array.from({ length: 6 }, (_, index) => index + 1);
 export const POSSIBLE_MONSTERS: Omit<WorldMonster, "currentHealth" | "id">[] = [
   {
     damage: 1,
-    maximumHealth: 3,
-    name: "Glitch Imp",
+    maximumHealth: 1,
+    name: "Pixel Golem",
     sprite: "\uD83D\uDC7E",
     type: "monster",
   },
   {
     damage: 1,
-    maximumHealth: 3,
-    name: "Crypt Stumbler",
+    maximumHealth: 4,
+    name: "Zombie",
     sprite: "\uD83E\uDDDF",
     type: "monster",
   },
   {
-    damage: 1,
-    maximumHealth: 3,
-    name: "Tiny Dragon",
+    damage: 2,
+    maximumHealth: 2,
+    name: "Dragon",
     sprite: "\uD83D\uDC09",
     type: "monster",
   },
   {
     damage: 1,
     maximumHealth: 3,
-    name: "Night Count",
+    name: "Vampire",
     sprite: "\uD83E\uDDDB",
     type: "monster",
   },
@@ -161,7 +166,9 @@ const oppositeDirections: Record<Direction, Direction> = {
   south: "north",
   west: "east",
 };
+//#endregion
 
+//#region helper functions
 function getRoomId(position: GridPosition) {
   return `${position.column}${position.row}`;
 }
@@ -463,275 +470,6 @@ function placeItem(
   }
 
   return false;
-}
-
-export function createDungeonMap(
-  level: number,
-  random: () => number,
-  startingPosition?: GridPosition,
-): DungeonMap {
-  const rooms = createEmptyGrid();
-  const entities = {
-    items: {} as Record<string, WorldItem>,
-    doorwayGuards: {} as Record<string, DoorwayGuard>,
-    monsters: {} as Record<string, WorldMonster>,
-  };
-  const finalStartingPosition = startingPosition ?? {
-    column: mapColumns[Math.floor(random() * mapColumns.length)],
-    row: mapRows[Math.floor(random() * mapRows.length)],
-  };
-  const startingRoomId = getRoomId(finalStartingPosition);
-  const allRoomIds = new Set([startingRoomId]);
-  const totalRooms = Math.min(72, 7 + level + Math.floor(random() * 5)); //7 + level + 0-4, to a max of 72 (the whole map)
-
-  while (allRoomIds.size < totalRooms) {
-    const shuffledRooms = shuffle([...allRoomIds], random);
-    let addedRoom = false;
-
-    for (const roomId of shuffledRooms) {
-      const room = findRoomInGrid(rooms, roomId);
-
-      if (!room) {
-        continue;
-      }
-
-      const directions = shuffle(
-        Object.keys(directionDeltas) as Direction[],
-        random,
-      );
-
-      for (const direction of directions) {
-        const neighbor = getNeighbor(room, direction);
-        const neighborId = neighbor ? getRoomId(neighbor) : null;
-
-        if (!neighborId || allRoomIds.has(neighborId)) {
-          continue;
-        }
-
-        openConnection(rooms, roomId, direction);
-        allRoomIds.add(neighborId);
-        addedRoom = true;
-        break;
-      }
-
-      if (addedRoom) {
-        break;
-      }
-    }
-
-    if (!addedRoom) {
-      break;
-    }
-  }
-
-  [...allRoomIds].forEach((roomId) => {
-    const room = findRoomInGrid(rooms, roomId);
-
-    if (!room) {
-      return;
-    }
-
-    const directions = shuffle(Object.keys(directionDeltas) as Direction[], random);
-
-    directions.slice(0, 2).forEach((direction) => {
-      const neighbor = getNeighbor(room, direction);
-      const neighborId = neighbor ? getRoomId(neighbor) : null;
-
-      if (!neighborId || !allRoomIds.has(neighborId) || random() > 0.25) {
-        return;
-      }
-
-      openConnection(rooms, roomId, direction);
-    });
-  });
-
-  const doorwayConnections = [...allRoomIds].flatMap((roomId) => {
-    const room = findRoomInGrid(rooms, roomId);
-
-    if (!room) {
-      return [] as { direction: Direction; roomId: string }[];
-    }
-
-    return (Object.keys(directionDeltas) as Direction[])
-      .filter((direction) => {
-        const nextRoomId = getConnectedRoomIdFromRooms(rooms, roomId, direction);
-
-        return (
-          room[direction] === "open" &&
-          nextRoomId !== null &&
-          roomId.localeCompare(nextRoomId) < 0
-        );
-      })
-      .map((direction) => ({ direction, roomId }));
-  });
-  const doorwayGuardCount = Math.min(
-    doorwayConnections.length,
-    Math.max(0, allRoomIds.size - 2),
-  );
-
-  shuffle(doorwayConnections, random)
-    .slice(0, doorwayGuardCount)
-    .forEach((connection, index) => {
-      const monster = createMonster(
-        index,
-        `${connection.roomId}:${connection.direction}`,
-        random,
-      );
-
-      placeDoorwayGuard(
-        { columns: mapColumns, entities, level, rooms, rows: mapRows, startingRoomId },
-        connection.roomId,
-        connection.direction,
-        monster,
-      );
-    });
-
-  const stairsCandidates = [...allRoomIds].filter(
-    (roomId) => roomId !== startingRoomId,
-  );
-  const stairsRoomId =
-    stairsCandidates[Math.floor(random() * stairsCandidates.length)] ??
-    startingRoomId;
-
-  [...allRoomIds].forEach((roomId) => {
-    const room = findRoomInGrid(rooms, roomId);
-
-    if (!room) {
-      return;
-    }
-
-    if (roomId === startingRoomId) {
-      room.isCurrentPosition = true;
-      room.isRevealed = true;
-      return;
-    }
-
-    if (roomId === stairsRoomId) {
-      room.contents = [
-        { id: "stairs", label: "Stairs", type: "stairs" } satisfies RoomStairsRef,
-      ];
-      return;
-    }
-  });
-
-  const lockableConnections = [...allRoomIds].flatMap((roomId) => {
-    const room = findRoomInGrid(rooms, roomId);
-
-    if (!room) {
-      return [] as { direction: Direction; roomId: string }[];
-    }
-
-    return (Object.keys(directionDeltas) as Direction[])
-      .filter((direction) => {
-        const nextRoomId = getConnectedRoomIdFromRooms(rooms, roomId, direction);
-
-        return (
-          room[direction] === "open" &&
-          nextRoomId !== null &&
-          roomId.localeCompare(nextRoomId) < 0
-        );
-      })
-      .map((direction) => ({ direction, roomId }));
-  });
-  const lockedDoorCount = lockableConnections.length > 0 && random() < 0.7 ? 1 : 0;
-
-  for (let index = 0; index < lockedDoorCount; index += 1) {
-    const connection =
-      lockableConnections[Math.floor(random() * lockableConnections.length)];
-    const reachableRoomIds = [
-      ...getReachableRoomIds(rooms, startingRoomId, connection),
-    ];
-
-    if (
-      placeItem(
-        { columns: mapColumns, entities, level, rooms, rows: mapRows, startingRoomId },
-        reachableRoomIds,
-        "key",
-        random,
-      )
-    ) {
-      setConnectionBoundary(
-        rooms,
-        connection.roomId,
-        connection.direction,
-        "locked",
-      );
-    }
-  }
-
-  const werewolfCandidateRooms = [...allRoomIds].filter((roomId) => {
-    const room = findRoomInGrid(rooms, roomId);
-    const guardedDirections = (Object.keys(directionDeltas) as Direction[]).filter(
-      (direction) => Boolean(getDoorwayGuardPlacement({ columns: mapColumns, entities, level, rooms, rows: mapRows, startingRoomId }, roomId, direction)),
-    );
-
-    return Boolean(
-      room &&
-        room.id !== startingRoomId &&
-        !room.contents.some((content) => content.type === "stairs") &&
-        guardedDirections.length === 0 &&
-        getReachableRoomIds(rooms, startingRoomId).has(room.id),
-    );
-  });
-  const werewolfRoomId =
-    werewolfCandidateRooms.length > 0 && random() < 0.85
-      ? werewolfCandidateRooms[
-          Math.floor(random() * werewolfCandidateRooms.length)
-        ]
-      : null;
-  const reachableRoomIds = [...getReachableRoomIds(rooms, startingRoomId)];
-
-  if (werewolfRoomId) {
-    const werewolfRoom = findRoomInGrid(rooms, werewolfRoomId);
-    const silverBulletRoomIds = reachableRoomIds.filter(
-      (roomId) => roomId !== werewolfRoomId,
-    );
-
-    if (
-      werewolfRoom &&
-      placeItem(
-        { columns: mapColumns, entities, level, rooms, rows: mapRows, startingRoomId },
-        silverBulletRoomIds,
-        "silver-bullet",
-        random,
-      )
-    ) {
-      const werewolf = createWerewolf(werewolfRoomId);
-
-      entities.monsters[werewolf.id] = werewolf;
-      werewolfRoom.contents = [
-        ...werewolfRoom.contents.filter((content) => content.type !== "monster"),
-        { id: werewolf.id, type: "monster" } satisfies RoomMonsterRef,
-      ];
-    }
-  }
-
-  if (random() < 0.35) {
-    placeItem(
-      { columns: mapColumns, entities, level, rooms, rows: mapRows, startingRoomId },
-      reachableRoomIds,
-      "health-potion",
-      random,
-    );
-  }
-
-  if (random() < 0.35) {
-    placeItem(
-      { columns: mapColumns, entities, level, rooms, rows: mapRows, startingRoomId },
-      reachableRoomIds,
-      "energy-meal",
-      random,
-    );
-  }
-
-  return {
-    columns: mapColumns,
-    entities,
-    level,
-    rooms,
-    rows: mapRows,
-    startingRoomId,
-  };
 }
 
 export function createSeededDungeonMap(
@@ -1064,4 +802,274 @@ export function getActiveRooms(map: DungeonMap) {
 
 export function getRoomPosition(roomId: string) {
   return getGridPosition(roomId);
+}
+//#endregion
+
+export function createDungeonMap(
+  level: number,
+  random: () => number,
+  startingPosition?: GridPosition,
+): DungeonMap {
+  const rooms = createEmptyGrid();
+  const entities = {
+    items: {} as Record<string, WorldItem>,
+    doorwayGuards: {} as Record<string, DoorwayGuard>,
+    monsters: {} as Record<string, WorldMonster>,
+  };
+  const finalStartingPosition = startingPosition ?? {
+    column: mapColumns[Math.floor(random() * mapColumns.length)],
+    row: mapRows[Math.floor(random() * mapRows.length)],
+  };
+  const startingRoomId = getRoomId(finalStartingPosition);
+  const allRoomIds = new Set([startingRoomId]);
+  const totalRooms = Math.min(72, 7 + level + Math.floor(random() * 5)); //7 + level + 0-4, to a max of 72 (the whole map)
+
+  while (allRoomIds.size < totalRooms) {
+    const shuffledRooms = shuffle([...allRoomIds], random);
+    let addedRoom = false;
+
+    for (const roomId of shuffledRooms) {
+      const room = findRoomInGrid(rooms, roomId);
+
+      if (!room) {
+        continue;
+      }
+
+      const directions = shuffle(
+        Object.keys(directionDeltas) as Direction[],
+        random,
+      );
+
+      for (const direction of directions) {
+        const neighbor = getNeighbor(room, direction);
+        const neighborId = neighbor ? getRoomId(neighbor) : null;
+
+        if (!neighborId || allRoomIds.has(neighborId)) {
+          continue;
+        }
+
+        openConnection(rooms, roomId, direction);
+        allRoomIds.add(neighborId);
+        addedRoom = true;
+        break;
+      }
+
+      if (addedRoom) {
+        break;
+      }
+    }
+
+    if (!addedRoom) {
+      break;
+    }
+  }
+
+  [...allRoomIds].forEach((roomId) => {
+    const room = findRoomInGrid(rooms, roomId);
+
+    if (!room) {
+      return;
+    }
+
+    const directions = shuffle(Object.keys(directionDeltas) as Direction[], random);
+
+    directions.slice(0, 2).forEach((direction) => {
+      const neighbor = getNeighbor(room, direction);
+      const neighborId = neighbor ? getRoomId(neighbor) : null;
+
+      if (!neighborId || !allRoomIds.has(neighborId) || random() > 0.25) {
+        return;
+      }
+
+      openConnection(rooms, roomId, direction);
+    });
+  });
+
+  const doorwayConnections = [...allRoomIds].flatMap((roomId) => {
+    const room = findRoomInGrid(rooms, roomId);
+
+    if (!room) {
+      return [] as { direction: Direction; roomId: string }[];
+    }
+
+    return (Object.keys(directionDeltas) as Direction[])
+      .filter((direction) => {
+        const nextRoomId = getConnectedRoomIdFromRooms(rooms, roomId, direction);
+
+        return (
+          room[direction] === "open" &&
+          nextRoomId !== null &&
+          roomId.localeCompare(nextRoomId) < 0
+        );
+      })
+      .map((direction) => ({ direction, roomId }));
+  });
+  const doorwayGuardCount = Math.min(
+    doorwayConnections.length,
+    Math.max(0, allRoomIds.size - 2),
+  );
+
+  shuffle(doorwayConnections, random)
+    .slice(0, doorwayGuardCount)
+    .forEach((connection, index) => {
+      const monster = createMonster(
+        index,
+        `${connection.roomId}:${connection.direction}`,
+        random,
+      );
+
+      placeDoorwayGuard(
+        { columns: mapColumns, entities, level, rooms, rows: mapRows, startingRoomId },
+        connection.roomId,
+        connection.direction,
+        monster,
+      );
+    });
+
+  const stairsCandidates = [...allRoomIds].filter(
+    (roomId) => roomId !== startingRoomId,
+  );
+  const stairsRoomId =
+    stairsCandidates[Math.floor(random() * stairsCandidates.length)] ??
+    startingRoomId;
+
+  [...allRoomIds].forEach((roomId) => {
+    const room = findRoomInGrid(rooms, roomId);
+
+    if (!room) {
+      return;
+    }
+
+    if (roomId === startingRoomId) {
+      room.isCurrentPosition = true;
+      room.isRevealed = true;
+      return;
+    }
+
+    if (roomId === stairsRoomId) {
+      room.contents = [
+        { id: "stairs", label: "Stairs", type: "stairs" } satisfies RoomStairsRef,
+      ];
+      return;
+    }
+  });
+
+  const lockableConnections = [...allRoomIds].flatMap((roomId) => {
+    const room = findRoomInGrid(rooms, roomId);
+
+    if (!room) {
+      return [] as { direction: Direction; roomId: string }[];
+    }
+
+    return (Object.keys(directionDeltas) as Direction[])
+      .filter((direction) => {
+        const nextRoomId = getConnectedRoomIdFromRooms(rooms, roomId, direction);
+
+        return (
+          room[direction] === "open" &&
+          nextRoomId !== null &&
+          roomId.localeCompare(nextRoomId) < 0
+        );
+      })
+      .map((direction) => ({ direction, roomId }));
+  });
+  const lockedDoorCount = lockableConnections.length > 0 && random() < 0.7 ? 1 : 0;
+
+  for (let index = 0; index < lockedDoorCount; index += 1) {
+    const connection =
+      lockableConnections[Math.floor(random() * lockableConnections.length)];
+    const reachableRoomIds = [
+      ...getReachableRoomIds(rooms, startingRoomId, connection),
+    ];
+
+    if (
+      placeItem(
+        { columns: mapColumns, entities, level, rooms, rows: mapRows, startingRoomId },
+        reachableRoomIds,
+        "key",
+        random,
+      )
+    ) {
+      setConnectionBoundary(
+        rooms,
+        connection.roomId,
+        connection.direction,
+        "locked",
+      );
+    }
+  }
+
+  const werewolfCandidateRooms = [...allRoomIds].filter((roomId) => {
+    const room = findRoomInGrid(rooms, roomId);
+    const guardedDirections = (Object.keys(directionDeltas) as Direction[]).filter(
+      (direction) => Boolean(getDoorwayGuardPlacement({ columns: mapColumns, entities, level, rooms, rows: mapRows, startingRoomId }, roomId, direction)),
+    );
+
+    return Boolean(
+      room &&
+        room.id !== startingRoomId &&
+        !room.contents.some((content) => content.type === "stairs") &&
+        guardedDirections.length === 0 &&
+        getReachableRoomIds(rooms, startingRoomId).has(room.id),
+    );
+  });
+  const werewolfRoomId =
+    werewolfCandidateRooms.length > 0 && random() < 0.85
+      ? werewolfCandidateRooms[
+          Math.floor(random() * werewolfCandidateRooms.length)
+        ]
+      : null;
+  const reachableRoomIds = [...getReachableRoomIds(rooms, startingRoomId)];
+
+  if (werewolfRoomId) {
+    const werewolfRoom = findRoomInGrid(rooms, werewolfRoomId);
+    const silverBulletRoomIds = reachableRoomIds.filter(
+      (roomId) => roomId !== werewolfRoomId,
+    );
+
+    if (
+      werewolfRoom &&
+      placeItem(
+        { columns: mapColumns, entities, level, rooms, rows: mapRows, startingRoomId },
+        silverBulletRoomIds,
+        "silver-bullet",
+        random,
+      )
+    ) {
+      const werewolf = createWerewolf(werewolfRoomId);
+
+      entities.monsters[werewolf.id] = werewolf;
+      werewolfRoom.contents = [
+        ...werewolfRoom.contents.filter((content) => content.type !== "monster"),
+        { id: werewolf.id, type: "monster" } satisfies RoomMonsterRef,
+      ];
+    }
+  }
+
+  if (random() < 0.35) {
+    placeItem(
+      { columns: mapColumns, entities, level, rooms, rows: mapRows, startingRoomId },
+      reachableRoomIds,
+      "health-potion",
+      random,
+    );
+  }
+
+  if (random() < 0.35) {
+    placeItem(
+      { columns: mapColumns, entities, level, rooms, rows: mapRows, startingRoomId },
+      reachableRoomIds,
+      "energy-meal",
+      random,
+    );
+  }
+
+  return {
+    columns: mapColumns,
+    entities,
+    level,
+    rooms,
+    rows: mapRows,
+    startingRoomId,
+  };
 }
