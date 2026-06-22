@@ -824,7 +824,8 @@ export function createDungeonMap(
   const allRoomIds = new Set([startingRoomId]);
   const totalRooms = Math.min(72, 7 + level + Math.floor(random() * 5)); //7 + level + 0-4, to a max of 72 (the whole map)
 
-  while (allRoomIds.size < totalRooms) {
+  
+  while (allRoomIds.size < totalRooms) { // keep adding rooms until we reach the desired count
     const shuffledRooms = shuffle([...allRoomIds], random);
     let addedRoom = false;
 
@@ -864,7 +865,7 @@ export function createDungeonMap(
     }
   }
 
-  [...allRoomIds].forEach((roomId) => {
+  [...allRoomIds].forEach((roomId) => { // add doorway connections for each room
     const room = findRoomInGrid(rooms, roomId);
 
     if (!room) {
@@ -885,7 +886,7 @@ export function createDungeonMap(
     });
   });
 
-  const doorwayConnections = [...allRoomIds].flatMap((roomId) => {
+  const doorwayConnections = [...allRoomIds].flatMap((roomId) => { // find all open connections that can potentially have guards
     const room = findRoomInGrid(rooms, roomId);
 
     if (!room) {
@@ -906,8 +907,8 @@ export function createDungeonMap(
   });
   const doorwayGuardCount = Math.min(
     doorwayConnections.length,
-    Math.max(0, allRoomIds.size - 2),
-  );
+    Math.max(0, allRoomIds.size / 2),
+  ); // the number of guards is at most the number of doorway connections, and on average there's a guard for every 2 rooms
 
   shuffle(doorwayConnections, random)
     .slice(0, doorwayGuardCount)
@@ -916,7 +917,7 @@ export function createDungeonMap(
         index,
         `${connection.roomId}:${connection.direction}`,
         random,
-      );
+      ); // create a unique monster for this guard based on its room, direction, and index
 
       placeDoorwayGuard(
         { columns: mapColumns, entities, level, rooms, rows: mapRows, startingRoomId },
@@ -924,16 +925,16 @@ export function createDungeonMap(
         connection.direction,
         monster,
       );
-    });
+    }); // randomly place guards on some of the doorway connections
 
   const stairsCandidates = [...allRoomIds].filter(
     (roomId) => roomId !== startingRoomId,
-  );
+  ); // potential rooms for stairs are all rooms except the starting room
   const stairsRoomId =
     stairsCandidates[Math.floor(random() * stairsCandidates.length)] ??
-    startingRoomId;
+    startingRoomId; // randomly select a room for the stairs, defaulting to the starting room if something goes wrong (though it shouldn't)
 
-  [...allRoomIds].forEach((roomId) => {
+  [...allRoomIds].forEach((roomId) => { // add stairs and starting position to rooms
     const room = findRoomInGrid(rooms, roomId);
 
     if (!room) {
@@ -954,7 +955,7 @@ export function createDungeonMap(
     }
   });
 
-  const lockableConnections = [...allRoomIds].flatMap((roomId) => {
+  const lockableConnections = [...allRoomIds].flatMap((roomId) => { // find all open connections that can potentially be locked
     const room = findRoomInGrid(rooms, roomId);
 
     if (!room) {
@@ -973,9 +974,9 @@ export function createDungeonMap(
       })
       .map((direction) => ({ direction, roomId }));
   });
-  const lockedDoorCount = lockableConnections.length > 0 && random() < 0.7 ? 1 : 0;
+  const lockedDoorCount = lockableConnections.length > 0 && random() < 0.7 ? 1 : 0; // if there are lockable connections, there's a 70% chance to have 1 locked door
 
-  for (let index = 0; index < lockedDoorCount; index += 1) {
+  for (let index = 0; index < lockedDoorCount; index += 1) { // lock some of the open connections
     const connection =
       lockableConnections[Math.floor(random() * lockableConnections.length)];
     const reachableRoomIds = [
@@ -999,7 +1000,7 @@ export function createDungeonMap(
     }
   }
 
-  const werewolfCandidateRooms = [...allRoomIds].filter((roomId) => {
+  const werewolfCandidateRooms = [...allRoomIds].filter((roomId) => { // potential rooms for the werewolf
     const room = findRoomInGrid(rooms, roomId);
     const guardedDirections = (Object.keys(directionDeltas) as Direction[]).filter(
       (direction) => Boolean(getDoorwayGuardPlacement({ columns: mapColumns, entities, level, rooms, rows: mapRows, startingRoomId }, roomId, direction)),
@@ -1014,14 +1015,14 @@ export function createDungeonMap(
     );
   });
   const werewolfRoomId =
-    werewolfCandidateRooms.length > 0 && random() < 0.85
+    werewolfCandidateRooms.length > 0 && random() < 0.45
       ? werewolfCandidateRooms[
           Math.floor(random() * werewolfCandidateRooms.length)
         ]
-      : null;
-  const reachableRoomIds = [...getReachableRoomIds(rooms, startingRoomId)];
+      : null; // if there are candidate rooms for the werewolf, there's an 45% chance to have a werewolf in one of them
+  const reachableRoomIds = [...getReachableRoomIds(rooms, startingRoomId)]; // get the list of rooms reachable from the starting room, which will be used for item placement
 
-  if (werewolfRoomId) {
+  if (werewolfRoomId) { // if we have a room for the werewolf, place it and a silver bullet in the dungeon
     const werewolfRoom = findRoomInGrid(rooms, werewolfRoomId);
     const silverBulletRoomIds = reachableRoomIds.filter(
       (roomId) => roomId !== werewolfRoomId,
@@ -1046,7 +1047,7 @@ export function createDungeonMap(
     }
   }
 
-  if (random() < 0.35) {
+  if (random() < 0.45) { // there's a 45% chance to place a health potion in a reachable room
     placeItem(
       { columns: mapColumns, entities, level, rooms, rows: mapRows, startingRoomId },
       reachableRoomIds,
@@ -1055,7 +1056,7 @@ export function createDungeonMap(
     );
   }
 
-  if (random() < 0.35) {
+  if (random() < 0.45) { // there's a 45% chance to place an energy meal in a reachable room
     placeItem(
       { columns: mapColumns, entities, level, rooms, rows: mapRows, startingRoomId },
       reachableRoomIds,
@@ -1064,7 +1065,7 @@ export function createDungeonMap(
     );
   }
 
-  return {
+  return { // finally, return the generated map
     columns: mapColumns,
     entities,
     level,
