@@ -10,6 +10,6 @@
 
 ## Other Packages:
 
-- React Native Reanimated - used for animated sprite movement (right now, the "sprites" are emojis) in components/combatant-sprite.tsx.
 - Expo Vector Icons - used for health, energy, and direction buttons on the game screen.
 - Expo Haptics - makes the phone vibrate when the player takes damage.
+- React Native Game Engine - Helps with rendering and updating the screen with animations.
