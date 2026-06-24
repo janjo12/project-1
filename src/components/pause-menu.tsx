@@ -1,17 +1,22 @@
 //#region imports
-import { PreferenceToggles } from "@/components/preference-toggles";
-import { useThemeColors, type ThemeColors } from "@/components/theme";
-import type { GameSettings } from "@/utils/settings-storage";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+
+import { useThemeColors, type ThemeColors } from "@/components/theme";
+
+import { ToggleButton } from "@/components/inputs";
+import type { GameSettings } from "@/utils/settings-storage";
 //#endregion
 
+//#region types
 type PauseMenuProps = {
   onBackToGame: () => void;
   onQuitToTitle: () => void;
   onSettingsChange: (settings: Partial<GameSettings>) => void;
-  settings: Pick<GameSettings, "appearance" | "vibrationEnabled">;
+  settings: GameSettings;
   visible: boolean;
 };
+//#endregion
+
 
 export function PauseMenu({
   onBackToGame,
@@ -33,7 +38,23 @@ export function PauseMenu({
       <View style={styles.pauseBackdrop}>
         <View accessibilityLabel="Game menu" style={styles.pausePanel}>
           <Text style={styles.pauseTitle}>Menu</Text>
-          <PreferenceToggles onChange={onSettingsChange} settings={settings} />
+
+          <ToggleButton
+            label="Dark Mode"
+            value={settings.appearance === "dark"}
+            onValueChange={(value) => {
+              onSettingsChange({ appearance: value ? "dark" : "light" });
+            }}
+          />
+
+          <ToggleButton
+            label="Vibration"
+            value={settings.vibrationEnabled}
+            onValueChange={(value) => {
+              onSettingsChange({ vibrationEnabled: value });
+            }}
+          />
+
           <View style={styles.pauseActions}>
             <PauseButton label="Back to Game" onPress={onBackToGame} />
             <PauseButton
@@ -125,6 +146,7 @@ function createStyles(colors: ThemeColors) {
     pausePanel: {
       backgroundColor: colors.paper,
       borderColor: colors.ink,
+      borderCurve: "continuous",
       borderRadius: 8,
       borderWidth: 3,
       gap: 28,

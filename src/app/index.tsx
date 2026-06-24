@@ -1,13 +1,26 @@
-import { FontAwesome } from "@expo/vector-icons";
+//#region imports
 import { router } from "expo-router";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert } from "react-native";
 
-import { AppButton } from "@/components/app-button";
-import { GameOptionsForm } from "@/components/game-options-form";
+import {
+  Container,
+  Footer,
+  FormField,
+  Header,
+  Title,
+} from "@/components/displays";
+import {
+  AppButton,
+  RadioGroup,
+  ScreenActionButton,
+  SegmentedButton,
+  TextEntry,
+} from "@/components/inputs";
 import { ScreenShell } from "@/components/screen-shell";
-import { ThemeProvider, useThemeColors } from "@/components/theme";
+import { ThemeProvider } from "@/components/theme";
 import { useGameSettings } from "@/hooks/use-game-settings";
 import { generateRandomSeed } from "@/utils/seed";
+//#endregion
 
 export default function Index() {
   const { isLoading, settings, updateSettings, saveSettings } =
@@ -30,76 +43,78 @@ export default function Index() {
   return (
     <ThemeProvider appearance={settings.appearance}>
       <ScreenShell>
-        <View style={styles.container}>
-          <View style={styles.header}>
-            <SettingsButton onPress={handleOpenSettings} />
-          </View>
-          <TitleText />
-          <GameOptionsForm settings={settings} onChange={updateSettings} />
-          <View style={styles.footer}>
+        <Container>
+          <Header>
+            <ScreenActionButton
+              accessibilityLabel="Settings"
+              icon="cog"
+              onPress={handleOpenSettings}
+              testID="open-settings-button"
+            />
+          </Header>
+          <Title>[Title]</Title>
+          <Container>
+            <FormField
+              helpLabel="Difficulty help"
+              label="Difficulty"
+              onHelpPress={() =>
+                Alert.alert(
+                  "Difficulty",
+                  "Easy removes the turn timer, normal keeps a steady timer, and hard shortens the timer while limiting your total turns by dungeon size.",
+                )
+              }
+            >
+              <SegmentedButton
+                onChange={(difficulty) => updateSettings({ difficulty })}
+                options={["easy", "normal", "hard"] as const}
+                value={settings.difficulty}
+              />
+            </FormField>
+
+            <FormField
+              helpLabel="Seed help"
+              label="Seed"
+              onHelpPress={() =>
+                Alert.alert(
+                  "Seed",
+                  "A seed repeats the same dungeon layout. Leave it blank to generate a fresh random dungeon when you start.",
+                )
+              }
+            >
+              <TextEntry
+                accessibilityLabel="Seed"
+                onChangeText={(seed) => updateSettings({ seed })}
+                placeholder="Random"
+                value={settings.seed}
+              />
+            </FormField>
+
+            <FormField
+              helpLabel="Handedness help"
+              label="Handedness"
+              onHelpPress={() =>
+                Alert.alert(
+                  "Handedness",
+                  "Left or right changes the action layout so the controls sit closer to your preferred thumb.",
+                )
+              }
+            >
+              <RadioGroup
+                onChange={(handedness) => updateSettings({ handedness })}
+                options={["left", "right"] as const}
+                value={settings.handedness}
+              />
+            </FormField>
+          </Container>
+
+          <Footer>
             <AppButton
               label={isLoading ? "Loading" : "Start"}
               onPress={handleStartGame}
             />
-          </View>
-        </View>
+          </Footer>
+        </Container>
       </ScreenShell>
     </ThemeProvider>
   );
 }
-
-function SettingsButton({ onPress }: { onPress: () => void }) {
-  const colors = useThemeColors();
-
-  return (
-    <Pressable
-      accessibilityLabel="Settings"
-      accessibilityRole="button"
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.settingsButton,
-        pressed && styles.pressed,
-      ]}
-      testID="open-settings-button"
-    >
-      <FontAwesome color={colors.ink} name="cog" size={28} />
-    </Pressable>
-  );
-}
-
-function TitleText() {
-  const colors = useThemeColors();
-
-  return <Text style={[styles.title, { color: colors.ink }]}>[Title]</Text>;
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    gap: 22,
-    justifyContent: "flex-start",
-    paddingBottom: 20,
-    paddingTop: 16,
-  },
-  footer: {
-    paddingTop: 8,
-  },
-  header: {
-    alignItems: "flex-start",
-    minHeight: 36,
-  },
-  pressed: {
-    opacity: 0.72,
-  },
-  settingsButton: {
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 36,
-    width: 36,
-  },
-  title: {
-    fontSize: 62,
-    fontWeight: "500",
-    textAlign: "center",
-  },
-});

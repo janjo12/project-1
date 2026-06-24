@@ -20,7 +20,7 @@ export const darkColors = {
 export const lightColors = {
   accent: "#ea580c",
   energy: "#16a34a",
-  fadedInk: "#64748b",
+  fadedInk: "#334155",
   health: "#dc2626",
   ink: "#0f172a",
   mapCurrentRoom: "#ef4444",

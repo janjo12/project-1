@@ -86,6 +86,20 @@ export type DungeonMap = {
   rows: number[];
   startingRoomId: string;
 };
+
+type DungeonGenerationContext = {
+  allRoomIds: Set<string>;
+  entities: DungeonMap["entities"];
+  level: number;
+  random: () => number;
+  rooms: DungeonMapJson;
+  startingRoomId: string;
+};
+
+type RoomConnection = {
+  direction: Direction;
+  roomId: string;
+};
 //#endregion
 
 //#region constant declarations
@@ -168,7 +182,7 @@ const oppositeDirections: Record<Direction, Direction> = {
 };
 //#endregion
 
-//#region helper functions
+//#region small helper functions
 function getRoomId(position: GridPosition) {
   return `${position.column}${position.row}`;
 }
@@ -611,6 +625,14 @@ export function getRoomMonster(map: DungeonMap, room: DungeonRoom | undefined) {
   return guardedMonster && guardedMonster.currentHealth > 0 ? guardedMonster : null;
 }
 
+export function getWerewolf(map: DungeonMap) {
+  return (
+    Object.values(map.entities.monsters).find(
+      (monster) => monster.chases && monster.currentHealth > 0,
+    ) ?? null
+  );
+}
+
 function getItemFromRoom(map: DungeonMap, room: DungeonRoom | undefined) {
   const itemId = room?.contents.find((content) => content.type === "item")?.id;
 
@@ -790,6 +812,42 @@ export function addItemToRoom(map: DungeonMap, roomId: string, itemId: ItemId) {
   };
 }
 
+export function moveWerewolfToRoom(map: DungeonMap, roomId: string) {
+  const werewolf = getWerewolf(map);
+
+  if (!werewolf) {
+    return map;
+  }
+
+  return {
+    ...map,
+    rooms: map.rooms.map((row) =>
+      row.map((room) => {
+        const contentsWithoutWerewolf = room.contents.filter(
+          (content) =>
+            content.type !== "monster" ||
+            !map.entities.monsters[content.id]?.chases,
+        );
+
+        if (room.id !== roomId) {
+          return {
+            ...room,
+            contents: contentsWithoutWerewolf,
+          };
+        }
+
+        return {
+          ...room,
+          contents: [
+            { id: werewolf.id, type: "monster" } satisfies RoomMonsterRef,
+            ...contentsWithoutWerewolf,
+          ],
+        };
+      }),
+    ),
+  };
+}
+
 export function getActiveRooms(map: DungeonMap) {
   return getRooms(map).filter(
     (room) =>
@@ -805,27 +863,29 @@ export function getRoomPosition(roomId: string) {
 }
 //#endregion
 
-export function createDungeonMap(
-  level: number,
-  random: () => number,
-  startingPosition?: GridPosition,
-): DungeonMap {
-  const rooms = createEmptyGrid();
-  const entities = {
-    items: {} as Record<string, WorldItem>,
-    doorwayGuards: {} as Record<string, DoorwayGuard>,
-    monsters: {} as Record<string, WorldMonster>,
+//#region large helper functions
+function createMapFromContext({
+  entities,
+  level,
+  rooms,
+  startingRoomId,
+}: DungeonGenerationContext): DungeonMap {
+  return {
+    columns: mapColumns,
+    entities,
+    level,
+    rooms,
+    rows: mapRows,
+    startingRoomId,
   };
-  const finalStartingPosition = startingPosition ?? {
-    column: mapColumns[Math.floor(random() * mapColumns.length)],
-    row: mapRows[Math.floor(random() * mapRows.length)],
-  };
-  const startingRoomId = getRoomId(finalStartingPosition);
-  const allRoomIds = new Set([startingRoomId]);
-  const totalRooms = Math.min(72, 7 + level + Math.floor(random() * 5)); //7 + level + 0-4, to a max of 72 (the whole map)
+}
 
-  
-  while (allRoomIds.size < totalRooms) { // keep adding rooms until we reach the desired count
+function growRoomNetwork({
+  allRoomIds,
+  random,
+  rooms,
+}: DungeonGenerationContext, totalRooms: number) {
+  while (allRoomIds.size < totalRooms) {
     const shuffledRooms = shuffle([...allRoomIds], random);
     let addedRoom = false;
 
@@ -864,8 +924,14 @@ export function createDungeonMap(
       break;
     }
   }
+}
 
-  [...allRoomIds].forEach((roomId) => { // add doorway connections for each room
+function addExtraRoomConnections({
+  allRoomIds,
+  random,
+  rooms,
+}: DungeonGenerationContext) {
+  [...allRoomIds].forEach((roomId) => {
     const room = findRoomInGrid(rooms, roomId);
 
     if (!room) {
@@ -885,12 +951,17 @@ export function createDungeonMap(
       openConnection(rooms, roomId, direction);
     });
   });
+}
 
-  const doorwayConnections = [...allRoomIds].flatMap((roomId) => { // find all open connections that can potentially have guards
+function getUniqueOpenConnections({
+  allRoomIds,
+  rooms,
+}: DungeonGenerationContext) {
+  return [...allRoomIds].flatMap((roomId) => {
     const room = findRoomInGrid(rooms, roomId);
 
     if (!room) {
-      return [] as { direction: Direction; roomId: string }[];
+      return [] as RoomConnection[];
     }
 
     return (Object.keys(directionDeltas) as Direction[])
@@ -905,43 +976,49 @@ export function createDungeonMap(
       })
       .map((direction) => ({ direction, roomId }));
   });
+}
+
+function placeDoorwayGuards(context: DungeonGenerationContext) {
+  const doorwayConnections = getUniqueOpenConnections(context);
   const doorwayGuardCount = Math.min(
     doorwayConnections.length,
-    Math.max(0, allRoomIds.size / 2),
-  ); // the number of guards is at most the number of doorway connections, and on average there's a guard for every 2 rooms
+    Math.max(0, context.allRoomIds.size / 2),
+  );
 
-  shuffle(doorwayConnections, random)
+  shuffle(doorwayConnections, context.random)
     .slice(0, doorwayGuardCount)
     .forEach((connection, index) => {
       const monster = createMonster(
         index,
         `${connection.roomId}:${connection.direction}`,
-        random,
-      ); // create a unique monster for this guard based on its room, direction, and index
+        context.random,
+      );
 
       placeDoorwayGuard(
-        { columns: mapColumns, entities, level, rooms, rows: mapRows, startingRoomId },
+        createMapFromContext(context),
         connection.roomId,
         connection.direction,
         monster,
       );
-    }); // randomly place guards on some of the doorway connections
+    });
+}
 
-  const stairsCandidates = [...allRoomIds].filter(
-    (roomId) => roomId !== startingRoomId,
-  ); // potential rooms for stairs are all rooms except the starting room
+function placeStairsAndStartingRoom(context: DungeonGenerationContext) {
+  const stairsCandidates = [...context.allRoomIds].filter(
+    (roomId) => roomId !== context.startingRoomId,
+  );
   const stairsRoomId =
-    stairsCandidates[Math.floor(random() * stairsCandidates.length)] ??
-    startingRoomId; // randomly select a room for the stairs, defaulting to the starting room if something goes wrong (though it shouldn't)
+    stairsCandidates[Math.floor(context.random() * stairsCandidates.length)] ??
+    context.startingRoomId;
 
-  [...allRoomIds].forEach((roomId) => { // add stairs and starting position to rooms
-    const room = findRoomInGrid(rooms, roomId);
+  [...context.allRoomIds].forEach((roomId) => {
+    const room = findRoomInGrid(context.rooms, roomId);
 
     if (!room) {
       return;
     }
 
-    if (roomId === startingRoomId) {
+    if (roomId === context.startingRoomId) {
       room.isCurrentPosition = true;
       room.isRevealed = true;
       return;
@@ -951,126 +1028,158 @@ export function createDungeonMap(
       room.contents = [
         { id: "stairs", label: "Stairs", type: "stairs" } satisfies RoomStairsRef,
       ];
-      return;
     }
   });
+}
 
-  const lockableConnections = [...allRoomIds].flatMap((roomId) => { // find all open connections that can potentially be locked
-    const room = findRoomInGrid(rooms, roomId);
+function lockRandomDoors(context: DungeonGenerationContext) {
+  const lockableConnections = getUniqueOpenConnections(context);
+  const lockedDoorCount = lockableConnections.length > 0 && context.random() < 0.7 ? 1 : 0;
 
-    if (!room) {
-      return [] as { direction: Direction; roomId: string }[];
-    }
-
-    return (Object.keys(directionDeltas) as Direction[])
-      .filter((direction) => {
-        const nextRoomId = getConnectedRoomIdFromRooms(rooms, roomId, direction);
-
-        return (
-          room[direction] === "open" &&
-          nextRoomId !== null &&
-          roomId.localeCompare(nextRoomId) < 0
-        );
-      })
-      .map((direction) => ({ direction, roomId }));
-  });
-  const lockedDoorCount = lockableConnections.length > 0 && random() < 0.7 ? 1 : 0; // if there are lockable connections, there's a 70% chance to have 1 locked door
-
-  for (let index = 0; index < lockedDoorCount; index += 1) { // lock some of the open connections
+  for (let index = 0; index < lockedDoorCount; index += 1) {
     const connection =
-      lockableConnections[Math.floor(random() * lockableConnections.length)];
+      lockableConnections[Math.floor(context.random() * lockableConnections.length)];
     const reachableRoomIds = [
-      ...getReachableRoomIds(rooms, startingRoomId, connection),
+      ...getReachableRoomIds(context.rooms, context.startingRoomId, connection),
     ];
 
     if (
       placeItem(
-        { columns: mapColumns, entities, level, rooms, rows: mapRows, startingRoomId },
+        createMapFromContext(context),
         reachableRoomIds,
         "key",
-        random,
+        context.random,
       )
     ) {
       setConnectionBoundary(
-        rooms,
+        context.rooms,
         connection.roomId,
         connection.direction,
         "locked",
       );
     }
   }
+}
 
-  const werewolfCandidateRooms = [...allRoomIds].filter((roomId) => { // potential rooms for the werewolf
-    const room = findRoomInGrid(rooms, roomId);
+function getWerewolfCandidateRooms(context: DungeonGenerationContext) {
+  return [...context.allRoomIds].filter((roomId) => {
+    const room = findRoomInGrid(context.rooms, roomId);
     const guardedDirections = (Object.keys(directionDeltas) as Direction[]).filter(
-      (direction) => Boolean(getDoorwayGuardPlacement({ columns: mapColumns, entities, level, rooms, rows: mapRows, startingRoomId }, roomId, direction)),
+      (direction) =>
+        Boolean(getDoorwayGuardPlacement(createMapFromContext(context), roomId, direction)),
     );
 
     return Boolean(
       room &&
-        room.id !== startingRoomId &&
+        room.id !== context.startingRoomId &&
         !room.contents.some((content) => content.type === "stairs") &&
         guardedDirections.length === 0 &&
-        getReachableRoomIds(rooms, startingRoomId).has(room.id),
+        getReachableRoomIds(context.rooms, context.startingRoomId).has(room.id),
     );
   });
+}
+
+function placeWerewolfAndSilverBullet(
+  context: DungeonGenerationContext,
+  reachableRoomIds: string[],
+) {
+  const werewolfCandidateRooms = getWerewolfCandidateRooms(context);
   const werewolfRoomId =
-    werewolfCandidateRooms.length > 0 && random() < 0.45
+    werewolfCandidateRooms.length > 0 && context.random() < 0.45
       ? werewolfCandidateRooms[
-          Math.floor(random() * werewolfCandidateRooms.length)
+          Math.floor(context.random() * werewolfCandidateRooms.length)
         ]
-      : null; // if there are candidate rooms for the werewolf, there's an 45% chance to have a werewolf in one of them
-  const reachableRoomIds = [...getReachableRoomIds(rooms, startingRoomId)]; // get the list of rooms reachable from the starting room, which will be used for item placement
+      : null;
 
-  if (werewolfRoomId) { // if we have a room for the werewolf, place it and a silver bullet in the dungeon
-    const werewolfRoom = findRoomInGrid(rooms, werewolfRoomId);
-    const silverBulletRoomIds = reachableRoomIds.filter(
-      (roomId) => roomId !== werewolfRoomId,
-    );
-
-    if (
-      werewolfRoom &&
-      placeItem(
-        { columns: mapColumns, entities, level, rooms, rows: mapRows, startingRoomId },
-        silverBulletRoomIds,
-        "silver-bullet",
-        random,
-      )
-    ) {
-      const werewolf = createWerewolf(werewolfRoomId);
-
-      entities.monsters[werewolf.id] = werewolf;
-      werewolfRoom.contents = [
-        ...werewolfRoom.contents.filter((content) => content.type !== "monster"),
-        { id: werewolf.id, type: "monster" } satisfies RoomMonsterRef,
-      ];
-    }
+  if (!werewolfRoomId) {
+    return;
   }
 
-  if (random() < 0.45) { // there's a 45% chance to place a health potion in a reachable room
+  const werewolfRoom = findRoomInGrid(context.rooms, werewolfRoomId);
+  const silverBulletRoomIds = reachableRoomIds.filter(
+    (roomId) => roomId !== werewolfRoomId,
+  );
+
+  if (
+    werewolfRoom &&
     placeItem(
-      { columns: mapColumns, entities, level, rooms, rows: mapRows, startingRoomId },
+      createMapFromContext(context),
+      silverBulletRoomIds,
+      "silver-bullet",
+      context.random,
+    )
+  ) {
+    const werewolf = createWerewolf(werewolfRoomId);
+
+    context.entities.monsters[werewolf.id] = werewolf;
+    werewolfRoom.contents = [
+      ...werewolfRoom.contents.filter((content) => content.type !== "monster"),
+      { id: werewolf.id, type: "monster" } satisfies RoomMonsterRef,
+    ];
+  }
+}
+
+function placeOptionalLoot(
+  context: DungeonGenerationContext,
+  reachableRoomIds: string[],
+) {
+  if (context.random() < 0.45) {
+    placeItem(
+      createMapFromContext(context),
       reachableRoomIds,
       "health-potion",
-      random,
+      context.random,
     );
   }
 
-  if (random() < 0.45) { // there's a 45% chance to place an energy meal in a reachable room
+  if (context.random() < 0.45) {
     placeItem(
-      { columns: mapColumns, entities, level, rooms, rows: mapRows, startingRoomId },
+      createMapFromContext(context),
       reachableRoomIds,
       "energy-meal",
-      random,
+      context.random,
     );
   }
+}
+//#endregion
 
-  return { // finally, return the generated map
-    columns: mapColumns,
+export function createDungeonMap(
+  level: number,
+  random: () => number,
+  startingPosition?: GridPosition,
+): DungeonMap {
+  const rooms = createEmptyGrid();
+  const entities = {
+    items: {} as Record<string, WorldItem>,
+    doorwayGuards: {} as Record<string, DoorwayGuard>,
+    monsters: {} as Record<string, WorldMonster>,
+  };
+  const finalStartingPosition = startingPosition ?? {
+    column: mapColumns[Math.floor(random() * mapColumns.length)],
+    row: mapRows[Math.floor(random() * mapRows.length)],
+  };
+  const startingRoomId = getRoomId(finalStartingPosition);
+  const allRoomIds = new Set([startingRoomId]);
+  const context: DungeonGenerationContext = {
+    allRoomIds,
     entities,
     level,
+    random,
     rooms,
-    rows: mapRows,
     startingRoomId,
   };
+  const totalRooms = Math.min(72, 7 + level + Math.floor(random() * 5));
+
+  growRoomNetwork(context, totalRooms);
+  addExtraRoomConnections(context);
+  placeDoorwayGuards(context);
+  placeStairsAndStartingRoom(context);
+  lockRandomDoors(context);
+
+  const reachableRoomIds = [...getReachableRoomIds(rooms, startingRoomId)];
+
+  placeWerewolfAndSilverBullet(context, reachableRoomIds);
+  placeOptionalLoot(context, reachableRoomIds);
+
+  return createMapFromContext(context);
 }

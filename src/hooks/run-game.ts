@@ -30,19 +30,20 @@ import {
   createAndSaveSeededDungeonMap,
   createSeededDungeonMap,
   damageMonsterInRoom,
+  getActiveRooms,
   getConnectedRoomId,
   getCurrentRoom,
   getCurrentRoomId,
   getDoorwayGuardPlacement,
   getGridPosition,
   getGuardedDirections,
-  getActiveRooms,
   getLockedDirections,
   getRoom,
   getRoomItem,
   getRoomItemId,
   getRoomMonster,
   moveCurrentPosition,
+  moveWerewolfToRoom,
   POSSIBLE_ITEMS,
   removeItemFromRoom,
   saveDungeonMap,
@@ -90,6 +91,13 @@ const directionScenePositions = {
   south: "bottom",
   west: "left",
 } satisfies Record<Direction, ScenePosition>;
+
+const defaultRoomDoorways: RoomDoorways = {
+  bottom: "wall",
+  left: "wall",
+  right: "wall",
+  top: "wall",
+};
 
 const playerEntryPositions = {
   east: "left",
@@ -359,6 +367,292 @@ function getTurnStatus({
 
   return `Facing ${currentEnemyName ?? "enemy"} | Level ${level} | Room ${roomId}`;
 }
+
+function getRoomDoorways(room: ReturnType<typeof getCurrentRoom>): RoomDoorways {
+  if (!room) {
+    return defaultRoomDoorways;
+  }
+
+  return {
+    bottom: room.south,
+    left: room.west,
+    right: room.east,
+    top: room.north,
+  };
+}
+
+function createMonsterSceneActor({
+  isActive,
+  monster,
+  position,
+}: {
+  isActive: boolean;
+  monster: WorldMonster;
+  position: ScenePosition;
+}): RoomSceneActor {
+  return {
+    currentHealth: monster.currentHealth,
+    sprite: monster.sprite,
+    kind: "enemy",
+    isActive,
+    label: monster.name,
+    maxHealth: monster.maximumHealth,
+    position,
+  };
+}
+
+function getRoomSceneActors({
+  currentMonsterId,
+  dungeonMap,
+  room,
+}: {
+  currentMonsterId: string | null;
+  dungeonMap: DungeonMapType;
+  room: ReturnType<typeof getCurrentRoom>;
+}) {
+  if (!room) {
+    return [];
+  }
+
+  const seenMonsterIds = new Set<string>();
+  const seenItemIds = new Set<string>();
+  const sceneActors: RoomSceneActor[] = [];
+
+  room.contents.forEach((content) => {
+    if (content.type === "monster") {
+      const monster = dungeonMap.entities.monsters[content.id];
+
+      if (!monster || monster.currentHealth <= 0 || seenMonsterIds.has(monster.id)) {
+        return;
+      }
+
+      seenMonsterIds.add(monster.id);
+      sceneActors.push(
+        createMonsterSceneActor({
+          isActive: monster.id === currentMonsterId,
+          monster,
+          position: "center",
+        }),
+      );
+      return;
+    }
+
+    if (content.type === "item") {
+      const item = dungeonMap.entities.items[content.id];
+
+      if (!item || seenItemIds.has(item.id)) {
+        return;
+      }
+
+      seenItemIds.add(item.id);
+      sceneActors.push({
+        sprite: item.sprite ?? item.label,
+        kind: "item",
+        label: item.label,
+        position: "center",
+      });
+      return;
+    }
+
+    if (content.type === "stairs") {
+      sceneActors.push({
+        sprite: "\uD83E\uDE9C",
+        kind: "stairs",
+        label: "Stairs",
+        position: "center",
+      });
+    }
+  });
+
+  getGuardedDirections(dungeonMap, room.id).forEach((direction) => {
+    const guard = getDoorwayGuardPlacement(dungeonMap, room.id, direction);
+    const monster = guard ? dungeonMap.entities.monsters[guard.monsterId] : null;
+
+    if (!monster || monster.currentHealth <= 0 || seenMonsterIds.has(monster.id)) {
+      return;
+    }
+
+    seenMonsterIds.add(monster.id);
+    sceneActors.push(
+      createMonsterSceneActor({
+        isActive: monster.id === currentMonsterId,
+        monster,
+        position: directionScenePositions[direction],
+      }),
+    );
+  });
+
+  return sceneActors;
+}
+
+type RunSnapshotOptions = {
+  clearedLevels: number;
+  difficulty: Difficulty;
+  dungeonMap: DungeonMapType;
+  inventoryItem: ItemId | null;
+  isResolving: boolean;
+  level: number;
+  playerEnergy: number;
+  playerHealth: number;
+  turnCounter: number;
+};
+
+function getInventoryItemSprite(itemId: ItemId | null) {
+  return itemId
+    ? (POSSIBLE_ITEMS.find((item) => item.id === itemId)?.sprite ?? null)
+    : null;
+}
+
+function getCurrentEnemy(monster: WorldMonster | null) {
+  return monster
+    ? {
+        sprite: monster.sprite,
+        hitPoints: monster.currentHealth,
+        name: monster.name,
+      }
+    : null;
+}
+
+function getRunSnapshot({
+  clearedLevels,
+  difficulty,
+  dungeonMap,
+  inventoryItem,
+  isResolving,
+  level,
+  playerEnergy,
+  playerHealth,
+  turnCounter,
+}: RunSnapshotOptions) {
+  const currentRoom =
+    getCurrentRoom(dungeonMap) ?? getRoom(dungeonMap, dungeonMap.startingRoomId);
+  const currentRoomId = currentRoom?.id ?? getCurrentRoomId(dungeonMap);
+  const currentRoomItem = getRoomItemId(dungeonMap, currentRoom);
+  const currentRoomItemObject = getRoomItem(dungeonMap, currentRoom);
+  const currentMonster = getRoomMonster(dungeonMap, currentRoom);
+  const currentMonsterId = currentMonster?.id ?? null;
+  const hasHardTurnCounter = difficulty === "hard";
+  const hasLost = playerHealth <= 0 || (hasHardTurnCounter && turnCounter <= 0);
+  const hasTurnTimer = difficulty !== "easy";
+  const currentEnemy = getCurrentEnemy(currentMonster);
+  const hasRoomEnemy = Boolean(currentMonster);
+
+  return {
+    currentEnemy,
+    currentEnemyMaxHitPoints: currentMonster?.maximumHealth ?? 1,
+    currentMonster,
+    currentRoom,
+    currentRoomId,
+    currentRoomItem,
+    currentRoomItemLabel: getItemLabel(currentRoomItem),
+    currentRoomItemObject,
+    currentRoomItemSprite: currentRoomItemObject?.sprite ?? null,
+    disabledDirections: getDisabledDirections({
+      dungeonMap,
+      isResolving,
+      roomId: currentRoomId,
+    }),
+    hasHardTurnCounter,
+    hasLost,
+    hasRoomEnemy,
+    hasTurnTimer,
+    inventoryItemLabel: getItemLabel(inventoryItem),
+    inventoryItemSprite: getInventoryItemSprite(inventoryItem),
+    isItemDisabled:
+      isResolving ||
+      hasLost ||
+      !canUseInventoryItem({
+        currentRoomId,
+        dungeonMap,
+        inventoryItem,
+        monster: currentMonster,
+        playerEnergy,
+        playerHealth,
+      }),
+    roomDoorways: getRoomDoorways(currentRoom),
+    roomHasStairs: currentRoom ? checkRoomStairs(currentRoom) : false,
+    roomSceneActors: getRoomSceneActors({
+      currentMonsterId,
+      dungeonMap,
+      room: currentRoom,
+    }),
+    turnDuration: getTurnDuration({ difficulty, level }),
+    turnStatus: getTurnStatus({
+      currentEnemyName: currentEnemy?.name,
+      hasRoomEnemy,
+      hasLost,
+      isResolving,
+      level,
+      roomId: currentRoomId,
+      clearedLevels,
+    }),
+  };
+}
+
+function getPlayerAttackDamage(action: PlayerAction, monster: WorldMonster) {
+  if (monster.chases) {
+    return 0;
+  }
+
+  return action === "special" ? 2 : 1;
+}
+
+function getNextLevelState({
+  clearedLevels,
+  difficulty,
+  level,
+  seed,
+  startingPosition,
+}: {
+  clearedLevels: number;
+  difficulty: Difficulty;
+  level: number;
+  seed: string;
+  startingPosition?: GridPosition;
+}) {
+  const nextClearedLevels = clearedLevels + 1;
+  const nextLevel = level + 1;
+  const nextMap = createLevelMap(seed, nextLevel, startingPosition);
+
+  return {
+    nextClearedLevels,
+    nextLevel,
+    nextMap,
+    nextTurnCounter: getHardTurnLimit({
+      difficulty,
+      level: nextLevel,
+      map: nextMap,
+      seed,
+    }),
+    nextTurnDuration: getTurnDuration({ difficulty, level: nextLevel }),
+  };
+}
+
+function recoverStat(current: number, maximum: number) {
+  return Math.min(maximum, current + maximum / 2);
+}
+
+function swapRoomItemWithInventory({
+  currentRoomId,
+  currentRoomItemId,
+  dungeonMap,
+  inventoryItem,
+}: {
+  currentRoomId: string;
+  currentRoomItemId: ItemId;
+  dungeonMap: DungeonMapType;
+  inventoryItem: ItemId | null;
+}) {
+  const mapWithoutPickedItem = removeItemFromRoom(
+    dungeonMap,
+    currentRoomId,
+    currentRoomItemId,
+  );
+
+  return inventoryItem
+    ? addItemToRoom(mapWithoutPickedItem, currentRoomId, inventoryItem)
+    : mapWithoutPickedItem;
+}
 //#endregion
 
 export function useRunGame({
@@ -381,6 +675,7 @@ export function useRunGame({
   const timeoutIds = useRef<ReturnType<typeof setTimeout>[]>([]);
   const clearedLevelsRef = useRef(0);
   const hardTurnGameOverScheduledRef = useRef(false);
+  const werewolfHasBeenEncounteredRef = useRef(false);
   const nextLevelStartingPositionRef = useRef<GridPosition | null>(null);
   const [animationFrame, setAnimationFrame] =
     useState<CombatAnimationFrame>(createCombatAnimationFrame);
@@ -405,151 +700,38 @@ export function useRunGame({
     getTurnDuration({ difficulty, level: 1 }),
   );
 
-  const currentRoom =
-    getCurrentRoom(dungeonMap) ?? getRoom(dungeonMap, dungeonMap.startingRoomId);
-  const currentRoomId = currentRoom?.id ?? getCurrentRoomId(dungeonMap);
-  const currentRoomItem = getRoomItemId(dungeonMap, currentRoom);
-  const currentRoomItemObject = getRoomItem(dungeonMap, currentRoom);
-  const currentRoomItemSprite = currentRoomItemObject?.sprite ?? null;
-  const currentMonster = getRoomMonster(dungeonMap, currentRoom);
-  const currentMonsterId = currentMonster?.id ?? null;
-  const hasHardTurnCounter = difficulty === "hard";
-  const hasLost = playerHealth <= 0 || (hasHardTurnCounter && turnCounter <= 0);
-  const hasTurnTimer = difficulty !== "easy";
-  const turnDuration = getTurnDuration({ difficulty, level });
-  const roomHasStairs = currentRoom ? checkRoomStairs(currentRoom) : false;
-  const roomDoorways: RoomDoorways = currentRoom
-    ? {
-        bottom: currentRoom.south,
-        left: currentRoom.west,
-        right: currentRoom.east,
-        top: currentRoom.north,
-      }
-    : {
-        bottom: "wall",
-        left: "wall",
-        right: "wall",
-        top: "wall",
-      };
-  const roomSceneActors: RoomSceneActor[] = currentRoom
-    ? (() => {
-        const seenMonsterIds = new Set<string>();
-        const seenItemIds = new Set<string>();
-        const sceneActors: RoomSceneActor[] = [];
-
-        currentRoom.contents.forEach((content) => {
-          if (content.type === "monster") {
-            const monster = dungeonMap.entities.monsters[content.id];
-
-            if (!monster || monster.currentHealth <= 0 || seenMonsterIds.has(monster.id)) {
-              return;
-            }
-
-            seenMonsterIds.add(monster.id);
-            sceneActors.push({
-              currentHealth: monster.currentHealth,
-              sprite: monster.sprite,
-              kind: "enemy",
-              isActive: monster.id === currentMonsterId,
-              label: monster.name,
-              maxHealth: monster.maximumHealth,
-              position: "center",
-            });
-            return;
-          }
-
-          if (content.type === "item") {
-            const item = dungeonMap.entities.items[content.id];
-
-            if (!item || seenItemIds.has(item.id)) {
-              return;
-            }
-
-            seenItemIds.add(item.id);
-            sceneActors.push({
-              sprite: item.sprite ?? item.label,
-              kind: "item",
-              label: item.label,
-              position: "center",
-            });
-            return;
-          }
-
-          if (content.type === "stairs") {
-            sceneActors.push({
-              sprite: "\uD83E\uDE9C",
-              kind: "stairs",
-              label: "Stairs",
-              position: "center",
-            });
-          }
-        });
-
-        getGuardedDirections(dungeonMap, currentRoom.id).forEach((direction) => {
-          const guard = getDoorwayGuardPlacement(
-            dungeonMap,
-            currentRoom.id,
-            direction,
-          );
-          const monster = guard ? dungeonMap.entities.monsters[guard.monsterId] : null;
-
-          if (!monster || monster.currentHealth <= 0 || seenMonsterIds.has(monster.id)) {
-            return;
-          }
-
-          seenMonsterIds.add(monster.id);
-          sceneActors.push({
-            currentHealth: monster.currentHealth,
-            sprite: monster.sprite,
-            kind: "enemy",
-            isActive: monster.id === currentMonsterId,
-            label: monster.name,
-            maxHealth: monster.maximumHealth,
-            position: directionScenePositions[direction],
-          });
-        });
-
-        return sceneActors;
-      })()
-    : [];
-  const currentEnemy = currentMonster
-    ? {
-        sprite: currentMonster.sprite,
-        hitPoints: currentMonster.currentHealth,
-        name: currentMonster.name,
-      }
-    : null;
-  const currentEnemyMaxHitPoints = currentMonster?.maximumHealth ?? 1;
-  const hasRoomEnemy = Boolean(currentMonster);
-  const currentRoomItemLabel = getItemLabel(currentRoomItem);
-  const inventoryItemLabel = getItemLabel(inventoryItem);
-  const inventoryItemSprite = inventoryItem
-    ? (POSSIBLE_ITEMS.find((item) => item.id === inventoryItem)?.sprite ?? null)
-    : null;
-  const isItemDisabled =
-    isResolving ||
-    hasLost ||
-    !canUseInventoryItem({
-      currentRoomId,
-      dungeonMap,
-      inventoryItem,
-      monster: currentMonster,
-      playerEnergy,
-      playerHealth,
-    });
-  const disabledDirections = getDisabledDirections({
-    dungeonMap,
-    isResolving,
-    roomId: currentRoomId,
-  });
-  const turnStatus = getTurnStatus({
-    currentEnemyName: currentEnemy?.name,
-    hasRoomEnemy,
+  const {
+    currentEnemy,
+    currentEnemyMaxHitPoints,
+    currentMonster,
+    currentRoomId,
+    currentRoomItem,
+    currentRoomItemLabel,
+    currentRoomItemObject,
+    currentRoomItemSprite,
+    disabledDirections,
+    hasHardTurnCounter,
     hasLost,
+    hasRoomEnemy,
+    hasTurnTimer,
+    inventoryItemLabel,
+    inventoryItemSprite,
+    isItemDisabled,
+    roomDoorways,
+    roomHasStairs,
+    roomSceneActors,
+    turnDuration,
+    turnStatus,
+  } = getRunSnapshot({
+    clearedLevels,
+    difficulty,
+    dungeonMap,
+    inventoryItem,
     isResolving,
     level,
-    roomId: currentRoomId,
-    clearedLevels,
+    playerEnergy,
+    playerHealth,
+    turnCounter,
   });
 
   useEffect(() => {
@@ -559,6 +741,12 @@ export function useRunGame({
       scheduledTimeoutIds.forEach(clearTimeout);
     };
   }, []);
+
+  useEffect(() => {
+    if (currentMonster?.chases) {
+      werewolfHasBeenEncounteredRef.current = true;
+    }
+  }, [currentMonster]);
 
   useEffect(() => {
     let isMounted = true;
@@ -573,6 +761,7 @@ export function useRunGame({
       );
 
       if (isMounted) {
+        werewolfHasBeenEncounteredRef.current = false;
         setDungeonMap(nextMap);
         setTurnCounter(
           getHardTurnLimit({
@@ -596,8 +785,11 @@ export function useRunGame({
   }, []);
 
   const commitMap = useCallback(
-    (updater: (map: DungeonMapType) => DungeonMapType) => {
-      const nextMap = updater(dungeonMap);
+    (
+      updater: (map: DungeonMapType) => DungeonMapType,
+      baseMap: DungeonMapType = dungeonMap,
+    ) => {
+      const nextMap = updater(baseMap);
 
       setDungeonMap(nextMap);
       void updateStoredDungeonMap(updater).then((storedMap) =>
@@ -617,12 +809,29 @@ export function useRunGame({
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   }, [vibrationEnabled]);
 
+  const resetFeedback = useCallback(() => {
+    resetRoomFeedback({
+      setEnemyHealthLossAmount,
+      setPlayerEnergyLossAmount,
+      setPlayerHealthLossAmount,
+    });
+  }, []);
+
   const advanceToNextLevel = useCallback(
     (startingPosition?: GridPosition) => {
-      const nextClearedLevels = clearedLevelsRef.current + 1;
-      const nextLevel = level + 1;
-      const nextMap = createLevelMap(seed, nextLevel, startingPosition);
-      const nextTurnDuration = getTurnDuration({ difficulty, level: nextLevel });
+      const {
+        nextClearedLevels,
+        nextLevel,
+        nextMap,
+        nextTurnCounter,
+        nextTurnDuration,
+      } = getNextLevelState({
+        clearedLevels: clearedLevelsRef.current,
+        difficulty,
+        level,
+        seed,
+        startingPosition,
+      });
 
       nextLevelStartingPositionRef.current = startingPosition ?? null;
       clearedLevelsRef.current = nextClearedLevels;
@@ -630,27 +839,17 @@ export function useRunGame({
       setLevel(nextLevel);
       setDungeonMap(nextMap);
       void saveDungeonMap(nextMap);
-      resetRoomFeedback({
-        setEnemyHealthLossAmount,
-        setPlayerEnergyLossAmount,
-        setPlayerHealthLossAmount,
-      });
+      resetFeedback();
       setPlayerHealth(PLAYER_MAX_HEALTH);
       setPlayerEnergy(PLAYER_MAX_ENERGY);
       setPlayerScenePosition("center");
-      setTurnCounter(
-        getHardTurnLimit({
-          difficulty,
-          level: nextLevel,
-          map: nextMap,
-          seed,
-        }),
-      );
+      setTurnCounter(nextTurnCounter);
       hardTurnGameOverScheduledRef.current = false;
+      werewolfHasBeenEncounteredRef.current = false;
       setTurnTimeRemaining(nextTurnDuration);
       setTurnNumber((number) => number + 1);
     },
-    [difficulty, level, seed],
+    [difficulty, level, resetFeedback, seed],
   );
 
   const finishTurn = useCallback(() => {
@@ -673,7 +872,17 @@ export function useRunGame({
   }, [difficulty, onGameOver, schedule, turnDuration]);
 
   const startEnemyMove = useCallback(
-    (isDefending: boolean, monsterDamage: number) => {
+    ({
+      isDefending,
+      mapAtEnd,
+      monsterDamage,
+      roomId,
+    }: {
+      isDefending: boolean;
+      mapAtEnd?: DungeonMapType;
+      monsterDamage: number;
+      roomId: string;
+    }) => {
       restartAnimations(setAnimationFrame, ["enemyAttackElapsed"]);
 
       if (!isDefending) {
@@ -700,10 +909,14 @@ export function useRunGame({
           });
         }
 
+        if (werewolfHasBeenEncounteredRef.current) {
+          commitMap((map) => moveWerewolfToRoom(map, roomId), mapAtEnd);
+        }
+
         finishTurn();
       });
     },
-    [finishTurn, onGameOver, schedule, triggerDamageHaptic],
+    [commitMap, finishTurn, onGameOver, schedule, triggerDamageHaptic],
   );
 
   const finishPlayerAction = useCallback(
@@ -721,7 +934,12 @@ export function useRunGame({
 
       if (roomAtEnd?.id === startedRoomId && monsterAtEnd) {
         setIsResolving(true);
-        startEnemyMove(isDefending, monsterAtEnd.damage);
+        startEnemyMove({
+          isDefending,
+          mapAtEnd,
+          monsterDamage: monsterAtEnd.damage,
+          roomId: startedRoomId,
+        });
         return;
       }
 
@@ -729,6 +947,37 @@ export function useRunGame({
     },
     [dungeonMap, finishTurn, startEnemyMove],
   );
+
+  const spendSpecialEnergy = useCallback(() => {
+    setPlayerEnergyLossAmount(1);
+    restartAnimations(setAnimationFrame, ["playerEnergyLossElapsed"]);
+    setPlayerEnergy((energy) => Math.max(0, energy - 1));
+  }, []);
+
+  const animatePlayerAttack = useCallback((healthLost: number) => {
+    restartAnimations(setAnimationFrame, ["playerAttackElapsed"]);
+
+    schedule(250, () => {
+      setEnemyHealthLossAmount(healthLost);
+      restartAnimations(setAnimationFrame, [
+        "enemyDamageElapsed",
+        "enemyHealthLossElapsed",
+      ]);
+    });
+  }, [schedule]);
+
+  const commitPlayerAttack = useCallback((monster: WorldMonster, damage: number) => {
+    schedule(500, () => {
+      const nextMap = commitMap((map) =>
+        damageMonsterInRoom(map, currentRoomId, monster.id, damage),
+      );
+
+      finishPlayerAction({
+        mapAtEnd: nextMap,
+        startedRoomId: currentRoomId,
+      });
+    });
+  }, [commitMap, currentRoomId, finishPlayerAction, schedule]);
 
   const resolveTurn = useCallback(
     (action: PlayerAction) => {
@@ -762,42 +1011,19 @@ export function useRunGame({
         return;
       }
 
-      const damage = currentMonster.chases
-        ? 0
-        : action === "special"
-          ? 2
-          : 1;
+      const damage = getPlayerAttackDamage(action, currentMonster);
       const healthLost = Math.min(currentMonster.currentHealth, damage);
 
       if (action === "special") {
-        setPlayerEnergyLossAmount(1);
-        restartAnimations(setAnimationFrame, ["playerEnergyLossElapsed"]);
-        setPlayerEnergy((energy) => Math.max(0, energy - 1));
+        spendSpecialEnergy();
       }
 
-      restartAnimations(setAnimationFrame, ["playerAttackElapsed"]);
-
-      schedule(250, () => {
-        setEnemyHealthLossAmount(healthLost);
-        restartAnimations(setAnimationFrame, [
-          "enemyDamageElapsed",
-          "enemyHealthLossElapsed",
-        ]);
-      });
-
-      schedule(500, () => {
-        const nextMap = commitMap((map) =>
-          damageMonsterInRoom(map, currentRoomId, currentMonster.id, damage),
-        );
-
-        finishPlayerAction({
-          mapAtEnd: nextMap,
-          startedRoomId: currentRoomId,
-        });
-      });
+      animatePlayerAttack(healthLost);
+      commitPlayerAttack(currentMonster, damage);
     },
     [
-      commitMap,
+      animatePlayerAttack,
+      commitPlayerAttack,
       currentMonster,
       finishPlayerAction,
       finishTurn,
@@ -807,6 +1033,7 @@ export function useRunGame({
       currentRoomId,
       playerEnergy,
       schedule,
+      spendSpecialEnergy,
     ],
   );
 
@@ -833,6 +1060,58 @@ export function useRunGame({
     resolveTurn(TURN_TIMEOUT_ACTION);
   }, [resolveTurn]);
 
+  function applyRecoveryItem({
+    recover,
+    startedRoomId,
+  }: {
+    recover: () => void;
+    startedRoomId: string;
+  }) {
+    recover();
+    setInventoryItem(null);
+    finishPlayerAction({ startedRoomId });
+  }
+
+  function applyKeyItem(startedRoomId: string) {
+    const lockedDirection = getLockedDirections(dungeonMap, currentRoomId)[0];
+
+    if (!lockedDirection) {
+      return;
+    }
+
+    const nextMap = commitMap((map) =>
+      unlockDoor(map, currentRoomId, lockedDirection),
+    );
+    setInventoryItem(null);
+    finishPlayerAction({ mapAtEnd: nextMap, startedRoomId });
+  }
+
+  function applySilverBullet(startedRoomId: string) {
+    if (!currentMonster?.chases) {
+      return;
+    }
+
+    setInventoryItem(null);
+    setEnemyHealthLossAmount(currentMonster.currentHealth);
+    restartAnimations(setAnimationFrame, [
+      "enemyDamageElapsed",
+      "enemyHealthLossElapsed",
+    ]);
+    triggerDamageHaptic();
+    const nextMap = commitMap((map) =>
+      damageMonsterInRoom(
+        map,
+        currentRoomId,
+        currentMonster.id,
+        currentMonster.currentHealth,
+      ),
+    );
+    finishPlayerAction({
+      mapAtEnd: nextMap,
+      startedRoomId,
+    });
+  }
+
   async function activateInventoryItem() {
     if (isItemDisabled || !inventoryItem) {
       return;
@@ -841,59 +1120,33 @@ export function useRunGame({
     const startedRoomId = currentRoomId;
 
     if (inventoryItem === "health-potion") {
-      setPlayerHealth((health) =>
-        Math.min(PLAYER_MAX_HEALTH, health + PLAYER_MAX_HEALTH / 2),
-      );
-      setInventoryItem(null);
-      finishPlayerAction({ startedRoomId });
+      applyRecoveryItem({
+        recover: () =>
+          setPlayerHealth((health) =>
+            recoverStat(health, PLAYER_MAX_HEALTH),
+          ),
+        startedRoomId,
+      });
       return;
     }
 
     if (inventoryItem === "energy-meal") {
-      setPlayerEnergy((energy) =>
-        Math.min(PLAYER_MAX_ENERGY, energy + PLAYER_MAX_ENERGY / 2),
-      );
-      setInventoryItem(null);
-      finishPlayerAction({ startedRoomId });
+      applyRecoveryItem({
+        recover: () =>
+          setPlayerEnergy((energy) =>
+            recoverStat(energy, PLAYER_MAX_ENERGY),
+          ),
+        startedRoomId,
+      });
       return;
     }
 
     if (inventoryItem === "key") {
-      const lockedDirection = getLockedDirections(dungeonMap, currentRoomId)[0];
-
-      if (!lockedDirection) {
-        return;
-      }
-
-      const nextMap = commitMap((map) =>
-        unlockDoor(map, currentRoomId, lockedDirection),
-      );
-      setInventoryItem(null);
-      finishPlayerAction({ mapAtEnd: nextMap, startedRoomId });
+      applyKeyItem(startedRoomId);
       return;
     }
 
-    if (currentMonster?.chases) {
-      setInventoryItem(null);
-      setEnemyHealthLossAmount(currentMonster.currentHealth);
-      restartAnimations(setAnimationFrame, [
-        "enemyDamageElapsed",
-        "enemyHealthLossElapsed",
-      ]);
-      triggerDamageHaptic();
-      const nextMap = commitMap((map) =>
-        damageMonsterInRoom(
-          map,
-          currentRoomId,
-          currentMonster.id,
-          currentMonster.currentHealth,
-        ),
-      );
-      finishPlayerAction({
-        mapAtEnd: nextMap,
-        startedRoomId,
-      });
-    }
+    applySilverBullet(startedRoomId);
   }
 
   async function pickupItem() {
@@ -903,19 +1156,16 @@ export function useRunGame({
 
     const nextInventoryItem = currentRoomItem;
 
-    void commitMap((map) => {
-      const mapWithoutPickedItem = removeItemFromRoom(
-        map,
+    const nextMap = commitMap((map) =>
+      swapRoomItemWithInventory({
         currentRoomId,
-        currentRoomItemObject.id,
-      );
-
-      return inventoryItem
-        ? addItemToRoom(mapWithoutPickedItem, currentRoomId, inventoryItem)
-        : mapWithoutPickedItem;
-    });
+        currentRoomItemId: currentRoomItemObject.id,
+        dungeonMap: map,
+        inventoryItem,
+      }),
+    );
     setInventoryItem(nextInventoryItem);
-    finishPlayerAction({ startedRoomId: currentRoomId });
+    finishPlayerAction({ mapAtEnd: nextMap, startedRoomId: currentRoomId });
   }
 
   function playerAction(action: PlayerAction) {
@@ -967,27 +1217,14 @@ export function useRunGame({
 
     const nextRoom = getRoom(dungeonMap, nextRoomId);
 
-    if (checkRoomStairs(nextRoom)) {
-      resetRoomFeedback({
-        setEnemyHealthLossAmount,
-        setPlayerEnergyLossAmount,
-        setPlayerHealthLossAmount,
-      });
-      void commitMap((map) => moveCurrentPosition(map, nextRoomId));
-      setPlayerScenePosition(playerEntryPositions[direction]);
-      const stairPosition = getGridPosition(nextRoomId);
-      nextLevelStartingPositionRef.current = stairPosition;
-      finishTurn();
-      return;
-    }
-
-    resetRoomFeedback({
-      setEnemyHealthLossAmount,
-      setPlayerEnergyLossAmount,
-      setPlayerHealthLossAmount,
-    });
+    resetFeedback();
     void commitMap((map) => moveCurrentPosition(map, nextRoomId));
     setPlayerScenePosition(playerEntryPositions[direction]);
+
+    if (checkRoomStairs(nextRoom)) {
+      nextLevelStartingPositionRef.current = getGridPosition(nextRoomId);
+    }
+
     finishTurn();
   }
 

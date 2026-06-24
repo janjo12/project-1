@@ -4,7 +4,13 @@ import {
   runGameLoop,
   TURN_DURATION,
 } from "@/hooks/run-game";
-import type { DungeonMap, DungeonRoom } from "@/utils/dungeon-map";
+import {
+  getRoom,
+  getRoomMonster,
+  moveWerewolfToRoom,
+  type DungeonMap,
+  type DungeonRoom,
+} from "@/utils/dungeon-map";
 
 function createRoom(
   id: string,
@@ -100,5 +106,45 @@ describe("run-game policies", () => {
     expect(entities.gameLoop.elapsed).toBe(2500);
     expect(onFrame).toHaveBeenCalledWith(200, 0);
     expect(onExpire).toHaveBeenCalledTimes(1);
+  });
+
+  it("moves the existing werewolf into the target room as the next active monster", () => {
+    const map = createTestMap();
+
+    map.entities.monsters["A2:monster"] = {
+      currentHealth: 2,
+      damage: 1,
+      id: "A2:monster",
+      maximumHealth: 2,
+      name: "Zombie",
+      sprite: "z",
+      type: "monster",
+    };
+    map.entities.monsters["B1:werewolf"] = {
+      chases: true,
+      currentHealth: 1,
+      damage: 1,
+      id: "B1:werewolf",
+      maximumHealth: 1,
+      name: "Werewolf",
+      sprite: "w",
+      type: "monster",
+    };
+    map.rooms[0][1].contents = [{ id: "A2:monster", type: "monster" }];
+    map.rooms[1][0].contents = [{ id: "B1:werewolf", type: "monster" }];
+
+    const nextMap = moveWerewolfToRoom(map, "A2");
+    const targetRoom = getRoom(nextMap, "A2");
+    const werewolfRefs = nextMap.rooms
+      .flat()
+      .flatMap((room) => room.contents)
+      .filter((content) => content.type === "monster" && content.id === "B1:werewolf");
+
+    expect(werewolfRefs).toHaveLength(1);
+    expect(targetRoom?.contents[0]).toEqual({
+      id: "B1:werewolf",
+      type: "monster",
+    });
+    expect(getRoomMonster(nextMap, targetRoom)?.name).toBe("Werewolf");
   });
 });

@@ -8,15 +8,15 @@ import {
   type DungeonMap as DungeonMapType,
 } from "@/utils/dungeon-map";
 
-type DungeonMapProps = { // eslint-disable-line react/prop-types
+type DungeonMapProps = {
   currentRoomId: string;
   map: DungeonMapType;
 };
 
-export function DungeonMap({ // eslint-disable-line react/prop-types
+export function DungeonMap({
   currentRoomId,
   map,
-}: DungeonMapProps) { // eslint-disable-line react/prop-types
+}: DungeonMapProps) {
   const colors = useThemeColors();
   const styles = createStyles(colors);
   const roomMap = new Map(getRooms(map).map((room) => [room.id, room]));
