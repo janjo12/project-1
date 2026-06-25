@@ -21,6 +21,11 @@ import {
   type CombatAnimationFrame,
 } from "@/entities";
 import {
+  applyWerewolfChaseAfterAction,
+  getHardTurnLimit,
+  getTurnDuration,
+} from "@/hooks/run-game-policies";
+import {
   addItemToRoom,
   hasRoomStairs as checkRoomStairs,
   createAndSaveSeededDungeonMap,
@@ -50,11 +55,6 @@ import {
   type ItemId,
   type WorldMonster,
 } from "@/utils/dungeon-map";
-import {
-  applyWerewolfChaseAfterAction,
-  getHardTurnLimit,
-  getTurnDuration,
-} from "@/hooks/run-game-policies";
 import type { Difficulty } from "@/utils/settings-storage";
 export { GameLoopTimer, runGameLoop } from "@/hooks/run-game-loop";
 export {
@@ -62,7 +62,7 @@ export {
   getHardTurnLimit,
   getTurnDuration,
   HARD_TURN_LIMIT,
-  TURN_DURATION,
+  TURN_DURATION
 } from "@/hooks/run-game-policies";
 //#endregion
 
@@ -506,9 +506,7 @@ function getNextLevelState({
     nextMap,
     nextTurnCounter: getHardTurnLimit({
       difficulty,
-      level: nextLevel,
       map: nextMap,
-      seed,
     }),
     nextTurnDuration: getTurnDuration({ difficulty, level: nextLevel }),
   };
@@ -547,7 +545,8 @@ export function useRunGame({
   onGameOver,
   seed,
   vibrationEnabled,
-}: UseGameRunOptions) { // this is the main hook that manages the game state and logic, including the player's stats, current room and monster, inventory, animations, and turn resolution
+}: UseGameRunOptions) {
+  //#region state and refs
   const initialDungeonMapRef = useRef<DungeonMapType | null>(null);
   const [level, setLevel] = useState(1);
   const [clearedLevels, setClearedLevels] = useState(0);
@@ -577,9 +576,7 @@ export function useRunGame({
   const [turnCounter, setTurnCounter] = useState(() =>
     getHardTurnLimit({
       difficulty,
-      level: 1,
       map: initialDungeonMapRef.current ?? createLevelMap(seed, 1),
-      seed,
     }),
   );
   const [turnNumber, setTurnNumber] = useState(0);
@@ -620,7 +617,9 @@ export function useRunGame({
     playerHealth,
     turnCounter,
   });
+  //#endregion
 
+  //#region effects and callbacks
   useEffect(() => {
     const scheduledTimeoutIds = timeoutIds.current;
 
@@ -653,9 +652,7 @@ export function useRunGame({
         setTurnCounter(
           getHardTurnLimit({
             difficulty,
-            level,
             map: nextMap,
-            seed,
           }),
         );
       }
@@ -979,7 +976,9 @@ export function useRunGame({
     setInventoryItem(null);
     finishPlayerAction({ startedRoomId });
   }
+  //#endregion
 
+  //#region non-callback functions
   function applyKeyItem(startedRoomId: string) {
     const lockedDirection = getLockedDirections(dungeonMap, currentRoomId)[0];
 
@@ -1135,6 +1134,7 @@ export function useRunGame({
 
     finishTurn();
   }
+  //#endregion
 
   return {
     animationFrame,

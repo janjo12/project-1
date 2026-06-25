@@ -600,17 +600,17 @@ export function getGuardedDirections(map: DungeonMap, roomId: string) {
   return directions.filter((direction) => room[direction] === "guarded");
 }
 
-export function prioritizeRoomContentsForTargeting(
-  map: DungeonMap,
-  contents: RoomContents,
-) {
+function prioritizeRoomContentsForTargeting(map: DungeonMap, contents: RoomContents) {
   return [...contents].sort((left, right) => {
     const leftMonster =
       left.type === "monster" ? map.entities.monsters[left.id] : null;
     const rightMonster =
       right.type === "monster" ? map.entities.monsters[right.id] : null;
 
-    return Number(Boolean(leftMonster?.chases)) - Number(Boolean(rightMonster?.chases));
+    return (
+      Number(Boolean(leftMonster?.chases)) -
+      Number(Boolean(rightMonster?.chases))
+    );
   });
 }
 
@@ -620,7 +620,8 @@ export function getTargetableRoomMonsterRefs(
 ) {
   return prioritizeRoomContentsForTargeting(map, room?.contents ?? []).filter(
     (content): content is RoomMonsterRef => {
-      const monster = content.type === "monster" ? map.entities.monsters[content.id] : null;
+      const monster =
+        content.type === "monster" ? map.entities.monsters[content.id] : null;
 
       return Boolean(monster && monster.currentHealth > 0);
     },

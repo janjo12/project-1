@@ -1,12 +1,13 @@
 //#region imports
 import { router } from "expo-router";
-import { Alert } from "react-native";
+import { useState } from "react";
 
 import {
   Container,
   Footer,
   Header,
   Row,
+  StyledModal,
   StyledText,
   Title,
 } from "@/components/displays";
@@ -24,9 +25,28 @@ import { useGameSettings } from "@/hooks/use-game-settings";
 import { generateRandomSeed } from "@/utils/seed";
 //#endregion
 
+const helpContent = {
+  difficulty: {
+    body: "Choose Easy for a casual experience. Normal adds a timer for each turn, and Hard requires you beat each level in a certain number of turns.",
+    title: "Difficulty",
+  },
+  handedness: {
+    body: "Left or right changes the action layout so the controls sit closer to your preferred thumb.",
+    title: "Handedness",
+  },
+  seed: {
+    body: "Used for determining the random layout of each level.",
+    title: "Seed",
+  },
+} as const;
+
+type HelpTopic = keyof typeof helpContent;
+
 export default function Index() {
   const { isLoading, settings, updateSettings, saveSettings } =
     useGameSettings({ refreshSeedOnLoad: true });
+  const [helpTopic, setHelpTopic] = useState<HelpTopic | null>(null);
+  const activeHelp = helpTopic ? helpContent[helpTopic] : null;
 
   const handleStartGame = async () => {
     const nextSettings = {
@@ -67,12 +87,7 @@ export default function Index() {
               <HelpButton
                 accessibilityLabel="Difficulty help"
                 accessibilityRole="button"
-                onPress={() =>
-                  Alert.alert(
-                    "Difficulty",
-                    "Choose Easy for a casual experience. Normal adds a timer for each turn, and Hard requires you beat each level in a certain number of turns.",
-                  )
-                }
+                onPress={() => setHelpTopic("difficulty")}
               />
             </Row>
 
@@ -88,12 +103,7 @@ export default function Index() {
               <HelpButton
                 accessibilityLabel="Seed help"
                 accessibilityRole="button"
-                onPress={() =>
-                  Alert.alert(
-                    "Seed",
-                    "Used for determining the random layout of each level.",
-                  )
-                }
+                onPress={() => setHelpTopic("seed")}
               />
             </Row>
 
@@ -107,12 +117,7 @@ export default function Index() {
               <HelpButton
                 accessibilityLabel="Handedness help"
                 accessibilityRole="button"
-                onPress={() =>
-                  Alert.alert(
-                    "Handedness",
-                    "Left or right changes the action layout so the controls sit closer to your preferred thumb.",
-                  )
-                }
+                onPress={() => setHelpTopic("handedness")}
               />
             </Row>
           </Container>
@@ -126,6 +131,26 @@ export default function Index() {
             />
           </Footer>
         </Container>
+        <StyledModal
+          accessibilityLabel={activeHelp ? `${activeHelp.title} help` : "Help"}
+          accessibilityRole="dialog"
+          animationType="fade"
+          onRequestClose={() => setHelpTopic(null)}
+          visible={activeHelp !== null}
+        >
+          {activeHelp ? (
+            <>
+              <Title>{activeHelp.title}</Title>
+              <StyledText>{activeHelp.body}</StyledText>
+              <PrimaryButton
+                accessibilityLabel="Close help"
+                accessibilityRole="button"
+                label="Got it"
+                onPress={() => setHelpTopic(null)}
+              />
+            </>
+          ) : null}
+        </StyledModal>
       </ScreenShell>
     </ThemeProvider>
   );

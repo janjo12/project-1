@@ -14,8 +14,6 @@ export function getHardTurnLimit({
 }: {
   difficulty: Difficulty;
   map: DungeonMap;
-  level: number;
-  seed: string;
 }) {
   if (difficulty !== "hard") {
     return HARD_TURN_LIMIT;

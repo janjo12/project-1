@@ -124,7 +124,7 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
   }
 
   return (
-    <ScreenShell compact>
+    <ScreenShell>
       <GameEngine
         key={game.turnNumber}
         entities={gameLoopEntities}

@@ -308,8 +308,8 @@ export function ToggleButton({
         onValueChange={(newValue) => {
           onValueChange(newValue);
         }}
-        thumbColor={value ? colors.paper : colors.fadedInk}
-        trackColor={{ false: colors.paperLight, true: colors.accent }}
+        thumbColor={value ? colors.accent : colors.fadedInk}
+        trackColor={{ false: colors.ink, true: colors.ink }}
         value={value}
       />
     </View>

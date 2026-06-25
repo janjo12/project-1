@@ -11,9 +11,9 @@ import {
   getRoomMonster,
   getTargetableMonsters,
   moveWerewolfToRoom,
-  prioritizeRoomContentsForTargeting,
   type DungeonMap,
   type DungeonRoom,
+  type WorldMonster,
 } from "@/utils/dungeon-map";
 
 function createRoom(
@@ -67,6 +67,35 @@ function createTestMap(): DungeonMap {
   };
 }
 
+function addMonster(
+  map: DungeonMap,
+  id: string,
+  overrides: Partial<WorldMonster> = {},
+) {
+  const maximumHealth = overrides.maximumHealth ?? 2;
+
+  map.entities.monsters[id] = {
+    currentHealth: maximumHealth,
+    damage: 1,
+    id,
+    maximumHealth,
+    name: "Zombie",
+    sprite: "z",
+    type: "monster",
+    ...overrides,
+  };
+}
+
+function addWerewolf(map: DungeonMap, id = "B1:werewolf") {
+  addMonster(map, id, {
+    chases: true,
+    currentHealth: 1,
+    maximumHealth: 1,
+    name: "Werewolf",
+    sprite: "w",
+  });
+}
+
 describe("run-game policies", () => {
   it("can be imported without evaluating map-dependent policies at module load", () => {
     expect(typeof runGameLoop).toBe("function");
@@ -76,9 +105,7 @@ describe("run-game policies", () => {
     expect(
       getHardTurnLimit({
         difficulty: "hard",
-        level: 1,
         map: createTestMap(),
-        seed: "test-seed",
       }),
     ).toBe(6);
   });
@@ -115,25 +142,8 @@ describe("run-game policies", () => {
   it("moves the existing werewolf into the target room", () => {
     const map = createTestMap();
 
-    map.entities.monsters["A2:monster"] = {
-      currentHealth: 2,
-      damage: 1,
-      id: "A2:monster",
-      maximumHealth: 2,
-      name: "Zombie",
-      sprite: "z",
-      type: "monster",
-    };
-    map.entities.monsters["B1:werewolf"] = {
-      chases: true,
-      currentHealth: 1,
-      damage: 1,
-      id: "B1:werewolf",
-      maximumHealth: 1,
-      name: "Werewolf",
-      sprite: "w",
-      type: "monster",
-    };
+    addMonster(map, "A2:monster");
+    addWerewolf(map);
     map.rooms[0][1].contents = [{ id: "A2:monster", type: "monster" }];
     map.rooms[1][0].contents = [{ id: "B1:werewolf", type: "monster" }];
 
@@ -142,7 +152,9 @@ describe("run-game policies", () => {
     const werewolfRefs = nextMap.rooms
       .flat()
       .flatMap((room) => room.contents)
-      .filter((content) => content.type === "monster" && content.id === "B1:werewolf");
+      .filter(
+        (content) => content.type === "monster" && content.id === "B1:werewolf",
+      );
 
     expect(werewolfRefs).toHaveLength(1);
     expect(targetRoom?.contents).toContainEqual({
@@ -158,25 +170,8 @@ describe("run-game policies", () => {
   it("targets non-werewolf enemies before the werewolf when both are in the room", () => {
     const map = createTestMap();
 
-    map.entities.monsters["A1:monster"] = {
-      currentHealth: 2,
-      damage: 1,
-      id: "A1:monster",
-      maximumHealth: 2,
-      name: "Zombie",
-      sprite: "z",
-      type: "monster",
-    };
-    map.entities.monsters["B1:werewolf"] = {
-      chases: true,
-      currentHealth: 1,
-      damage: 1,
-      id: "B1:werewolf",
-      maximumHealth: 1,
-      name: "Werewolf",
-      sprite: "w",
-      type: "monster",
-    };
+    addMonster(map, "A1:monster");
+    addWerewolf(map);
     map.rooms[0][0].contents = [
       { id: "B1:werewolf", type: "monster" },
       { id: "A1:monster", type: "monster" },
@@ -190,25 +185,8 @@ describe("run-game policies", () => {
 
     map.rooms[0][0].east = "guarded";
     map.rooms[0][1].west = "guarded";
-    map.entities.monsters["A1:east:guard"] = {
-      currentHealth: 2,
-      damage: 1,
-      id: "A1:east:guard",
-      maximumHealth: 2,
-      name: "Zombie",
-      sprite: "z",
-      type: "monster",
-    };
-    map.entities.monsters["B1:werewolf"] = {
-      chases: true,
-      currentHealth: 1,
-      damage: 1,
-      id: "B1:werewolf",
-      maximumHealth: 1,
-      name: "Werewolf",
-      sprite: "w",
-      type: "monster",
-    };
+    addMonster(map, "A1:east:guard");
+    addWerewolf(map);
     map.entities.doorwayGuards["A1:east:guard"] = {
       direction: "east",
       monsterId: "A1:east:guard",
@@ -227,25 +205,8 @@ describe("run-game policies", () => {
   it("damages another available enemy before damaging the werewolf", () => {
     const map = createTestMap();
 
-    map.entities.monsters["A1:monster"] = {
-      currentHealth: 2,
-      damage: 1,
-      id: "A1:monster",
-      maximumHealth: 2,
-      name: "Zombie",
-      sprite: "z",
-      type: "monster",
-    };
-    map.entities.monsters["B1:werewolf"] = {
-      chases: true,
-      currentHealth: 1,
-      damage: 1,
-      id: "B1:werewolf",
-      maximumHealth: 1,
-      name: "Werewolf",
-      sprite: "w",
-      type: "monster",
-    };
+    addMonster(map, "A1:monster");
+    addWerewolf(map);
     map.rooms[0][0].contents = [
       { id: "B1:werewolf", type: "monster" },
       { id: "A1:monster", type: "monster" },
@@ -258,53 +219,10 @@ describe("run-game policies", () => {
     expect(nextMap.entities.monsters["B1:werewolf"].currentHealth).toBe(1);
   });
 
-  it("uses one room-content priority function to put the werewolf after other enemies", () => {
-    const map = createTestMap();
-
-    map.entities.monsters["A1:monster"] = {
-      currentHealth: 2,
-      damage: 1,
-      id: "A1:monster",
-      maximumHealth: 2,
-      name: "Zombie",
-      sprite: "z",
-      type: "monster",
-    };
-    map.entities.monsters["B1:werewolf"] = {
-      chases: true,
-      currentHealth: 1,
-      damage: 1,
-      id: "B1:werewolf",
-      maximumHealth: 1,
-      name: "Werewolf",
-      sprite: "w",
-      type: "monster",
-    };
-
-    expect(
-      prioritizeRoomContentsForTargeting(map, [
-        { id: "B1:werewolf", type: "monster" },
-        { id: "A1:monster", type: "monster" },
-      ]),
-    ).toEqual([
-      { id: "A1:monster", type: "monster" },
-      { id: "B1:werewolf", type: "monster" },
-    ]);
-  });
-
   it("moves the aggroed werewolf after a non-move action in an empty room", () => {
     const map = createTestMap();
 
-    map.entities.monsters["B1:werewolf"] = {
-      chases: true,
-      currentHealth: 1,
-      damage: 1,
-      id: "B1:werewolf",
-      maximumHealth: 1,
-      name: "Werewolf",
-      sprite: "w",
-      type: "monster",
-    };
+    addWerewolf(map);
     map.rooms[1][0].contents = [{ id: "B1:werewolf", type: "monster" }];
 
     const nextMap = applyWerewolfChaseAfterAction({
@@ -321,16 +239,7 @@ describe("run-game policies", () => {
   it("does not move the werewolf before it has been aggroed", () => {
     const map = createTestMap();
 
-    map.entities.monsters["B1:werewolf"] = {
-      chases: true,
-      currentHealth: 1,
-      damage: 1,
-      id: "B1:werewolf",
-      maximumHealth: 1,
-      name: "Werewolf",
-      sprite: "w",
-      type: "monster",
-    };
+    addWerewolf(map);
     map.rooms[1][0].contents = [{ id: "B1:werewolf", type: "monster" }];
 
     const nextMap = applyWerewolfChaseAfterAction({
