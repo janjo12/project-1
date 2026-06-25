@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from "react-native";
 
-type CombatantSpriteProps = { // eslint-disable-line react/prop-types
+type CombatantSpriteProps = {
   accessibilityLabel: string;
   attackDirection?: "left" | "right";
   attackProgress?: number | null;
@@ -12,7 +12,7 @@ type CombatantSpriteProps = { // eslint-disable-line react/prop-types
 
 const ATTACK_DISTANCE = 20; // the distance the sprite moves during an attack animation
 
-export function CombatantSprite({ // eslint-disable-line react/prop-types
+export function CombatantSprite({
   accessibilityLabel,
   attackDirection = "right",
   attackProgress = null,
@@ -45,7 +45,7 @@ export function CombatantSprite({ // eslint-disable-line react/prop-types
   );
 }
 
-function getAttackOffset( // eslint-disable-line react/prop-types
+function getAttackOffset(
   progress: number | null,
   attackDirection: "left" | "right",
 ) {
@@ -59,7 +59,7 @@ function getAttackOffset( // eslint-disable-line react/prop-types
   return direction * ATTACK_DISTANCE * mirroredProgress;
 }
 
-function getDamageOpacity(progress: number | null) { // eslint-disable-line react/prop-types
+function getDamageOpacity(progress: number | null) {
   if (progress === null) {
     return 1;
   }

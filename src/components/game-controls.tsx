@@ -16,7 +16,7 @@ export type PlayerAction =
   | "pickup-item"
   | "special";
 
-type ActionControlsProps = { // eslint-disable-line react/prop-types
+type ActionControlsProps = {
   disabledActions?: PlayerAction[];
   disabledDirections?: Direction[];
   floorItemLabel?: string | null;
@@ -35,7 +35,7 @@ const arrowIcons = {
   west: "arrow-left",
 } as const;
 
-export function ActionControls({ // eslint-disable-line react/prop-types
+export function ActionControls({
   disabledActions = [],
   disabledDirections = [],
   floorItemLabel = null,
@@ -45,7 +45,7 @@ export function ActionControls({ // eslint-disable-line react/prop-types
   itemSprite = null,
   nextLevelNumber = null,
   playerAction,
-}: ActionControlsProps) { // eslint-disable-line react/prop-types
+}: ActionControlsProps) {
   const colors = useThemeColors();
   const styles = createStyles(colors);
   const isUseItemDisabled = isBusy || isItemDisabled;
@@ -198,7 +198,7 @@ export function ActionControls({ // eslint-disable-line react/prop-types
   );
 }
 
-type CircularButtonProps = { // eslint-disable-line react/prop-types
+type CircularButtonProps = {
   disabled: boolean;
   icon?: keyof typeof FontAwesome.glyphMap;
   label?: string;
@@ -208,7 +208,7 @@ type CircularButtonProps = { // eslint-disable-line react/prop-types
   testID: string;
 };
 
-function CircularButton({ // eslint-disable-line react/prop-types
+function CircularButton({
   disabled,
   icon,
   label,
@@ -216,7 +216,7 @@ function CircularButton({ // eslint-disable-line react/prop-types
   onPress,
   styles,
   testID,
-}: CircularButtonProps) { // eslint-disable-line react/prop-types
+}: CircularButtonProps) {
   const colors = useThemeColors();
 
   return (
@@ -255,7 +255,7 @@ function CircularButton({ // eslint-disable-line react/prop-types
   );
 }
 
-type ArrowButtonProps = { // eslint-disable-line react/prop-types
+type ArrowButtonProps = {
   color: string;
   direction: Direction;
   disabled: boolean;
@@ -263,13 +263,13 @@ type ArrowButtonProps = { // eslint-disable-line react/prop-types
   styles: ReturnType<typeof createStyles>;
 };
 
-function ArrowButton({ // eslint-disable-line react/prop-types
+function ArrowButton({
   color,
   direction,
   disabled,
   playerAction,
   styles,
-}: ArrowButtonProps) { // eslint-disable-line react/prop-types
+}: ArrowButtonProps) {
   return (
     <Pressable
       accessibilityLabel={`Move ${direction}`}
@@ -301,6 +301,12 @@ function createStyles(colors: ThemeColors) {
       justifyContent: "flex-end",
       minWidth: 124,
       paddingBottom: 8,
+    },
+    pressed: {
+      opacity: 0.72,
+    },
+    disabledButton: {
+      opacity: 0.38,
     },
     floorItemSlot: {
       alignItems: "center",
@@ -360,9 +366,6 @@ function createStyles(colors: ThemeColors) {
       fontSize: 16,
       lineHeight: 18,
     },
-    disabledButton: {
-      opacity: 0.38,
-    },
     dPad: {
       alignSelf: "center",
       gap: 4,
@@ -395,9 +398,6 @@ function createStyles(colors: ThemeColors) {
       height: 34,
       justifyContent: "center",
       width: 34,
-    },
-    pressed: {
-      opacity: 0.72,
     },
   });
 }

@@ -1,9 +1,8 @@
 // #region imports
 import { router } from "expo-router";
-import { StyleSheet, View } from "react-native";
 
 import { Container, Header, Title } from "@/components/displays";
-import { ScreenActionButton, ToggleButton } from "@/components/inputs";
+import { CancelButton, ToggleButton } from "@/components/inputs";
 import { ScreenShell } from "@/components/screen-shell";
 import { ThemeProvider } from "@/components/theme";
 
@@ -18,14 +17,15 @@ export default function SettingsRoute() {
       <ScreenShell>
         <Container>
           <Header>
-            <ScreenActionButton
+            <CancelButton
               accessibilityLabel="Back"
+              accessibilityRole="button"
               label="Back"
               onPress={() => router.replace("/")}
             />
           </Header>
 
-          <View style={styles.content}>
+          <Container>
             <Title>Settings</Title>
             <ToggleButton
               label="Dark Mode"
@@ -41,17 +41,9 @@ export default function SettingsRoute() {
                 updateSettings({ vibrationEnabled: value });
               }}
             />
-          </View>
+          </Container>
         </Container>
       </ScreenShell>
     </ThemeProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  content: {
-    flex: 1,
-    gap: 24,
-    justifyContent: "center",
-  },
-});

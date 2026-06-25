@@ -1,5 +1,5 @@
 import { FontAwesome } from "@expo/vector-icons";
-import { StyleSheet, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 
 import { type ThemeColors, useThemeColors } from "@/components/theme";
 
@@ -11,6 +11,16 @@ type ResourceBarProps = {
   max: number;
   panelPosition?: "first" | "last" | "middle" | "single";
   testID: string;
+};
+
+type ResourceBarGroupProps = {
+  children: React.ReactNode;
+};
+
+type DebugBarProps = {
+  accessibilityLabel: string;
+  accessibilityRole: "text";
+  children: React.ReactNode;
 };
 
 export function ResourceBar({
@@ -65,6 +75,30 @@ export function ResourceBar({
   );
 }
 
+export function ResourceBarGroup({ children }: ResourceBarGroupProps) {
+  const colors = useThemeColors();
+  const styles = createStyles(colors);
+
+  return (
+    <View style={styles.playerBars}>
+      {children}
+    </View>
+  );
+}
+
+export function DebugBar({
+  children
+}: DebugBarProps) {
+  const colors = useThemeColors();
+  const styles = createStyles(colors);
+
+  return (
+    <Text style={styles.turnStatus}>
+      {children}
+    </Text>
+  );
+}
+
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     connectedRow: {
@@ -85,6 +119,9 @@ function createStyles(colors: ThemeColors) {
     overlappedRow: {
       marginTop: -2,
     },
+    playerBars: {
+      gap: 6,
+    },
     row: {
       alignItems: "center",
       backgroundColor: colors.paper,
@@ -104,6 +141,13 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
       height: 10,
       overflow: "hidden",
+    },
+    turnStatus: {
+      color: colors.fadedInk,
+      fontSize: 16,
+      fontWeight: "900",
+      minHeight: 22,
+      textAlign: "center",
     },
   });
 }

@@ -7,31 +7,52 @@ import { type ThemeColors, useThemeColors } from "@/components/theme";
 //#endregion
 
 //#region types
+type CancelButtonProps = {
+  accessibilityLabel: string;
+  accessibilityRole: "button";
+  label: string;
+  onPress: () => void;
+};
+
+type DestructiveButtonProps = {
+  accessibilityLabel: string;
+  accessibilityRole: "button";
+  label: string;
+  onPress: () => void;
+};
+
+type HelpButtonProps = {
+  accessibilityLabel: string;
+  accessibilityRole: "button";
+  onPress: () => void;
+};
+
+type NormalButtonProps = {
+  accessibilityLabel: string;
+  accessibilityRole: "button";
+  icon?: keyof typeof FontAwesome.glyphMap;
+  label?: string;
+  onPress: () => void;
+  testID?: string;
+};
+
+type PrimaryButtonProps = {
+  accessibilityLabel: string;
+  accessibilityRole: "button";
+  label: string;
+  onPress: () => void;
+};
+
 type RadioGroupProps<TValue extends string> = {
   onChange: (value: TValue) => void;
   options: readonly TValue[];
   value: TValue;
 };
 
-type TextEntryProps = {
-  accessibilityLabel: string;
-  onChangeText: (value: string) => void;
-  placeholder: string;
-  value: string;
-};
-
 type SegmentedButtonProps<TValue extends string> = {
   onChange: (value: TValue) => void;
   options: readonly TValue[];
   value: TValue;
-};
-
-type ScreenActionButtonProps = {
-  accessibilityLabel: string;
-  icon?: keyof typeof FontAwesome.glyphMap;
-  label?: string;
-  onPress: () => void;
-  testID?: string;
 };
 
 type SelectableOptionProps = {
@@ -41,10 +62,12 @@ type SelectableOptionProps = {
   variant: "segment" | "radio";
 };
 
-type AppButtonProps = {
-  label: string;
-  onPress: () => void;
-  variant?: "primary" | "secondary";
+type TextEntryProps = {
+  accessibilityLabel: string;
+  accessibilityRole: "textbox";
+  onChangeText: (value: string) => void;
+  placeholder: string;
+  value: string;
 };
 
 type ToggleButtonProps = {
@@ -54,31 +77,90 @@ type ToggleButtonProps = {
 };
 //#endregion
 
-export function TextEntry({
-  accessibilityLabel,
-  onChangeText,
-  placeholder,
-  value,
-}: TextEntryProps) {
+//#region components
+export function CancelButton({ label, onPress }: CancelButtonProps) {
   const colors = useThemeColors();
   const styles = createStyles(colors);
 
   return (
-    <TextInput
-      accessibilityLabel={accessibilityLabel}
-      autoCapitalize="none"
-      autoCorrect={false}
-      onChangeText={onChangeText}
-      placeholder={placeholder}
-      placeholderTextColor={colors.fadedInk}
-      selectionColor={colors.accent}
-      style={styles.input}
-      value={value}
-    />
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.textButton,
+        pressed && styles.pressed,
+      ]}
+    >
+      <Text style={styles.label}>{label}</Text>
+    </Pressable>
   );
 }
 
-export function PrimaryButton({ label, onPress }: AppButtonProps) {
+export function DestructiveButton({ label, onPress }: DestructiveButtonProps) {
+  const colors = useThemeColors();
+  const styles = createStyles(colors);
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.textButton,
+        pressed && styles.pressed,
+      ]}
+    >
+      <Text style={[styles.label, styles.secondaryLabel]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+export function HelpButton({ accessibilityLabel, onPress }: HelpButtonProps) {
+  const colors = useThemeColors();
+  const styles = createStyles(colors);
+
+  return (
+    <Pressable
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.iconButton,
+        pressed && styles.pressed,
+      ]}
+    >
+      <FontAwesome color={colors.ink} name="question-circle" size={28} />
+    </Pressable>
+  );
+}
+
+export function NormalButton({
+  accessibilityLabel,
+  icon,
+  label,
+  onPress,
+  testID,
+}: NormalButtonProps) {
+  const colors = useThemeColors();
+  const styles = createStyles(colors);
+
+  return (
+    <Pressable
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [
+        icon ? styles.iconButton : styles.textButton,
+        pressed && styles.pressed,
+      ]}
+      testID={testID}
+    >
+      {icon ? <FontAwesome color={colors.ink} name={icon} size={28} /> : null}
+      {label ? <Text style={styles.label}>{label}</Text> : null}
+    </Pressable>
+  );
+}
+
+export function PrimaryButton({ label, onPress }: PrimaryButtonProps) {
   const colors = useThemeColors();
   const styles = createStyles(colors);
 
@@ -116,33 +198,6 @@ export function RadioGroup<TValue extends string>({
         />
       ))}
     </View>
-  );
-}
-
-export function ScreenActionButton({
-  accessibilityLabel,
-  icon,
-  label,
-  onPress,
-  testID,
-}: ScreenActionButtonProps) {
-  const colors = useThemeColors();
-  const styles = createStyles(colors);
-
-  return (
-    <Pressable
-      accessibilityLabel={accessibilityLabel}
-      accessibilityRole="button"
-      onPress={onPress}
-      style={({ pressed }) => [
-        icon ? styles.iconButton : styles.textButton,
-        pressed && styles.pressed,
-      ]}
-      testID={testID}
-    >
-      {icon ? <FontAwesome color={colors.ink} name={icon} size={28} /> : null}
-      {label ? <Text style={styles.label}>{label}</Text> : null}
-    </Pressable>
   );
 }
 
@@ -210,36 +265,27 @@ export function SegmentedButton<TValue extends string>({
   );
 }
 
-export function AppButton({
-  label,
-  onPress,
-  variant = "primary",
-}: AppButtonProps) {
+export function TextEntry({
+  accessibilityLabel,
+  onChangeText,
+  placeholder,
+  value,
+}: TextEntryProps) {
   const colors = useThemeColors();
   const styles = createStyles(colors);
-  const isPrimary = variant === "primary";
 
   return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.appButton,
-        isPrimary ? styles.appButtonPrimary : styles.appButtonSecondary,
-        pressed && styles.pressed,
-      ]}
-    >
-      <Text
-        adjustsFontSizeToFit
-        numberOfLines={1}
-        style={[
-          styles.appButtonLabel,
-          isPrimary ? styles.primaryLabel : styles.secondaryLabel,
-        ]}
-      >
-        {label}
-      </Text>
-    </Pressable>
+    <TextInput
+      accessibilityLabel={accessibilityLabel}
+      autoCapitalize="none"
+      autoCorrect={false}
+      onChangeText={onChangeText}
+      placeholder={placeholder}
+      placeholderTextColor={colors.fadedInk}
+      selectionColor={colors.accent}
+      style={styles.input}
+      value={value}
+    />
   );
 }
 
@@ -269,15 +315,47 @@ export function ToggleButton({
     </View>
   );
 }
+//#endregion
   
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-    row: {
-      alignItems: "center",
+    control: {
+      backgroundColor: colors.paperLight,
+      borderColor: colors.ink,
+      borderCurve: "continuous",
+      borderRadius: 8,
+      borderWidth: 2,
+      flex: 1,
       flexDirection: "row",
-      gap: 12,
-      justifyContent: "space-between",
-      minHeight: 58,
+      minWidth: 0,
+      overflow: "hidden",
+    },
+    destructiveLabel: {
+      color: colors.health,
+      fontSize: 22,
+    },
+    helpIcon: {
+      color: colors.ink,
+      fontSize: 22,
+      fontWeight: "700",
+    },
+    helpButton: {
+      alignItems: "center",
+      backgroundColor: colors.paperLight,
+      borderColor: colors.ink,
+      borderRadius: 14,
+      borderWidth: 2,
+      height: 28,
+      justifyContent: "center",
+      width: 28,
+    },
+    iconButton: {
+      alignItems: "center",
+      borderCurve: "continuous",
+      borderRadius: 8,
+      justifyContent: "center",
+      minHeight: 40,
+      width: 40,
     },
     input: {
       backgroundColor: colors.paperLight,
@@ -286,23 +364,17 @@ function createStyles(colors: ThemeColors) {
       borderRadius: 8,
       borderWidth: 2,
       color: colors.ink,
-      fontSize: 22,
+      flex: 1,
+      fontSize: 18,
       fontWeight: "600",
-      minHeight: 56,
-      paddingHorizontal: 16,
-      paddingVertical: 10,
-    },
-    iconButton: {
-      alignItems: "center",
-      borderCurve: "continuous",
-      borderRadius: 8,
-      justifyContent: "center",
       minHeight: 44,
-      width: 44,
+      minWidth: 0,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
     },
     label: {
       color: colors.ink,
-      fontSize: 25,
+      fontSize: 21,
       fontWeight: "600",
       textAlign: "center",
     },
@@ -317,80 +389,12 @@ function createStyles(colors: ThemeColors) {
       borderRadius: 28,
       borderWidth: 3,
       justifyContent: "center",
-      minHeight: 72,
-      paddingHorizontal: 24,
-      paddingVertical: 16,
-    },
-    appButton: {
-      alignItems: "center",
-      borderCurve: "continuous",
-      borderRadius: 28,
-      borderWidth: 3,
-      justifyContent: "center",
-      minHeight: 64,
-      paddingHorizontal: 24,
-      paddingVertical: 14,
-    },
-    appButtonPrimary: {
-      backgroundColor: colors.ink,
-      borderColor: colors.ink,
-    },
-    appButtonSecondary: {
-      backgroundColor: colors.paper,
-      borderColor: colors.ink,
-      borderRadius: 8,
-      borderWidth: 2,
-      minHeight: 54,
-    },
-    appButtonLabel: {
-      fontSize: 25,
-      fontWeight: "800",
-      textAlign: "center",
+      minHeight: 56,
+      paddingHorizontal: 20,
+      paddingVertical: 12,
     },
     primaryLabel: {
       color: colors.paper,
-    },
-    secondaryLabel: {
-      color: colors.ink,
-      fontSize: 22,
-    },
-    textButton: {
-      alignItems: "center",
-      borderCurve: "continuous",
-      borderRadius: 8,
-      justifyContent: "center",
-      minHeight: 44,
-      paddingHorizontal: 8,
-    },
-    segment: {
-      alignItems: "center",
-      flex: 1,
-      justifyContent: "center",
-      minHeight: 54,
-      paddingHorizontal: 8,
-      paddingVertical: 10,
-    },
-    selectedSegment: {
-      backgroundColor: colors.ink,
-    },
-    segmentText: {
-      color: colors.ink,
-      fontSize: 22,
-      fontWeight: "700",
-      textTransform: "capitalize",
-    },
-    selectedText: {
-      color: colors.paperLight,
-    },
-    radioOption: {
-      alignItems: "center",
-      borderCurve: "continuous",
-      borderRadius: 8,
-      flexDirection: "row",
-      gap: 8,
-      minHeight: 44,
-      paddingHorizontal: 4,
-      paddingVertical: 6,
     },
     radioMark: {
       backgroundColor: colors.paperLight,
@@ -400,31 +404,79 @@ function createStyles(colors: ThemeColors) {
       height: 26,
       width: 26,
     },
+    radioOption: {
+      alignItems: "center",
+      borderCurve: "continuous",
+      borderRadius: 8,
+      flexDirection: "row",
+      gap: 8,
+      minHeight: 40,
+      paddingHorizontal: 2,
+      paddingVertical: 4,
+    },
+    row: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: 12,
+      justifyContent: "space-between",
+      minHeight: 58,
+    },
+    secondaryLabel: {
+      color: colors.ink,
+      fontSize: 22,
+    },
+    segment: {
+      alignItems: "center",
+      flex: 1,
+      justifyContent: "center",
+      minHeight: 42,
+      paddingHorizontal: 6,
+      paddingVertical: 6,
+    },
+    segmentText: {
+      color: colors.ink,
+      fontSize: 18,
+      fontWeight: "700",
+      textTransform: "capitalize",
+    },
     selectedRadioMark: {
       backgroundColor: colors.ink,
     },
+    selectedSegment: {
+      backgroundColor: colors.ink,
+    },
+    selectedText: {
+      color: colors.paperLight,
+    },
+    textButton: {
+      alignItems: "center",
+      borderCurve: "continuous",
+      borderRadius: 8,
+      justifyContent: "center",
+      minHeight: 40,
+      paddingHorizontal: 8,
+    },
     radioText: {
       color: colors.ink,
-      fontSize: 23,
+      fontSize: 18,
       fontWeight: "600",
       textTransform: "capitalize",
     },
-    control: {
-      backgroundColor: colors.paperLight,
-      borderColor: colors.ink,
-      borderCurve: "continuous",
-      borderRadius: 8,
-      borderWidth: 2,
-      flexDirection: "row",
-      overflow: "hidden",
-    },
     radioGroup: {
       alignItems: "center",
+      flex: 1,
       flexDirection: "row",
       flexWrap: "wrap",
-      gap: 18,
+      gap: 10,
       justifyContent: "space-between",
-      minHeight: 58,
+      minHeight: 42,
+      minWidth: 0,
+    },
+    toggleLabel: {
+      color: colors.ink,
+      flex: 1,
+      fontSize: 22,
+      fontWeight: "700",
     },
     toggleRow: {
       alignItems: "center",
@@ -436,15 +488,9 @@ function createStyles(colors: ThemeColors) {
       flexDirection: "row",
       gap: 14,
       justifyContent: "space-between",
-      minHeight: 58,
-      paddingHorizontal: 14,
-      paddingVertical: 8,
-    },
-    toggleLabel: {
-      color: colors.ink,
-      flex: 1,
-      fontSize: 22,
-      fontWeight: "700",
+      minHeight: 48,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
     },
   });
 }

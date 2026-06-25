@@ -6,6 +6,7 @@ import type { Appearance } from "@/utils/settings-storage";
 export const darkColors = {
   accent: "#f97316",
   energy: "#22c55e",
+  timer: "#b966ff",
   fadedInk: "#9ca3af",
   health: "#ef4444",
   ink: "#f8fafc",
@@ -20,6 +21,7 @@ export const darkColors = {
 export const lightColors = {
   accent: "#ea580c",
   energy: "#16a34a",
+  timer: "#a855f7",
   fadedInk: "#334155",
   health: "#dc2626",
   ink: "#0f172a",

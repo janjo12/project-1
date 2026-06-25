@@ -1,16 +1,18 @@
 //#region imports
 import { router } from "expo-router";
 import { useMemo, useState } from "react";
-import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert } from "react-native";
 import { GameEngine } from "react-native-game-engine";
 
+import { Container, Header, Row, StyledModal, Title } from "@/components/displays";
 import { DungeonMap } from "@/components/dungeon-map";
 import { ActionControls, type PlayerAction } from "@/components/game-controls";
 import { GameViewPanel } from "@/components/game-view-panel";
-import { PauseMenu } from "@/components/pause-menu";
-import { ResourceBar } from "@/components/resource-bar";
+import { DestructiveButton, NormalButton, PrimaryButton, ToggleButton } from "@/components/inputs";
+import { DebugBar, ResourceBar, ResourceBarGroup } from "@/components/resource-bar";
 import { ScreenShell } from "@/components/screen-shell";
-import { ThemeProvider, useThemeColors, type ThemeColors } from "@/components/theme";
+import { ThemeProvider, useThemeColors } from "@/components/theme";
+
 import {
   GameLoopTimer,
   PLAYER_MAX_ENERGY,
@@ -22,9 +24,22 @@ import { useGameSettings } from "@/hooks/use-game-settings";
 import type { GameSettings } from "@/utils/settings-storage";
 //#endregion
 
-const TURN_TIMER_COLOR = "#a855f7";
+//#region types
+type PauseMenuProps = {
+  onBackToGame: () => void;
+  onQuitToTitle: () => void;
+  onSettingsChange: (settings: Partial<GameSettings>) => void;
+  settings: GameSettings;
+  visible: boolean;
+};
 
-export default function GameRoute() {
+type GameContentProps = {
+  onSettingsChange: (settings: Partial<GameSettings>) => void;
+  settings: GameSettings;
+};
+//#endregion
+
+export default function GameScreen() {
   const { isLoading, settings, updateSettings } = useGameSettings();
 
   if (isLoading) {
@@ -33,21 +48,15 @@ export default function GameRoute() {
 
   return (
     <ThemeProvider appearance={settings.appearance}>
-      <GameContent settings={settings} updateSettings={updateSettings} />
+      <GameContent settings={settings} onSettingsChange={updateSettings} />
     </ThemeProvider>
   );
 }
 
-type GameContentProps = {
-  settings: GameSettings;
-  updateSettings: (settings: Partial<GameSettings>) => void;
-};
-
-function GameContent({ settings, updateSettings }: GameContentProps) {
+function GameContent({ onSettingsChange, settings }: GameContentProps) {
   const isLeftHanded = settings.handedness === "left";
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const colors = useThemeColors();
-  const styles = createStyles(colors);
   const game = useRunGame({
     difficulty: settings.difficulty,
     onGameOver: (score) =>
@@ -83,6 +92,22 @@ function GameContent({ settings, updateSettings }: GameContentProps) {
       game.updateGameFrame,
     ],
   );
+  const map = (
+    <DungeonMap currentRoomId={game.currentRoomId} map={game.dungeonMap} />
+  );
+  const controls = (
+    <ActionControls
+      disabledActions={disabledActions}
+      disabledDirections={game.disabledDirections}
+      floorItemLabel={game.currentRoomItemLabel}
+      isItemDisabled={game.isItemDisabled}
+      isBusy={game.isResolving}
+      itemLabel={game.inventoryItemLabel}
+      itemSprite={game.inventoryItemSprite}
+      nextLevelNumber={game.roomHasStairs ? game.level + 1 : null}
+      playerAction={game.playerAction}
+    />
+  );
 
   function confirmQuitToTitle() {
     Alert.alert("Quit to Title?", "Your current run will be lost.", [
@@ -100,113 +125,87 @@ function GameContent({ settings, updateSettings }: GameContentProps) {
 
   return (
     <ScreenShell compact>
-      <View style={styles.container}>
-        <GameEngine
-          key={game.turnNumber}
-          entities={gameLoopEntities}
-          renderer={() => null}
-          running={game.isGameLoopRunning() && !isMenuOpen}
-          style={styles.engineLoop}
-          systems={[runGameLoop]}
-          timer={new GameLoopTimer()}
+      <GameEngine
+        key={game.turnNumber}
+        entities={gameLoopEntities}
+        renderer={() => null}
+        running={game.isGameLoopRunning() && !isMenuOpen}
+        systems={[runGameLoop]}
+        timer={new GameLoopTimer()}
+      />
+
+      <Header>
+        <NormalButton
+          accessibilityLabel="Menu"
+          accessibilityRole="button"
+          label="Menu"
+          onPress={() => setIsMenuOpen(true)}
         />
+      </Header>
 
-        <View
-          style={[styles.header, isLeftHanded && styles.headerMirrored]}
-          testID="game-header"
-        >
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => setIsMenuOpen(true)}
-            style={({ pressed }) => [
-              styles.menuButton,
-              pressed && styles.pressed,
-            ]}
-          >
-            <Text style={styles.menuButtonText}>Menu</Text>
-          </Pressable>
-        </View>
+      <GameViewPanel
+        animationFrame={game.animationFrame}
+        enemy={game.currentEnemy}
+        enemyHealthLossAmount={game.enemyHealthLossAmount}
+        enemyMaxHitPoints={game.currentEnemyMaxHitPoints}
+        floorItem={game.currentRoomItemSprite}
+        floorStairs={game.roomHasStairs}
+        hardTurnCounter={game.hardTurnCounter}
+        playerPosition={game.playerScenePosition}
+        roomDoorways={game.roomDoorways}
+        roomSceneActors={game.roomSceneActors}
+        playerEnergyLossAmount={game.playerEnergyLossAmount}
+        playerHealthLossAmount={game.playerHealthLossAmount}
+      />
 
-        <GameViewPanel
-          animationFrame={game.animationFrame}
-          enemy={game.currentEnemy}
-          enemyHealthLossAmount={game.enemyHealthLossAmount}
-          enemyMaxHitPoints={game.currentEnemyMaxHitPoints}
-          floorItem={game.currentRoomItemSprite}
-          floorStairs={game.roomHasStairs}
-          hardTurnCounter={game.hardTurnCounter}
-          playerPosition={game.playerScenePosition}
-          roomDoorways={game.roomDoorways}
-          roomSceneActors={game.roomSceneActors}
-          playerEnergyLossAmount={game.playerEnergyLossAmount}
-          playerHealthLossAmount={game.playerHealthLossAmount}
+      <ResourceBarGroup>
+        <ResourceBar
+          accessibilityLabel="Player health"
+          color={colors.health}
+          current={game.playerHealth}
+          icon="heart"
+          max={PLAYER_MAX_HEALTH}
+          panelPosition="first"
+          testID="player-health-bar"
         />
-
-        <View style={styles.playerBars}>
+        <ResourceBar
+          accessibilityLabel="Player energy"
+          color={colors.energy}
+          current={game.playerEnergy}
+          icon="bolt"
+          max={PLAYER_MAX_ENERGY}
+          panelPosition={game.hasTurnTimer ? "middle" : "last"}
+          testID="player-energy-bar"
+        />
+        {game.hasTurnTimer ? (
           <ResourceBar
-            accessibilityLabel="Player health"
-            color={colors.health}
-            current={game.playerHealth}
-            icon="heart"
-            max={PLAYER_MAX_HEALTH}
-            panelPosition="first"
-            testID="player-health-bar"
+            accessibilityLabel="Turn timer"
+            color={colors.timer}
+            current={game.turnTimeRemaining}
+            icon="hourglass-half"
+            max={game.turnDuration}
+            panelPosition="last"
+            testID="turn-timer"
           />
-          <ResourceBar
-            accessibilityLabel="Player energy"
-            color={colors.energy}
-            current={game.playerEnergy}
-            icon="bolt"
-            max={PLAYER_MAX_ENERGY}
-            panelPosition={game.hasTurnTimer ? "middle" : "last"}
-            testID="player-energy-bar"
-          />
-          {game.hasTurnTimer ? (
-            <ResourceBar
-              accessibilityLabel="Turn timer"
-              color={TURN_TIMER_COLOR}
-              current={game.turnTimeRemaining}
-              icon="hourglass-half"
-              max={game.turnDuration}
-              panelPosition="last"
-              testID="turn-timer"
-            />
-          ) : null}
-        </View>
+        ) : null}
+      </ResourceBarGroup>
 
-        <Text accessibilityLabel="Turn status" style={styles.turnStatus}>
-          {game.turnStatus}
-        </Text>
+      <DebugBar accessibilityLabel="Turn status" accessibilityRole="text">
+        {game.turnStatus}
+      </DebugBar>
 
-        <View
-          style={[
-            styles.lowerLayout,
-            isLeftHanded && styles.lowerLayoutMirrored,
-          ]}
-          testID="game-lower-layout"
-        >
-          <DungeonMap currentRoomId={game.currentRoomId} map={game.dungeonMap} />
-          <ActionControls
-            disabledActions={disabledActions}
-            disabledDirections={game.disabledDirections}
-            floorItemLabel={game.currentRoomItemLabel}
-            isItemDisabled={game.isItemDisabled}
-            isBusy={game.isResolving}
-            itemLabel={game.inventoryItemLabel}
-            itemSprite={game.inventoryItemSprite}
-            nextLevelNumber={game.roomHasStairs ? game.level + 1 : null}
-            playerAction={game.playerAction}
-          />
-        </View>
+      <Row>
+        {isLeftHanded ? controls : map}
+        {isLeftHanded ? map : controls}
+      </Row>
 
-        <PauseMenu
-          onBackToGame={() => setIsMenuOpen(false)}
-          onQuitToTitle={confirmQuitToTitle}
-          onSettingsChange={updateSettings}
-          settings={settings}
-          visible={isMenuOpen}
-        />
-      </View>
+      <PauseMenu
+        onBackToGame={() => setIsMenuOpen(false)}
+        onQuitToTitle={confirmQuitToTitle}
+        onSettingsChange={onSettingsChange}
+        settings={settings}
+        visible={isMenuOpen}
+      />
     </ScreenShell>
   );
 }
@@ -231,60 +230,53 @@ function getDisabledActions({
   return [] satisfies PlayerAction[];
 }
 
-function createStyles(colors: ThemeColors) {
-  return StyleSheet.create({
-    container: {
-      flex: 1,
-      gap: 10,
-    },
-    engineLoop: {
-      height: 0,
-      opacity: 0,
-      width: 0,
-    },
-    header: {
-      flexDirection: "row",
-      justifyContent: "flex-start",
-      minHeight: 46,
-      paddingTop: 18,
-    },
-    headerMirrored: {
-      justifyContent: "flex-end",
-    },
-    lowerLayout: {
-      alignItems: "flex-end",
-      flex: 1,
-      flexDirection: "row",
-      gap: 14,
-      justifyContent: "space-between",
-      paddingBottom: 120,
-    },
-    lowerLayoutMirrored: {
-      flexDirection: "row-reverse",
-    },
-    menuButton: {
-      alignItems: "center",
-      justifyContent: "center",
-      minHeight: 36,
-      paddingHorizontal: 10,
-    },
-    menuButtonText: {
-      color: colors.ink,
-      fontSize: 14,
-      fontWeight: "900",
-    },
-    playerBars: {
-      gap: 6,
-    },
-    pressed: {
-      opacity: 0.72,
-    },
-    turnStatus: {
-      color: colors.fadedInk,
-      fontSize: 16,
-      fontWeight: "900",
-      minHeight: 22,
-      textAlign: "center",
-    },
-  });
+export function PauseMenu({
+  onBackToGame,
+  onQuitToTitle,
+  onSettingsChange,
+  settings,
+  visible,
+}: PauseMenuProps) {
+  return (
+    <StyledModal
+      accessibilityLabel="Game menu"
+      accessibilityRole="dialog"
+      animationType="fade"
+      onRequestClose={onBackToGame}
+      visible={visible}
+    >
+      <Title>Menu</Title>
+
+      <Container>
+        <ToggleButton
+          label="Dark Mode"
+          value={settings.appearance === "dark"}
+          onValueChange={(value) => {
+            onSettingsChange({ appearance: value ? "dark" : "light" });
+          }}
+        />
+        <ToggleButton
+          label="Vibration"
+          value={settings.vibrationEnabled}
+          onValueChange={(value) => {
+            onSettingsChange({ vibrationEnabled: value });
+          }}
+        />
+      </Container>
+
+      <PrimaryButton 
+        accessibilityLabel="Back to Game"
+        accessibilityRole="button"
+        label="Back to Game"
+        onPress={onBackToGame}
+      />
+
+      <DestructiveButton
+        accessibilityLabel="Quit to Title"
+        accessibilityRole="button"
+        label="Quit to Title"
+        onPress={onQuitToTitle}
+      />
+    </StyledModal>
+  );
 }

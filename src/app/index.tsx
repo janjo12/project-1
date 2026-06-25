@@ -5,16 +5,18 @@ import { Alert } from "react-native";
 import {
   Container,
   Footer,
-  FormField,
   Header,
+  Row,
+  StyledText,
   Title,
 } from "@/components/displays";
 import {
-  AppButton,
+  HelpButton,
+  NormalButton,
+  PrimaryButton,
   RadioGroup,
-  ScreenActionButton,
   SegmentedButton,
-  TextEntry,
+  TextEntry
 } from "@/components/inputs";
 import { ScreenShell } from "@/components/screen-shell";
 import { ThemeProvider } from "@/components/theme";
@@ -45,70 +47,80 @@ export default function Index() {
       <ScreenShell>
         <Container>
           <Header>
-            <ScreenActionButton
+            <NormalButton
               accessibilityLabel="Settings"
+              accessibilityRole="button"
               icon="cog"
               onPress={handleOpenSettings}
               testID="open-settings-button"
             />
           </Header>
-          <Title>[Title]</Title>
+          <Title>[Project 1]</Title>
           <Container>
-            <FormField
-              helpLabel="Difficulty help"
-              label="Difficulty"
-              onHelpPress={() =>
-                Alert.alert(
-                  "Difficulty",
-                  "Easy removes the turn timer, normal keeps a steady timer, and hard shortens the timer while limiting your total turns by dungeon size.",
-                )
-              }
-            >
+            <Row>
+              <StyledText>Difficulty</StyledText>
               <SegmentedButton
                 onChange={(difficulty) => updateSettings({ difficulty })}
                 options={["easy", "normal", "hard"] as const}
                 value={settings.difficulty}
               />
-            </FormField>
+              <HelpButton
+                accessibilityLabel="Difficulty help"
+                accessibilityRole="button"
+                onPress={() =>
+                  Alert.alert(
+                    "Difficulty",
+                    "Easy removes the turn timer, normal keeps a steady timer, and hard shortens the timer while limiting your total turns by dungeon size.",
+                  )
+                }
+              />
+            </Row>
 
-            <FormField
-              helpLabel="Seed help"
-              label="Seed"
-              onHelpPress={() =>
-                Alert.alert(
-                  "Seed",
-                  "A seed repeats the same dungeon layout. Leave it blank to generate a fresh random dungeon when you start.",
-                )
-              }
-            >
+            <Row>
+              <StyledText>Seed</StyledText>
               <TextEntry
                 accessibilityLabel="Seed"
+                accessibilityRole="textbox"
                 onChangeText={(seed) => updateSettings({ seed })}
                 placeholder="Random"
                 value={settings.seed}
               />
-            </FormField>
+              <HelpButton
+                accessibilityLabel="Seed help"
+                accessibilityRole="button"
+                onPress={() =>
+                  Alert.alert(
+                    "Seed",
+                    "A seed repeats the same dungeon layout. Leave it blank to generate a fresh random dungeon when you start.",
+                  )
+                }
+              />
+            </Row>
 
-            <FormField
-              helpLabel="Handedness help"
-              label="Handedness"
-              onHelpPress={() =>
-                Alert.alert(
-                  "Handedness",
-                  "Left or right changes the action layout so the controls sit closer to your preferred thumb.",
-                )
-              }
-            >
+            <Row>
+              <StyledText>Handedness</StyledText>
               <RadioGroup
                 onChange={(handedness) => updateSettings({ handedness })}
                 options={["left", "right"] as const}
                 value={settings.handedness}
               />
-            </FormField>
+              <HelpButton
+                accessibilityLabel="Handedness help"
+                accessibilityRole="button"
+                onPress={() =>
+                  Alert.alert(
+                    "Handedness",
+                    "Left or right changes the action layout so the controls sit closer to your preferred thumb.",
+                  )
+                }
+              />
+            </Row>
           </Container>
 
           <Footer>
-            <AppButton
+            <PrimaryButton
+              accessibilityLabel={isLoading ? "Loading" : "Start Game"}
+              accessibilityRole="button"
               label={isLoading ? "Loading" : "Start"}
               onPress={handleStartGame}
             />

@@ -165,6 +165,11 @@ function createStyles(colors: ThemeColors) {
       minHeight: 352,
       minWidth: 188,
     },
+    body: {
+      flex: 1,
+      flexDirection: "row",
+      gap: 4,
+    },
     title: {
       color: colors.ink,
       fontSize: 14,
@@ -189,10 +194,8 @@ function createStyles(colors: ThemeColors) {
       lineHeight: 15,
       textAlign: "center",
     },
-    body: {
-      flex: 1,
-      flexDirection: "row",
-      gap: 4,
+    currentAxisLabel: {
+      color: colors.mapCurrentRoom,
     },
     rowLabels: {
       gap: 2,
@@ -240,9 +243,6 @@ function createStyles(colors: ThemeColors) {
     },
     currentRoom: {
       backgroundColor: colors.mapCurrentRoom,
-    },
-    currentAxisLabel: {
-      color: colors.mapCurrentRoom,
     },
     stairsIcon: {
       color: colors.paper,

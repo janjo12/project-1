@@ -28,24 +28,23 @@ export function ScreenShell({ children, compact = false }: ScreenShellProps) {
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  scrollContent: {
-    backgroundColor: colors.paperDark,
-    flexGrow: 1,
-    padding: 18,
-  },
-  compactScrollContent: {
-    padding: 12,
-  },
-  phoneFrame: {
-    backgroundColor: colors.paper,
-    flex: 1,
-    gap: 24,
-    minHeight: 760,
-    padding: 28,
-  },
-  compactPhoneFrame: {
-    minHeight: 820,
-    padding: 14,
-  },
+    scrollContent: {
+      backgroundColor: colors.paper,
+      flexGrow: 1,
+    },
+    compactScrollContent: {
+      backgroundColor: colors.paper,
+    },
+    phoneFrame: {
+      backgroundColor: colors.paper,
+      flex: 1,
+      gap: 24,
+      padding: 20,
+      width: "100%",
+    },
+    compactPhoneFrame: {
+      gap: 10,
+      padding: 14,
+    },
   });
 }
