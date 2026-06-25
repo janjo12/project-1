@@ -55,7 +55,7 @@ export default function Index() {
               testID="open-settings-button"
             />
           </Header>
-          <Title>[Project 1]</Title>
+          <Title>{"\n"}[Project 1]{"\n"}</Title>
           <Container>
             <Row>
               <StyledText>Difficulty</StyledText>
@@ -70,7 +70,7 @@ export default function Index() {
                 onPress={() =>
                   Alert.alert(
                     "Difficulty",
-                    "Easy removes the turn timer, normal keeps a steady timer, and hard shortens the timer while limiting your total turns by dungeon size.",
+                    "Choose Easy for a casual experience. Normal adds a timer for each turn, and Hard requires you beat each level in a certain number of turns.",
                   )
                 }
               />
@@ -91,7 +91,7 @@ export default function Index() {
                 onPress={() =>
                   Alert.alert(
                     "Seed",
-                    "A seed repeats the same dungeon layout. Leave it blank to generate a fresh random dungeon when you start.",
+                    "Used for determining the random layout of each level.",
                   )
                 }
               />

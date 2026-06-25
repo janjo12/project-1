@@ -87,7 +87,7 @@ export function CancelButton({ label, onPress }: CancelButtonProps) {
       accessibilityRole="button"
       onPress={onPress}
       style={({ pressed }) => [
-        styles.textButton,
+        styles.cancelButton,
         pressed && styles.pressed,
       ]}
     >
@@ -105,11 +105,11 @@ export function DestructiveButton({ label, onPress }: DestructiveButtonProps) {
       accessibilityRole="button"
       onPress={onPress}
       style={({ pressed }) => [
-        styles.textButton,
+        styles.destructiveButton,
         pressed && styles.pressed,
       ]}
     >
-      <Text style={[styles.label, styles.secondaryLabel]}>{label}</Text>
+      <Text style={[styles.label, styles.destructiveLabel]}>{label}</Text>
     </Pressable>
   );
 }
@@ -319,6 +319,14 @@ export function ToggleButton({
   
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
+    cancelButton: {
+      alignItems: "center",
+      borderCurve: "continuous",
+      borderRadius: 8,
+      justifyContent: "center",
+      minHeight: 40,
+      paddingHorizontal: 8,
+    },
     control: {
       backgroundColor: colors.paperLight,
       borderColor: colors.ink,
@@ -330,9 +338,20 @@ function createStyles(colors: ThemeColors) {
       minWidth: 0,
       overflow: "hidden",
     },
+    destructiveButton: {
+      alignItems: "center",
+      backgroundColor: colors.paper,
+      borderColor: colors.health,
+      borderCurve: "continuous",
+      borderRadius: 28,
+      borderWidth: 3,
+      justifyContent: "center",
+      minHeight: 56,
+      paddingHorizontal: 20,
+      paddingVertical: 12,
+    },
     destructiveLabel: {
       color: colors.health,
-      fontSize: 22,
     },
     helpIcon: {
       color: colors.ink,

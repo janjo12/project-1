@@ -8,10 +8,6 @@ import {
   type Dispatch,
   type SetStateAction,
 } from "react";
-import type {
-  GameEngineSystem,
-  GameEngineUpdateEventOptionType,
-} from "react-native-game-engine";
 
 import type {
   RoomDoorways,
@@ -30,7 +26,6 @@ import {
   createAndSaveSeededDungeonMap,
   createSeededDungeonMap,
   damageMonsterInRoom,
-  getActiveRooms,
   getConnectedRoomId,
   getCurrentRoom,
   getCurrentRoomId,
@@ -42,8 +37,8 @@ import {
   getRoomItem,
   getRoomItemId,
   getRoomMonster,
+  getTargetableRoomMonsterRefs,
   moveCurrentPosition,
-  moveWerewolfToRoom,
   POSSIBLE_ITEMS,
   removeItemFromRoom,
   saveDungeonMap,
@@ -55,14 +50,25 @@ import {
   type ItemId,
   type WorldMonster,
 } from "@/utils/dungeon-map";
+import {
+  applyWerewolfChaseAfterAction,
+  getHardTurnLimit,
+  getTurnDuration,
+} from "@/hooks/run-game-policies";
 import type { Difficulty } from "@/utils/settings-storage";
+export { GameLoopTimer, runGameLoop } from "@/hooks/run-game-loop";
+export {
+  applyWerewolfChaseAfterAction,
+  getHardTurnLimit,
+  getTurnDuration,
+  HARD_TURN_LIMIT,
+  TURN_DURATION,
+} from "@/hooks/run-game-policies";
 //#endregion
 
 //#region constants and types
 export const PLAYER_MAX_HEALTH = PLAYER.maxHealth;
 export const PLAYER_MAX_ENERGY = PLAYER.maxEnergy;
-export const HARD_TURN_LIMIT = 30;
-export const TURN_DURATION = 6000;
 
 type PlayerAction =
   | "attack"
@@ -76,7 +82,6 @@ type PlayerAction =
   | "pickup-item"
   | "special";
 
-const GAME_LOOP_TICK = 100;
 const TURN_TIMEOUT_ACTION = "defend" satisfies PlayerAction;
 const moveActionDirections = {
   "move-east": "east",
@@ -113,94 +118,6 @@ type UseGameRunOptions = {
   vibrationEnabled: boolean;
 };
 
-type GameLoopEntity = {
-  elapsed: number;
-  expired: boolean;
-  isTurnClockActive: () => boolean;
-  onExpire: () => void;
-  onFrame: (delta: number, turnTimeRemaining?: number) => void;
-  resetKey: number;
-  turnDuration: number;
-};
-
-type GameLoopEntities = {
-  gameLoop: GameLoopEntity;
-};
-//#endregion
-
-//#region game loop and system
-export class GameLoopTimer { // this is a custom timer class that can be started and stopped, and allows subscribers to be notified of the elapsed time at regular intervals
-  private currentTime = 0;
-  private intervalId: ReturnType<typeof setInterval> | null = null;
-  private subscribers: ((time: number) => void)[] = [];
-
-  start() {
-    if (this.intervalId) {
-      return;
-    }
-
-    this.intervalId = setInterval(() => {
-      this.currentTime += GAME_LOOP_TICK;
-      this.subscribers.forEach((subscriber) => subscriber(this.currentTime));
-    }, GAME_LOOP_TICK);
-  }
-
-  stop() {
-    if (!this.intervalId) {
-      return;
-    }
-
-    clearInterval(this.intervalId);
-    this.intervalId = null;
-  }
-
-  subscribe(callback: (time: number) => void) {
-    if (!this.subscribers.includes(callback)) {
-      this.subscribers.push(callback);
-    }
-  }
-
-  unsubscribe(callback: (time: number) => void) {
-    this.subscribers = this.subscribers.filter(
-      (subscriber) => subscriber !== callback,
-    );
-  }
-}
-
-export const runGameLoop: GameEngineSystem = (
-  entities: GameLoopEntities,
-  { time }: GameEngineUpdateEventOptionType,
-) => { // this is the main game loop system that advances the game state based on the elapsed time and turn timer
-  const loop = entities.gameLoop;
-
-  if (!loop) {
-    return entities;
-  }
-
-  const delta = Math.max(0, time.delta || GAME_LOOP_TICK);
-  let turnTimeRemaining: number | undefined;
-  let didExpire = false;
-  const turnDuration = Math.max(1, loop.turnDuration);
-
-  if (loop.isTurnClockActive() && !loop.expired) {
-    loop.elapsed = Math.min(turnDuration, loop.elapsed + delta);
-    turnTimeRemaining = turnDuration - loop.elapsed;
-
-    if (loop.elapsed >= turnDuration) {
-      loop.expired = true;
-      didExpire = true;
-      turnTimeRemaining = 0;
-    }
-  }
-
-  loop.onFrame(delta, turnTimeRemaining);
-
-  if (didExpire) {
-    loop.onExpire();
-  }
-
-  return entities;
-};
 //#endregion
 
 //#region helper functions
@@ -217,39 +134,6 @@ function restartAnimations(
 
     return nextFrame;
   });
-}
-
-export function getHardTurnLimit({ // the hard turn limit is determined by the number of active rooms in the level, multiplied by a factor (in this case, 3)
-  difficulty,
-  map,
-  level,
-  seed,
-}: {
-  difficulty: Difficulty;
-  map: DungeonMapType;
-  level: number;
-  seed: string;
-}) {
-  void level;
-  void seed;
-
-  if (difficulty !== "hard") {
-    return HARD_TURN_LIMIT;
-  }
-
-  return Math.max(1, getActiveRooms(map).length * 3);
-}
-
-export function getTurnDuration({ // the turn duration is determined by the difficulty and level, with a minimum of 2000ms
-  difficulty,
-  level,
-}: {
-  difficulty: Difficulty;
-  level: number;
-}) {
-  const startingDuration = difficulty === "hard" ? 5000 : TURN_DURATION;
-
-  return Math.max(2000, startingDuration - (level - 1) * 30);
 }
 
 function createLevelMap(seed: string, level: number, startingPosition?: GridPosition) {
@@ -418,25 +302,24 @@ function getRoomSceneActors({
   const seenItemIds = new Set<string>();
   const sceneActors: RoomSceneActor[] = [];
 
-  room.contents.forEach((content) => {
-    if (content.type === "monster") {
-      const monster = dungeonMap.entities.monsters[content.id];
+  getTargetableRoomMonsterRefs(dungeonMap, room).forEach((content) => {
+    const monster = dungeonMap.entities.monsters[content.id];
 
-      if (!monster || monster.currentHealth <= 0 || seenMonsterIds.has(monster.id)) {
-        return;
-      }
-
-      seenMonsterIds.add(monster.id);
-      sceneActors.push(
-        createMonsterSceneActor({
-          isActive: monster.id === currentMonsterId,
-          monster,
-          position: "center",
-        }),
-      );
+    if (!monster || seenMonsterIds.has(monster.id)) {
       return;
     }
 
+    seenMonsterIds.add(monster.id);
+    sceneActors.push(
+      createMonsterSceneActor({
+        isActive: monster.id === currentMonsterId,
+        monster,
+        position: "center",
+      }),
+    );
+  });
+
+  room.contents.forEach((content) => {
     if (content.type === "item") {
       const item = dungeonMap.entities.items[content.id];
 
@@ -482,7 +365,10 @@ function getRoomSceneActors({
     );
   });
 
-  return sceneActors;
+  return sceneActors.sort(
+    (leftActor, rightActor) =>
+      Number(Boolean(leftActor.isActive)) - Number(Boolean(rightActor.isActive)),
+  );
 }
 
 type RunSnapshotOptions = {
@@ -653,6 +539,7 @@ function swapRoomItemWithInventory({
     ? addItemToRoom(mapWithoutPickedItem, currentRoomId, inventoryItem)
     : mapWithoutPickedItem;
 }
+
 //#endregion
 
 export function useRunGame({
@@ -871,6 +758,31 @@ export function useRunGame({
     }
   }, [difficulty, onGameOver, schedule, turnDuration]);
 
+  const finishNonMoveTurn = useCallback(
+    ({
+      mapAtEnd,
+      roomId,
+    }: {
+      mapAtEnd?: DungeonMapType;
+      roomId: string;
+    }) => {
+      if (werewolfHasBeenEncounteredRef.current) {
+        commitMap(
+          (map) =>
+            applyWerewolfChaseAfterAction({
+              hasEncounteredWerewolf: true,
+              map,
+              roomId,
+            }),
+          mapAtEnd,
+        );
+      }
+
+      finishTurn();
+    },
+    [commitMap, finishTurn],
+  );
+
   const startEnemyMove = useCallback(
     ({
       isDefending,
@@ -909,14 +821,10 @@ export function useRunGame({
           });
         }
 
-        if (werewolfHasBeenEncounteredRef.current) {
-          commitMap((map) => moveWerewolfToRoom(map, roomId), mapAtEnd);
-        }
-
-        finishTurn();
+        finishNonMoveTurn({ mapAtEnd, roomId });
       });
     },
-    [commitMap, finishTurn, onGameOver, schedule, triggerDamageHaptic],
+    [finishNonMoveTurn, onGameOver, schedule, triggerDamageHaptic],
   );
 
   const finishPlayerAction = useCallback(
@@ -943,9 +851,9 @@ export function useRunGame({
         return;
       }
 
-      finishTurn();
+      finishNonMoveTurn({ mapAtEnd, roomId: startedRoomId });
     },
-    [dungeonMap, finishTurn, startEnemyMove],
+    [dungeonMap, finishNonMoveTurn, startEnemyMove],
   );
 
   const spendSpecialEnergy = useCallback(() => {
@@ -987,7 +895,7 @@ export function useRunGame({
 
       if (!hasRoomEnemy) {
         if (action === TURN_TIMEOUT_ACTION) {
-          finishTurn();
+          finishNonMoveTurn({ roomId: currentRoomId });
         }
         return;
       }
@@ -1007,7 +915,7 @@ export function useRunGame({
       }
 
       if (!currentMonster) {
-        finishTurn();
+        finishNonMoveTurn({ roomId: currentRoomId });
         return;
       }
 
@@ -1026,7 +934,7 @@ export function useRunGame({
       commitPlayerAttack,
       currentMonster,
       finishPlayerAction,
-      finishTurn,
+      finishNonMoveTurn,
       hasLost,
       hasRoomEnemy,
       isResolving,

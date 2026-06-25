@@ -600,29 +600,68 @@ export function getGuardedDirections(map: DungeonMap, roomId: string) {
   return directions.filter((direction) => room[direction] === "guarded");
 }
 
-function getMonsterFromRoom(map: DungeonMap, room: DungeonRoom | undefined) {
-  const monsterId = room?.contents.find((content) => content.type === "monster")?.id;
+export function prioritizeRoomContentsForTargeting(
+  map: DungeonMap,
+  contents: RoomContents,
+) {
+  return [...contents].sort((left, right) => {
+    const leftMonster =
+      left.type === "monster" ? map.entities.monsters[left.id] : null;
+    const rightMonster =
+      right.type === "monster" ? map.entities.monsters[right.id] : null;
 
-  return monsterId ? map.entities.monsters[monsterId] ?? null : null;
+    return Number(Boolean(leftMonster?.chases)) - Number(Boolean(rightMonster?.chases));
+  });
+}
+
+export function getTargetableRoomMonsterRefs(
+  map: DungeonMap,
+  room: DungeonRoom | undefined,
+) {
+  return prioritizeRoomContentsForTargeting(map, room?.contents ?? []).filter(
+    (content): content is RoomMonsterRef => {
+      const monster = content.type === "monster" ? map.entities.monsters[content.id] : null;
+
+      return Boolean(monster && monster.currentHealth > 0);
+    },
+  );
+}
+
+function getLivingMonster(map: DungeonMap, monsterId: string) {
+  const monster = map.entities.monsters[monsterId] ?? null;
+
+  return monster && monster.currentHealth > 0 ? monster : null;
+}
+
+export function getTargetableMonsters(
+  map: DungeonMap,
+  room: DungeonRoom | undefined,
+) {
+  if (!room) {
+    return [];
+  }
+
+  const monsters = [
+    ...getTargetableRoomMonsterRefs(map, room)
+      .map((monsterRef) => getLivingMonster(map, monsterRef.id))
+      .filter((monster): monster is WorldMonster => Boolean(monster)),
+    ...(Object.keys(directionDeltas) as Direction[])
+      .map((direction) => getDoorwayGuardPlacement(map, room.id, direction))
+      .map((guard) => (guard ? getLivingMonster(map, guard.monsterId) : null))
+      .filter((monster): monster is WorldMonster => Boolean(monster)),
+  ];
+  const uniqueMonsters = [
+    ...new Map(monsters.map((monster) => [monster.id, monster])).values(),
+  ];
+
+  return uniqueMonsters.sort(
+    (leftMonster, rightMonster) =>
+      Number(Boolean(leftMonster.chases)) - Number(Boolean(rightMonster.chases)),
+  );
 }
 
 export function getRoomMonster(map: DungeonMap, room: DungeonRoom | undefined) {
-  const roomMonster = getMonsterFromRoom(map, room);
-
-  if (roomMonster && roomMonster.currentHealth > 0) {
-    return roomMonster;
-  }
-
-  if (!room) {
-    return null;
-  }
-
-  const guardedMonster = (Object.keys(directionDeltas) as Direction[])
-    .map((direction) => getDoorwayGuardPlacement(map, room.id, direction))
-    .map((guard) => (guard ? map.entities.monsters[guard.monsterId] ?? null : null))
-    .find((monster): monster is WorldMonster => Boolean(monster));
-
-  return guardedMonster && guardedMonster.currentHealth > 0 ? guardedMonster : null;
+  return getTargetableMonsters(map, room)[0] ?? null;
 }
 
 export function getWerewolf(map: DungeonMap) {
@@ -838,10 +877,10 @@ export function moveWerewolfToRoom(map: DungeonMap, roomId: string) {
 
         return {
           ...room,
-          contents: [
-            { id: werewolf.id, type: "monster" } satisfies RoomMonsterRef,
+          contents: prioritizeRoomContentsForTargeting(map, [
             ...contentsWithoutWerewolf,
-          ],
+            { id: werewolf.id, type: "monster" } satisfies RoomMonsterRef,
+          ]),
         };
       }),
     ),

@@ -1,7 +1,7 @@
 //#region imports
 import { router, useLocalSearchParams } from "expo-router";
 
-import { Container, StyledText, Title } from "@/components/displays";
+import { Container, Title } from "@/components/displays";
 import { PrimaryButton } from "@/components/inputs";
 import { ScreenShell } from "@/components/screen-shell";
 import {
@@ -13,27 +13,19 @@ import { useGameSettings } from "@/hooks/use-game-settings";
 
 export default function GameOverRoute() {
   const { score } = useLocalSearchParams<{ score?: string }>();
-
-  return (
-    <GameOverScreen
-      score={score ?? "0"}
-      onReturnToTitle={() => router.replace("/")}
-    />
-  );
-}
-
-export function GameOverScreen({
-  score, onReturnToTitle}: {score: string; onReturnToTitle: () => void}) {
+  const onReturnToTitle = () => {
+    router.replace("/");
+  };
 
   return (
     <ThemeProvider appearance={useGameSettings().settings.appearance}>
       <ScreenShell>
         <Container>
-          <Title>Game Over</Title>
+          <Title>{"\n\n\n"}Game Over</Title>
 
-          <StyledText>
-            Score: {score}
-          </StyledText>
+          <Title>
+            {"\n"}Score: {score ?? "0"}{"\n"}
+          </Title>
 
           <PrimaryButton 
             accessibilityLabel="Return to Title"
