@@ -2,8 +2,7 @@ import type {
   GameEngineSystem,
   GameEngineUpdateEventOptionType,
 } from "react-native-game-engine";
-
-const GAME_LOOP_TICK = 100;
+import { GAME_PARAMETERS } from "@/gameparameters";
 
 type GameLoopEntity = {
   elapsed: number;
@@ -30,9 +29,9 @@ export class GameLoopTimer {
     }
 
     this.intervalId = setInterval(() => {
-      this.currentTime += GAME_LOOP_TICK;
+      this.currentTime += GAME_PARAMETERS.turn.gameLoopTickMs;
       this.subscribers.forEach((subscriber) => subscriber(this.currentTime));
-    }, GAME_LOOP_TICK);
+    }, GAME_PARAMETERS.turn.gameLoopTickMs);
   }
 
   stop() {
@@ -67,7 +66,7 @@ export const runGameLoop: GameEngineSystem = (
     return entities;
   }
 
-  const delta = Math.max(0, time.delta || GAME_LOOP_TICK);
+  const delta = Math.max(0, time.delta || GAME_PARAMETERS.turn.gameLoopTickMs);
   const turnDuration = Math.max(1, loop.turnDuration);
   let turnTimeRemaining: number | undefined;
   let didExpire = false;

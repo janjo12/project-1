@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View } from "react-native";
+import { GAME_PARAMETERS } from "@/gameparameters";
 
 type CombatantSpriteProps = {
   accessibilityLabel: string;
@@ -9,8 +10,6 @@ type CombatantSpriteProps = {
   sprite: string;
   scale?: number;
 };
-
-const ATTACK_DISTANCE = 20; // the distance the sprite moves during an attack animation
 
 export function CombatantSprite({
   accessibilityLabel,
@@ -56,7 +55,11 @@ function getAttackOffset(
   const direction = attackDirection === "right" ? 1 : -1;
   const mirroredProgress = progress <= 0.5 ? progress / 0.5 : (1 - progress) / 0.5;
 
-  return direction * ATTACK_DISTANCE * mirroredProgress;
+  return (
+    direction *
+    GAME_PARAMETERS.animation.attackTravelDistance *
+    mirroredProgress
+  );
 }
 
 function getDamageOpacity(progress: number | null) {

@@ -1,8 +1,10 @@
-import { FontAwesome } from "@expo/vector-icons";
-import { StyleSheet, Text, View, type ViewStyle } from "react-native";
+import { Pressable, View, type ViewStyle } from "react-native";
 
 import { CombatantSprite } from "@/components/combatant-sprite";
-import { type ThemeColors, useThemeColors } from "@/components/theme";
+import { EnemyHealthBar, FloatingResourceLoss } from "@/components/room-combat-feedback";
+import { RoomWalls, SceneSprite } from "@/components/room-walls";
+import { createStyles } from "@/components/room-scene-styles";
+import { useThemeColors } from "@/components/theme";
 import { COMBAT_ANIMATION, type CombatAnimationFrame } from "@/entities";
 
 export type ScenePosition = "top" | "bottom" | "left" | "right" | "center";
@@ -11,6 +13,7 @@ type DoorState = "guarded" | "locked" | "open" | "wall";
 export type RoomDoorways = Record<DoorPosition, DoorState>;
 
 export type RoomSceneActor = {
+  id: string;
   currentHealth?: number;
   sprite: string;
   kind: "enemy" | "item" | "stairs";
@@ -21,21 +24,23 @@ export type RoomSceneActor = {
 };
 
 type RoomSceneProps = {
+  canUnlockDoors?: boolean;
   animationFrame: CombatAnimationFrame;
   bounceOffset: number;
   doorways: RoomDoorways;
   enemyHealthLossAmount: number;
-  enemyMaxHitPoints: number;
   actors: RoomSceneActor[];
   playerEnergyLossAmount: number;
   playerHealthLossAmount: number;
   playerPosition: ScenePosition;
   playerSprite: string;
   sceneScale: number;
+  disabled?: boolean;
+  onActorPress?: (actor: RoomSceneActor) => void;
+  onDoorwayPress?: (position: DoorPosition) => void;
+  onPlayerPress?: () => void;
 };
 
-const DOOR_GUARD_ICON = "\u274C";
-const DOOR_LOCK_ICON = "\uD83D\uDD12";
 const SCENE_SPRITE_HALF_SIZE = 32;
 
 export function RoomScene({
@@ -44,19 +49,28 @@ export function RoomScene({
   bounceOffset,
   doorways,
   enemyHealthLossAmount,
-  enemyMaxHitPoints,
   playerEnergyLossAmount,
   playerHealthLossAmount,
   playerPosition,
   playerSprite,
   sceneScale,
+  canUnlockDoors = false,
+  disabled = false,
+  onActorPress,
+  onDoorwayPress,
+  onPlayerPress,
 }: RoomSceneProps) {
   const colors = useThemeColors();
   const styles = createStyles(colors);
 
   return (
     <View style={styles.sceneArea}>
-      <RoomWalls doorways={doorways} />
+      <RoomWalls
+        canUnlockDoors={canUnlockDoors}
+        disabled={disabled}
+        doorways={doorways}
+        onPress={onDoorwayPress}
+      />
 
       {actors.map((actor, index) => (
         <SceneActor
@@ -64,8 +78,9 @@ export function RoomScene({
           animationFrame={animationFrame}
           bounceOffset={bounceOffset}
           enemyHealthLossAmount={enemyHealthLossAmount}
-          enemyMaxHitPoints={enemyMaxHitPoints}
           key={`${actor.kind}-${actor.label}-${index}`}
+          disabled={disabled}
+          onPress={onActorPress}
           sceneScale={sceneScale}
         />
       ))}
@@ -78,6 +93,8 @@ export function RoomScene({
         position={playerPosition}
         sceneScale={sceneScale}
         sprite={playerSprite}
+        disabled={disabled}
+        onPress={onPlayerPress}
       />
     </View>
   );
@@ -88,8 +105,9 @@ type SceneActorProps = {
   animationFrame: CombatAnimationFrame;
   bounceOffset: number;
   enemyHealthLossAmount: number;
-  enemyMaxHitPoints: number;
   sceneScale: number;
+  disabled: boolean;
+  onPress?: (actor: RoomSceneActor) => void;
 };
 
 function SceneActor({
@@ -97,18 +115,26 @@ function SceneActor({
   animationFrame,
   bounceOffset,
   enemyHealthLossAmount,
-  enemyMaxHitPoints,
   sceneScale,
+  disabled,
+  onPress,
 }: SceneActorProps) {
   const colors = useThemeColors();
   const styles = createStyles(colors);
   const isActive = actor.isActive ?? true;
 
   return (
-    <View
-      style={[
+    <Pressable
+      accessibilityLabel={actor.label}
+      accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      hitSlop={8}
+      onPress={() => onPress?.(actor)}
+      style={({ pressed }) => [
         styles.actorPosition,
         getActorPosition(actor.position ?? "center"),
+        pressed && styles.pressedActor,
       ]}
     >
       {actor.kind === "enemy" ? (
@@ -152,7 +178,7 @@ function SceneActor({
               accessibilityLabel="Enemy health"
               color={colors.health}
               current={actor.currentHealth ?? 1}
-              max={actor.maxHealth ?? enemyMaxHitPoints}
+              max={actor.maxHealth ?? 1}
               testID="enemy-health-bar"
             />
           </View>
@@ -164,7 +190,7 @@ function SceneActor({
           scale={sceneScale}
         />
       )}
-    </View>
+    </Pressable>
   );
 }
 
@@ -176,6 +202,8 @@ type PlayerActorProps = {
   position: ScenePosition;
   sceneScale: number;
   sprite: string;
+  disabled: boolean;
+  onPress?: () => void;
 };
 
 function PlayerActor({
@@ -186,12 +214,27 @@ function PlayerActor({
   position,
   sceneScale,
   sprite,
+  disabled,
+  onPress,
 }: PlayerActorProps) {
   const colors = useThemeColors();
   const styles = createStyles(colors);
 
   return (
-    <View style={[styles.actorPosition, getActorPosition(position)]}>
+    <Pressable
+      accessibilityLabel="Defend"
+      accessibilityHint="Halves incoming damage and counterattacks"
+      accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      hitSlop={8}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.actorPosition,
+        getActorPosition(position),
+        pressed && styles.pressedActor,
+      ]}
+    >
       <FloatingResourceLoss
         amount={healthLossAmount}
         color={colors.health}
@@ -227,158 +270,7 @@ function PlayerActor({
         sprite={sprite}
         scale={sceneScale}
       />
-    </View>
-  );
-}
-
-type EnemyHealthBarProps = {
-  accessibilityLabel: string;
-  color: string;
-  current: number;
-  max: number;
-  testID: string;
-};
-
-function EnemyHealthBar({
-  accessibilityLabel,
-  color,
-  current,
-  max,
-  testID,
-}: EnemyHealthBarProps) {
-  const styles = createStyles(useThemeColors());
-  const safeMax = Math.max(1, max);
-  const fillPercent = Math.max(0, Math.min(100, (current / safeMax) * 100));
-
-  return (
-    <View
-      accessibilityLabel={accessibilityLabel}
-      style={styles.enemyHealthBarTrack}
-      testID={testID}
-    >
-      <View
-        style={[
-          styles.enemyHealthBarFill,
-          {
-            backgroundColor: color,
-            width: `${fillPercent}%`,
-          },
-        ]}
-        testID={`${testID}-fill`}
-      />
-    </View>
-  );
-}
-
-type FloatingResourceLossProps = {
-  amount: number;
-  color: string;
-  icon: "bolt" | "heart";
-  progress: number | null;
-  testID: string;
-};
-
-function FloatingResourceLoss({
-  amount,
-  color,
-  icon,
-  progress,
-  testID,
-}: FloatingResourceLossProps) {
-  const styles = createStyles(useThemeColors());
-
-  if (amount <= 0) {
-    return null;
-  }
-
-  const visibleProgress = progress ?? 1;
-  const opacity =
-    progress === null
-      ? 0
-      : progress < 0.62
-        ? 1
-        : Math.max(0, 1 - (progress - 0.62) / 0.38);
-  const translateY = -28 * visibleProgress;
-
-  return (
-    <View
-      style={[
-        styles.floatingLoss,
-        {
-          opacity,
-          transform: [{ translateY }],
-        },
-      ]}
-      testID={testID}
-    >
-      <Text style={[styles.floatingLossText, { color }]}>- {amount}</Text>
-      <FontAwesome color={color} name={icon} size={16} testID={`${testID}-icon`} />
-    </View>
-  );
-}
-
-function RoomWalls({ doorways }: { doorways: RoomDoorways }) {
-  const styles = createStyles(useThemeColors());
-  const positions: DoorPosition[] = ["top", "right", "bottom", "left"];
-
-  return (
-    <>
-      {positions.map((position) => {
-        const state = doorways[position];
-
-        if (state === "wall") {
-          return null;
-        }
-
-        return (
-          <View
-            accessibilityLabel={`${position} ${state} doorway`}
-            key={position}
-            style={[
-              styles.doorwayGap,
-              position === "top" || position === "bottom"
-                ? styles.horizontalDoorwayGap
-                : styles.verticalDoorwayGap,
-              position === "top" && styles.topDoorwayGap,
-              position === "bottom" && styles.bottomDoorwayGap,
-              position === "left" && styles.leftDoorwayGap,
-              position === "right" && styles.rightDoorwayGap,
-            ]}
-          >
-            {state === "guarded" ? (
-              <Text style={[styles.doorwayIcon, styles.guardedDoorwayIcon]}>
-                {DOOR_GUARD_ICON}
-              </Text>
-            ) : null}
-            {state === "locked" ? (
-              <Text style={[styles.doorwayIcon, styles.lockedDoorwayIcon]}>
-                {DOOR_LOCK_ICON}
-              </Text>
-            ) : null}
-          </View>
-        );
-      })}
-    </>
-  );
-}
-
-function SceneSprite({
-  accessibilityLabel,
-  sprite,
-  scale,
-}: {
-  accessibilityLabel: string;
-  sprite: string;
-  scale: number;
-}) {
-  const styles = createStyles(useThemeColors());
-
-  return (
-    <View style={{ transform: [{ scale }] }}>
-      <Text accessibilityLabel={accessibilityLabel} style={styles.sprite}>
-        {sprite}
-      </Text>
-    </View>
+    </Pressable>
   );
 }
 
@@ -438,94 +330,4 @@ function getActorPosition(position: ScenePosition): ViewStyle {
         ],
       };
   }
-}
-
-function createStyles(colors: ThemeColors) {
-  return StyleSheet.create({
-    actorContent: {
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    actorPosition: {
-      alignItems: "center",
-      justifyContent: "center",
-      position: "absolute",
-    },
-    doorwayGap: {
-      alignItems: "center",
-      backgroundColor: colors.paper,
-      justifyContent: "center",
-      position: "absolute",
-      zIndex: 3,
-    },
-    doorwayIcon: {
-      fontSize: 17,
-      fontWeight: "900",
-      lineHeight: 20,
-      textAlign: "center",
-    },
-    bottomDoorwayGap: {
-      bottom: -7,
-    },
-    enemyHealthBarFill: {
-      height: "100%",
-    },
-    enemyHealthBarTrack: {
-      backgroundColor: "rgba(239, 68, 68, 0.18)",
-      height: 4,
-      left: 7,
-      overflow: "hidden",
-      top: 3,
-      width: 56,
-    },
-    floatingLoss: {
-      alignItems: "center",
-      flexDirection: "row",
-      gap: 4,
-      justifyContent: "center",
-      position: "absolute",
-      top: -4,
-      zIndex: 2,
-    },
-    floatingLossText: {
-      fontSize: 18,
-      fontWeight: "900",
-    },
-    guardedDoorwayIcon: {
-      color: "#dc2626",
-    },
-    horizontalDoorwayGap: {
-      height: 12,
-      left: "42%",
-      width: "16%",
-    },
-    leftDoorwayGap: {
-      left: -7,
-    },
-    lockedDoorwayIcon: {
-      color: colors.ink,
-    },
-    rightDoorwayGap: {
-      right: -7,
-    },
-    sceneArea: {
-      borderColor: colors.ink,
-      borderWidth: 5,
-      height: 220,
-      overflow: "visible",
-      position: "relative",
-      width: "100%",
-    },
-    sprite: {
-      fontSize: 64,
-    },
-    topDoorwayGap: {
-      top: -7,
-    },
-    verticalDoorwayGap: {
-      height: "20%",
-      top: "40%",
-      width: 12,
-    },
-  });
 }

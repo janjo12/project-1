@@ -1,3 +1,5 @@
+import { GAME_PARAMETERS } from "@/gameparameters";
+
 export {
   advanceAnimationFrame,
   COMBAT_ANIMATION,
@@ -9,6 +11,6 @@ export const PLAYER: {
   maxEnergy: number;
   maxHealth: number;
 } = {
-  maxEnergy: 6,
-  maxHealth: 10,
+  maxEnergy: GAME_PARAMETERS.player.maxEnergy,
+  maxHealth: GAME_PARAMETERS.player.maxHealth,
 };

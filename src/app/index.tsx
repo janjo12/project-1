@@ -27,7 +27,7 @@ import { generateRandomSeed } from "@/utils/seed";
 
 const helpContent = {
   difficulty: {
-    body: "Choose Easy for a casual experience. Normal adds a timer for each turn, and Hard requires you beat each level in a certain number of turns.",
+    body: "Choose Easy for a casual experience. Normal requires you to beat each level in a limited number of turns. Hard keeps that turn limit and adds a timer for every turn.",
     title: "Difficulty",
   },
   handedness: {

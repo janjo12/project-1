@@ -1,9 +1,11 @@
-export const COMBAT_ANIMATION = { // in milliseconds
-  attackDuration: 500,
-  bounceDistance: 10,
-  bounceDuration: 1400,
-  damageDuration: 248,
-  resourceLossDuration: 680,
+import { GAME_PARAMETERS } from "@/gameparameters";
+
+export const COMBAT_ANIMATION = {
+  attackDuration: GAME_PARAMETERS.animation.attackDurationMs,
+  bounceDistance: GAME_PARAMETERS.animation.bounceDistance,
+  bounceDuration: GAME_PARAMETERS.animation.bounceDurationMs,
+  damageDuration: GAME_PARAMETERS.animation.damageDurationMs,
+  resourceLossDuration: GAME_PARAMETERS.animation.resourceLossDurationMs,
 } as const;
 
 export type CombatAnimationFrame = {

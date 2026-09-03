@@ -1,5 +1,5 @@
 //#region imports
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { GAME_PARAMETERS } from "@/gameparameters";
 //#endregion
 
 //#region types
@@ -87,7 +87,7 @@ export type DungeonMap = {
   startingRoomId: string;
 };
 
-type DungeonGenerationContext = {
+export type DungeonGenerationContext = {
   allRoomIds: Set<string>;
   entities: DungeonMap["entities"];
   level: number;
@@ -96,7 +96,7 @@ type DungeonGenerationContext = {
   startingRoomId: string;
 };
 
-type RoomConnection = {
+export type RoomConnection = {
   direction: Direction;
   roomId: string;
 };
@@ -119,62 +119,22 @@ export const mapColumns = [
 ];
 export const mapRows = Array.from({ length: 6 }, (_, index) => index + 1);
 
-export const POSSIBLE_MONSTERS: Omit<WorldMonster, "currentHealth" | "id">[] = [
-  {
-    damage: 1,
-    maximumHealth: 1,
-    name: "Pixel Golem",
-    sprite: "\uD83D\uDC7E",
-    type: "monster",
-  },
-  {
-    damage: 1,
-    maximumHealth: 4,
-    name: "Zombie",
-    sprite: "\uD83E\uDDDF",
-    type: "monster",
-  },
-  {
-    damage: 2,
-    maximumHealth: 2,
-    name: "Dragon",
-    sprite: "\uD83D\uDC09",
-    type: "monster",
-  },
-  {
-    damage: 1,
-    maximumHealth: 3,
-    name: "Vampire",
-    sprite: "\uD83E\uDDDB",
-    type: "monster",
-  },
-  {
-    damage: 1,
-    chases: true,
-    maximumHealth: 1,
-    name: "Werewolf",
-    sprite: "\uD83D\uDC3A",
-    type: "monster",
-  },
-];
+export const POSSIBLE_MONSTERS: Omit<WorldMonster, "currentHealth" | "id">[] =
+  GAME_PARAMETERS.monsters.map((monster) => ({ ...monster, type: "monster" as const }));
 
-export const POSSIBLE_ITEMS: WorldItem[] = [
-  { id: "energy-meal", sprite: "🍔", label: "Energy Meal", type: "item" },
-  { id: "health-potion", sprite: "🧪", label: "Health Potion", type: "item" },
-  { id: "key", sprite: "🗝️", label: "Key", type: "item" },
-  { id: "silver-bullet", sprite: "🔫",label: "Silver Bullet", type: "item" },
-];
+export const POSSIBLE_ITEMS: WorldItem[] = GAME_PARAMETERS.items.map((item) => ({
+  ...item,
+  type: "item" as const,
+}));
 
-const MAP_STORAGE_KEY = "project-1:dungeon-map";
-
-const directionDeltas: Record<Direction, { column: number; row: number }> = {
+export const directionDeltas: Record<Direction, { column: number; row: number }> = {
   east: { column: 0, row: 1 },
   north: { column: -1, row: 0 },
   south: { column: 1, row: 0 },
   west: { column: 0, row: -1 },
 };
 
-const oppositeDirections: Record<Direction, Direction> = {
+export const oppositeDirections: Record<Direction, Direction> = {
   east: "west",
   north: "south",
   south: "north",
@@ -183,7 +143,7 @@ const oppositeDirections: Record<Direction, Direction> = {
 //#endregion
 
 //#region small helper functions
-function getRoomId(position: GridPosition) {
+export function getRoomId(position: GridPosition) {
   return `${position.column}${position.row}`;
 }
 
@@ -205,7 +165,7 @@ export function getGridPosition(roomId: string): GridPosition | null {
   return position;
 }
 
-function getNeighbor(position: GridPosition, direction: Direction) {
+export function getNeighbor(position: GridPosition, direction: Direction) {
   const columnIndex = mapColumns.indexOf(position.column);
   const delta = directionDeltas[direction];
   const nextColumn = mapColumns[columnIndex + delta.column];
@@ -221,7 +181,7 @@ function getNeighbor(position: GridPosition, direction: Direction) {
   };
 }
 
-function shuffle<T>(items: T[], random: () => number) {
+export function shuffle<T>(items: T[], random: () => number) {
   const shuffledItems = [...items];
 
   for (let index = shuffledItems.length - 1; index > 0; index -= 1) {
@@ -255,7 +215,7 @@ export function createSeededRandom(seed: string) {
   };
 }
 
-function createEmptyGrid(): DungeonMapJson {
+export function createEmptyGrid(): DungeonMapJson {
   return mapRows.map((row) =>
     mapColumns.map((column) => ({
       column,
@@ -272,11 +232,11 @@ function createEmptyGrid(): DungeonMapJson {
   );
 }
 
-function findRoomInGrid(rooms: DungeonMapJson, roomId: string) {
+export function findRoomInGrid(rooms: DungeonMapJson, roomId: string) {
   return rooms.flat().find((room) => room.id === roomId);
 }
 
-function openConnection(rooms: DungeonMapJson, roomId: string, direction: Direction) {
+export function openConnection(rooms: DungeonMapJson, roomId: string, direction: Direction) {
   const room = findRoomInGrid(rooms, roomId);
 
   if (!room) {
@@ -294,7 +254,7 @@ function openConnection(rooms: DungeonMapJson, roomId: string, direction: Direct
   neighborRoom[oppositeDirections[direction]] = "open";
 }
 
-function setConnectionBoundary(
+export function setConnectionBoundary(
   rooms: DungeonMapJson,
   roomId: string,
   direction: Direction,
@@ -312,7 +272,7 @@ function setConnectionBoundary(
   neighborRoom[oppositeDirections[direction]] = boundary;
 }
 
-function getReachableRoomIds(
+export function getReachableRoomIds(
   rooms: DungeonMapJson,
   startingRoomId: string,
   blockedConnection?: { direction: Direction; roomId: string },
@@ -363,7 +323,7 @@ function getReachableRoomIds(
   return reachableRoomIds;
 }
 
-function getConnectedRoomIdFromRooms(
+export function getConnectedRoomIdFromRooms(
   rooms: DungeonMapJson,
   roomId: string,
   direction: Direction,
@@ -383,7 +343,7 @@ function getConnectedRoomIdFromRooms(
   return findRoomInGrid(rooms, getRoomId(neighbor))?.id ?? null;
 }
 
-function createMonster(index: number, roomId: string, random: () => number) {
+export function createMonster(index: number, roomId: string, random: () => number) {
   const monsters = POSSIBLE_MONSTERS.filter((monster) => !monster.chases);
   const monster = monsters[index % monsters.length];
 
@@ -394,7 +354,7 @@ function createMonster(index: number, roomId: string, random: () => number) {
   } satisfies WorldMonster;
 }
 
-function createWerewolf(roomId: string) {
+export function createWerewolf(roomId: string) {
   const werewolf = POSSIBLE_MONSTERS.find((monster) => monster.chases)!;
 
   return {
@@ -404,7 +364,7 @@ function createWerewolf(roomId: string) {
   } satisfies WorldMonster;
 }
 
-function getNeighborRoom(rooms: DungeonMapJson, roomId: string, direction: Direction) {
+export function getNeighborRoom(rooms: DungeonMapJson, roomId: string, direction: Direction) {
   const room = findRoomInGrid(rooms, roomId);
   const neighbor = room ? getNeighbor(room, direction) : null;
 
@@ -430,7 +390,7 @@ export function getDoorwayGuardPlacement(
   );
 }
 
-function createItem(itemId: ItemId, id: string) {
+export function createItem(itemId: ItemId, id: string) {
   const baseItem = POSSIBLE_ITEMS.find((item) => item.id === itemId)!;
 
   return {
@@ -440,7 +400,7 @@ function createItem(itemId: ItemId, id: string) {
   } satisfies WorldItem;
 }
 
-function placeDoorwayGuard(
+export function placeDoorwayGuard(
   map: DungeonMap,
   roomId: string,
   direction: Direction,
@@ -455,7 +415,7 @@ function placeDoorwayGuard(
   setConnectionBoundary(map.rooms, roomId, direction, "guarded");
 }
 
-function placeItem(
+export function placeItem(
   map: DungeonMap,
   candidateRoomIds: string[],
   itemId: ItemId,
@@ -484,742 +444,4 @@ function placeItem(
   }
 
   return false;
-}
-
-export function createSeededDungeonMap(
-  seed: string,
-  level: number,
-  startingPosition?: GridPosition,
-) {
-  const random = createSeededRandom(`${seed}:level:${level}`);
-
-  return createDungeonMap(level, random, startingPosition);
-}
-
-export async function saveDungeonMap(map: DungeonMap) {
-  await AsyncStorage.setItem(MAP_STORAGE_KEY, JSON.stringify(map));
-}
-
-export async function loadDungeonMap() {
-  const storedMap = await AsyncStorage.getItem(MAP_STORAGE_KEY);
-
-  return storedMap ? (JSON.parse(storedMap) as DungeonMap) : null;
-}
-
-export async function createAndSaveSeededDungeonMap(
-  seed: string,
-  level: number,
-  startingPosition?: GridPosition,
-) {
-  const map = createSeededDungeonMap(seed, level, startingPosition);
-
-  await saveDungeonMap(map);
-
-  return map;
-}
-
-export async function updateStoredDungeonMap(
-  updater: (map: DungeonMap) => DungeonMap,
-) {
-  const map = await loadDungeonMap();
-
-  if (!map) {
-    return null;
-  }
-
-  const nextMap = updater(map);
-
-  await saveDungeonMap(nextMap);
-
-  return nextMap;
-}
-
-export function getRooms(map: DungeonMap) {
-  return map.rooms.flat();
-}
-
-export function getRoom(map: DungeonMap, roomId: string) {
-  return getRooms(map).find((room) => room.id === roomId);
-}
-
-export function getCurrentRoom(map: DungeonMap) {
-  return getRooms(map).find((room) => room.isCurrentPosition);
-}
-
-export function getCurrentRoomId(map: DungeonMap) {
-  return getCurrentRoom(map)?.id ?? map.startingRoomId;
-}
-
-export function getConnectedRoomId(
-  map: DungeonMap,
-  roomId: string,
-  direction: Direction,
-) {
-  const room = getRoom(map, roomId);
-
-  if (room?.[direction] !== "open") {
-    return null;
-  }
-
-  const neighbor = getNeighbor(room, direction);
-
-  if (!neighbor) {
-    return null;
-  }
-
-  return getRoom(map, getRoomId(neighbor))?.id ?? null;
-}
-
-export function getOpenDirections(map: DungeonMap, roomId: string) {
-  const directions: Direction[] = ["north", "east", "south", "west"];
-
-  return directions.filter(
-    (direction) => getConnectedRoomId(map, roomId, direction) !== null,
-  );
-}
-
-export function getLockedDirections(map: DungeonMap, roomId: string) {
-  const room = getRoom(map, roomId);
-  const directions: Direction[] = ["north", "east", "south", "west"];
-
-  if (!room) {
-    return [];
-  }
-
-  return directions.filter((direction) => room[direction] === "locked");
-}
-
-export function getGuardedDirections(map: DungeonMap, roomId: string) {
-  const room = getRoom(map, roomId);
-  const directions: Direction[] = ["north", "east", "south", "west"];
-
-  if (!room) {
-    return [];
-  }
-
-  return directions.filter((direction) => room[direction] === "guarded");
-}
-
-function prioritizeRoomContentsForTargeting(map: DungeonMap, contents: RoomContents) {
-  return [...contents].sort((left, right) => {
-    const leftMonster =
-      left.type === "monster" ? map.entities.monsters[left.id] : null;
-    const rightMonster =
-      right.type === "monster" ? map.entities.monsters[right.id] : null;
-
-    return (
-      Number(Boolean(leftMonster?.chases)) -
-      Number(Boolean(rightMonster?.chases))
-    );
-  });
-}
-
-export function getTargetableRoomMonsterRefs(
-  map: DungeonMap,
-  room: DungeonRoom | undefined,
-) {
-  return prioritizeRoomContentsForTargeting(map, room?.contents ?? []).filter(
-    (content): content is RoomMonsterRef => {
-      const monster =
-        content.type === "monster" ? map.entities.monsters[content.id] : null;
-
-      return Boolean(monster && monster.currentHealth > 0);
-    },
-  );
-}
-
-function getLivingMonster(map: DungeonMap, monsterId: string) {
-  const monster = map.entities.monsters[monsterId] ?? null;
-
-  return monster && monster.currentHealth > 0 ? monster : null;
-}
-
-export function getTargetableMonsters(
-  map: DungeonMap,
-  room: DungeonRoom | undefined,
-) {
-  if (!room) {
-    return [];
-  }
-
-  const monsters = [
-    ...getTargetableRoomMonsterRefs(map, room)
-      .map((monsterRef) => getLivingMonster(map, monsterRef.id))
-      .filter((monster): monster is WorldMonster => Boolean(monster)),
-    ...(Object.keys(directionDeltas) as Direction[])
-      .map((direction) => getDoorwayGuardPlacement(map, room.id, direction))
-      .map((guard) => (guard ? getLivingMonster(map, guard.monsterId) : null))
-      .filter((monster): monster is WorldMonster => Boolean(monster)),
-  ];
-  const uniqueMonsters = [
-    ...new Map(monsters.map((monster) => [monster.id, monster])).values(),
-  ];
-
-  return uniqueMonsters.sort(
-    (leftMonster, rightMonster) =>
-      Number(Boolean(leftMonster.chases)) - Number(Boolean(rightMonster.chases)),
-  );
-}
-
-export function getRoomMonster(map: DungeonMap, room: DungeonRoom | undefined) {
-  return getTargetableMonsters(map, room)[0] ?? null;
-}
-
-export function getWerewolf(map: DungeonMap) {
-  return (
-    Object.values(map.entities.monsters).find(
-      (monster) => monster.chases && monster.currentHealth > 0,
-    ) ?? null
-  );
-}
-
-function getItemFromRoom(map: DungeonMap, room: DungeonRoom | undefined) {
-  const itemId = room?.contents.find((content) => content.type === "item")?.id;
-
-  return itemId ? map.entities.items[itemId] ?? null : null;
-}
-
-export function getRoomItem(map: DungeonMap, room: DungeonRoom | undefined) {
-  return getItemFromRoom(map, room);
-}
-
-export function getRoomItemId(map: DungeonMap, room: DungeonRoom | undefined) {
-  return getRoomItem(map, room)?.itemId ?? null;
-}
-
-export function hasRoomStairs(room: DungeonRoom | undefined) {
-  return Boolean(room?.contents.some((content) => content.type === "stairs"));
-}
-
-export function getStairsRoom(map: DungeonMap) {
-  return getRooms(map).find((room) => hasRoomStairs(room));
-}
-
-export function unlockDoor(
-  map: DungeonMap,
-  roomId: string,
-  direction: Direction,
-): DungeonMap {
-  return {
-    ...map,
-    rooms: map.rooms.map((row) =>
-      row.map((room) => {
-        if (room.id === roomId) {
-          return { ...room, [direction]: "open" };
-        }
-
-        const sourceRoom = getRoom(map, roomId);
-        const neighbor = sourceRoom ? getNeighbor(sourceRoom, direction) : null;
-
-        if (neighbor && room.id === getRoomId(neighbor)) {
-          return { ...room, [oppositeDirections[direction]]: "open" };
-        }
-
-        return room;
-      }),
-    ),
-  };
-}
-
-export function moveCurrentPosition(map: DungeonMap, nextRoomId: string) {
-  return {
-    ...map,
-    rooms: map.rooms.map((row) =>
-      row.map((room) => ({
-        ...room,
-        isCurrentPosition: room.id === nextRoomId,
-        isRevealed:
-          room.isRevealed || room.isCurrentPosition || room.id === nextRoomId,
-      })),
-    ),
-  };
-}
-
-export function damageMonsterInRoom(
-  map: DungeonMap,
-  roomId: string,
-  monsterId: string,
-  damage: number,
-) {
-  const nextMonster = map.entities.monsters[monsterId];
-
-  if (!nextMonster) {
-    return map;
-  }
-
-  const nextHealth = Math.max(0, nextMonster.currentHealth - damage);
-  const nextMap: DungeonMap = {
-    ...map,
-    entities: {
-      ...map.entities,
-      monsters: {
-        ...map.entities.monsters,
-        [monsterId]: {
-          ...nextMonster,
-          currentHealth: nextHealth,
-        },
-      },
-    },
-  };
-
-  const doorwayGuard = nextMap.entities.doorwayGuards[monsterId];
-
-  if (!doorwayGuard || nextHealth > 0) {
-    return nextMap;
-  }
-
-  const sourceRoom = getRoom(nextMap, doorwayGuard.roomId);
-  const neighbor = sourceRoom ? getNeighbor(sourceRoom, doorwayGuard.direction) : null;
-
-  const nextRooms = nextMap.rooms.map((row) =>
-    row.map((room) => {
-      if (room.id === doorwayGuard.roomId) {
-        return { ...room, [doorwayGuard.direction]: "open" };
-      }
-
-      if (neighbor && room.id === getRoomId(neighbor)) {
-        return { ...room, [oppositeDirections[doorwayGuard.direction]]: "open" };
-      }
-
-      return room;
-    }),
-  );
-
-  const { [monsterId]: _removedGuard, ...remainingDoorwayGuards } = nextMap.entities.doorwayGuards;
-
-  return {
-    ...nextMap,
-    entities: {
-      ...nextMap.entities,
-      doorwayGuards: remainingDoorwayGuards,
-    },
-    rooms: nextRooms,
-  };
-}
-
-export function removeItemFromRoom(map: DungeonMap, roomId: string, itemId: ItemId) {
-  return {
-    ...map,
-    entities: {
-      ...map.entities,
-      items: Object.fromEntries(
-        Object.entries(map.entities.items).filter(([, item]) => item.id !== itemId),
-      ),
-    },
-    rooms: map.rooms.map((row) =>
-      row.map((room) =>
-        room.id === roomId
-          ? {
-              ...room,
-              contents: room.contents.filter(
-                (content) => !(content.type === "item" && content.id === itemId),
-              ),
-            }
-          : room,
-      ),
-    ),
-  };
-}
-
-export function addItemToRoom(map: DungeonMap, roomId: string, itemId: ItemId) {
-  const nextItem = createItem(
-    itemId,
-    `${itemId}:${roomId}:${Date.now()}:${Math.floor(Math.random() * 1_000_000)}`,
-  );
-
-  return {
-    ...map,
-    entities: {
-      ...map.entities,
-      items: {
-        ...map.entities.items,
-        [nextItem.id]: nextItem,
-      },
-    },
-    rooms: map.rooms.map((row) =>
-      row.map((room) =>
-        room.id === roomId
-          ? {
-              ...room,
-              contents: [
-                ...room.contents,
-                { id: nextItem.id, type: "item" } satisfies RoomItemRef,
-              ],
-            }
-          : room,
-      ),
-    ),
-  };
-}
-
-export function moveWerewolfToRoom(map: DungeonMap, roomId: string) {
-  const werewolf = getWerewolf(map);
-
-  if (!werewolf) {
-    return map;
-  }
-
-  return {
-    ...map,
-    rooms: map.rooms.map((row) =>
-      row.map((room) => {
-        const contentsWithoutWerewolf = room.contents.filter(
-          (content) =>
-            content.type !== "monster" ||
-            !map.entities.monsters[content.id]?.chases,
-        );
-
-        if (room.id !== roomId) {
-          return {
-            ...room,
-            contents: contentsWithoutWerewolf,
-          };
-        }
-
-        return {
-          ...room,
-          contents: prioritizeRoomContentsForTargeting(map, [
-            ...contentsWithoutWerewolf,
-            { id: werewolf.id, type: "monster" } satisfies RoomMonsterRef,
-          ]),
-        };
-      }),
-    ),
-  };
-}
-
-export function getActiveRooms(map: DungeonMap) {
-  return getRooms(map).filter(
-    (room) =>
-      room.isRevealed ||
-      room.contents.length > 0 ||
-      getOpenDirections(map, room.id).length > 0 ||
-      getGuardedDirections(map, room.id).length > 0,
-  );
-}
-
-export function getRoomPosition(roomId: string) {
-  return getGridPosition(roomId);
-}
-//#endregion
-
-//#region large helper functions
-function createMapFromContext({
-  entities,
-  level,
-  rooms,
-  startingRoomId,
-}: DungeonGenerationContext): DungeonMap {
-  return {
-    columns: mapColumns,
-    entities,
-    level,
-    rooms,
-    rows: mapRows,
-    startingRoomId,
-  };
-}
-
-function growRoomNetwork({
-  allRoomIds,
-  random,
-  rooms,
-}: DungeonGenerationContext, totalRooms: number) {
-  while (allRoomIds.size < totalRooms) {
-    const shuffledRooms = shuffle([...allRoomIds], random);
-    let addedRoom = false;
-
-    for (const roomId of shuffledRooms) {
-      const room = findRoomInGrid(rooms, roomId);
-
-      if (!room) {
-        continue;
-      }
-
-      const directions = shuffle(
-        Object.keys(directionDeltas) as Direction[],
-        random,
-      );
-
-      for (const direction of directions) {
-        const neighbor = getNeighbor(room, direction);
-        const neighborId = neighbor ? getRoomId(neighbor) : null;
-
-        if (!neighborId || allRoomIds.has(neighborId)) {
-          continue;
-        }
-
-        openConnection(rooms, roomId, direction);
-        allRoomIds.add(neighborId);
-        addedRoom = true;
-        break;
-      }
-
-      if (addedRoom) {
-        break;
-      }
-    }
-
-    if (!addedRoom) {
-      break;
-    }
-  }
-}
-
-function addExtraRoomConnections({
-  allRoomIds,
-  random,
-  rooms,
-}: DungeonGenerationContext) {
-  [...allRoomIds].forEach((roomId) => {
-    const room = findRoomInGrid(rooms, roomId);
-
-    if (!room) {
-      return;
-    }
-
-    const directions = shuffle(Object.keys(directionDeltas) as Direction[], random);
-
-    directions.slice(0, 2).forEach((direction) => {
-      const neighbor = getNeighbor(room, direction);
-      const neighborId = neighbor ? getRoomId(neighbor) : null;
-
-      if (!neighborId || !allRoomIds.has(neighborId) || random() > 0.25) {
-        return;
-      }
-
-      openConnection(rooms, roomId, direction);
-    });
-  });
-}
-
-function getUniqueOpenConnections({
-  allRoomIds,
-  rooms,
-}: DungeonGenerationContext) {
-  return [...allRoomIds].flatMap((roomId) => {
-    const room = findRoomInGrid(rooms, roomId);
-
-    if (!room) {
-      return [] as RoomConnection[];
-    }
-
-    return (Object.keys(directionDeltas) as Direction[])
-      .filter((direction) => {
-        const nextRoomId = getConnectedRoomIdFromRooms(rooms, roomId, direction);
-
-        return (
-          room[direction] === "open" &&
-          nextRoomId !== null &&
-          roomId.localeCompare(nextRoomId) < 0
-        );
-      })
-      .map((direction) => ({ direction, roomId }));
-  });
-}
-
-function placeDoorwayGuards(context: DungeonGenerationContext) {
-  const doorwayConnections = getUniqueOpenConnections(context);
-  const doorwayGuardCount = Math.min(
-    doorwayConnections.length,
-    Math.max(0, context.allRoomIds.size / 2),
-  );
-
-  shuffle(doorwayConnections, context.random)
-    .slice(0, doorwayGuardCount)
-    .forEach((connection, index) => {
-      const monster = createMonster(
-        index,
-        `${connection.roomId}:${connection.direction}`,
-        context.random,
-      );
-
-      placeDoorwayGuard(
-        createMapFromContext(context),
-        connection.roomId,
-        connection.direction,
-        monster,
-      );
-    });
-}
-
-function placeStairsAndStartingRoom(context: DungeonGenerationContext) {
-  const stairsCandidates = [...context.allRoomIds].filter(
-    (roomId) => roomId !== context.startingRoomId,
-  );
-  const stairsRoomId =
-    stairsCandidates[Math.floor(context.random() * stairsCandidates.length)] ??
-    context.startingRoomId;
-
-  [...context.allRoomIds].forEach((roomId) => {
-    const room = findRoomInGrid(context.rooms, roomId);
-
-    if (!room) {
-      return;
-    }
-
-    if (roomId === context.startingRoomId) {
-      room.isCurrentPosition = true;
-      room.isRevealed = true;
-      return;
-    }
-
-    if (roomId === stairsRoomId) {
-      room.contents = [
-        { id: "stairs", label: "Stairs", type: "stairs" } satisfies RoomStairsRef,
-      ];
-    }
-  });
-}
-
-function lockRandomDoors(context: DungeonGenerationContext) {
-  const lockableConnections = getUniqueOpenConnections(context);
-  const lockedDoorCount = lockableConnections.length > 0 && context.random() < 0.7 ? 1 : 0;
-
-  for (let index = 0; index < lockedDoorCount; index += 1) {
-    const connection =
-      lockableConnections[Math.floor(context.random() * lockableConnections.length)];
-    const reachableRoomIds = [
-      ...getReachableRoomIds(context.rooms, context.startingRoomId, connection),
-    ];
-
-    if (
-      placeItem(
-        createMapFromContext(context),
-        reachableRoomIds,
-        "key",
-        context.random,
-      )
-    ) {
-      setConnectionBoundary(
-        context.rooms,
-        connection.roomId,
-        connection.direction,
-        "locked",
-      );
-    }
-  }
-}
-
-function getWerewolfCandidateRooms(context: DungeonGenerationContext) {
-  return [...context.allRoomIds].filter((roomId) => {
-    const room = findRoomInGrid(context.rooms, roomId);
-    const guardedDirections = (Object.keys(directionDeltas) as Direction[]).filter(
-      (direction) =>
-        Boolean(getDoorwayGuardPlacement(createMapFromContext(context), roomId, direction)),
-    );
-
-    return Boolean(
-      room &&
-        room.id !== context.startingRoomId &&
-        !room.contents.some((content) => content.type === "stairs") &&
-        guardedDirections.length === 0 &&
-        getReachableRoomIds(context.rooms, context.startingRoomId).has(room.id),
-    );
-  });
-}
-
-function placeWerewolfAndSilverBullet(
-  context: DungeonGenerationContext,
-  reachableRoomIds: string[],
-) {
-  const werewolfCandidateRooms = getWerewolfCandidateRooms(context);
-  const werewolfRoomId =
-    werewolfCandidateRooms.length > 0 && context.random() < 0.45
-      ? werewolfCandidateRooms[
-          Math.floor(context.random() * werewolfCandidateRooms.length)
-        ]
-      : null;
-
-  if (!werewolfRoomId) {
-    return;
-  }
-
-  const werewolfRoom = findRoomInGrid(context.rooms, werewolfRoomId);
-  const silverBulletRoomIds = reachableRoomIds.filter(
-    (roomId) => roomId !== werewolfRoomId,
-  );
-
-  if (
-    werewolfRoom &&
-    placeItem(
-      createMapFromContext(context),
-      silverBulletRoomIds,
-      "silver-bullet",
-      context.random,
-    )
-  ) {
-    const werewolf = createWerewolf(werewolfRoomId);
-
-    context.entities.monsters[werewolf.id] = werewolf;
-    werewolfRoom.contents = [
-      ...werewolfRoom.contents.filter((content) => content.type !== "monster"),
-      { id: werewolf.id, type: "monster" } satisfies RoomMonsterRef,
-    ];
-  }
-}
-
-function placeOptionalLoot(
-  context: DungeonGenerationContext,
-  reachableRoomIds: string[],
-) {
-  if (context.random() < 0.45) {
-    placeItem(
-      createMapFromContext(context),
-      reachableRoomIds,
-      "health-potion",
-      context.random,
-    );
-  }
-
-  if (context.random() < 0.45) {
-    placeItem(
-      createMapFromContext(context),
-      reachableRoomIds,
-      "energy-meal",
-      context.random,
-    );
-  }
-}
-//#endregion
-
-export function createDungeonMap(
-  level: number,
-  random: () => number,
-  startingPosition?: GridPosition,
-): DungeonMap {
-  const rooms = createEmptyGrid();
-  const entities = {
-    items: {} as Record<string, WorldItem>,
-    doorwayGuards: {} as Record<string, DoorwayGuard>,
-    monsters: {} as Record<string, WorldMonster>,
-  };
-  const finalStartingPosition = startingPosition ?? {
-    column: mapColumns[Math.floor(random() * mapColumns.length)],
-    row: mapRows[Math.floor(random() * mapRows.length)],
-  };
-  const startingRoomId = getRoomId(finalStartingPosition);
-  const allRoomIds = new Set([startingRoomId]);
-  const context: DungeonGenerationContext = {
-    allRoomIds,
-    entities,
-    level,
-    random,
-    rooms,
-    startingRoomId,
-  };
-  const totalRooms = Math.min(72, 7 + level + Math.floor(random() * 5));
-
-  growRoomNetwork(context, totalRooms);
-  addExtraRoomConnections(context);
-  placeDoorwayGuards(context);
-  placeStairsAndStartingRoom(context);
-  lockRandomDoors(context);
-
-  const reachableRoomIds = [...getReachableRoomIds(rooms, startingRoomId)];
-
-  placeWerewolfAndSilverBullet(context, reachableRoomIds);
-  placeOptionalLoot(context, reachableRoomIds);
-
-  return createMapFromContext(context);
 }

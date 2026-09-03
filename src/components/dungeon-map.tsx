@@ -1,12 +1,8 @@
 import { StyleSheet, Text, View } from "react-native";
 
 import { useThemeColors, type ThemeColors } from "@/components/theme";
-import {
-  getRoomMonster,
-  getRoomPosition,
-  getRooms,
-  type DungeonMap as DungeonMapType,
-} from "@/utils/dungeon-map";
+import type { DungeonMap as DungeonMapType } from "@/utils/dungeon-map";
+import { getRoomMonster, getRoomPosition, getRooms } from "@/utils/dungeon-map-runtime";
 
 type DungeonMapProps = {
   currentRoomId: string;

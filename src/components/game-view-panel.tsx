@@ -18,30 +18,24 @@ import {
 //#region types
 export type { RoomDoorways, RoomSceneActor, ScenePosition };
 
-export type Enemy = {
-  sprite: string;
-  hitPoints: number;
-  name: string;
-};
-
 type GameViewPanelProps = {
+  canUnlockDoors?: boolean;
   animationFrame?: CombatAnimationFrame;
-  enemy?: Enemy | null;
   enemyHealthLossAmount?: number;
-  enemyMaxHitPoints?: number;
-  floorItem?: string | null;
-  floorStairs?: boolean;
   hardTurnCounter?: number | null;
   playerPosition?: ScenePosition;
   roomDoorways?: RoomDoorways;
   roomSceneActors?: RoomSceneActor[];
   playerEnergyLossAmount?: number;
   playerHealthLossAmount?: number;
+  disabled?: boolean;
+  onActorPress?: (actor: RoomSceneActor) => void;
+  onDoorwayPress?: (position: Exclude<ScenePosition, "center">) => void;
+  onPlayerPress?: () => void;
 };
 //#endregion
 
 const PLAYER_SPRITE = "\uD83E\uDD3A";
-const STAIRS_SPRITE = "\uD83E\uDE9C";
 const defaultRoomDoorways: RoomDoorways = {
   bottom: "wall",
   left: "wall",
@@ -50,27 +44,23 @@ const defaultRoomDoorways: RoomDoorways = {
 };
 
 export function GameViewPanel({
+  canUnlockDoors = false,
   animationFrame = createCombatAnimationFrame(),
-  enemy = null,
   enemyHealthLossAmount = 0,
-  enemyMaxHitPoints = enemy?.hitPoints ?? 1,
-  floorItem = null,
-  floorStairs = false,
   hardTurnCounter = null,
   playerPosition = "center",
   roomDoorways = defaultRoomDoorways,
   roomSceneActors,
   playerEnergyLossAmount = 0,
   playerHealthLossAmount = 0,
+  disabled = false,
+  onActorPress,
+  onDoorwayPress,
+  onPlayerPress,
 }: GameViewPanelProps) {
   const colors = useThemeColors();
   const styles = createStyles(colors);
-  const visibleActors = roomSceneActors ?? createSceneActors({
-    enemy,
-    enemyMaxHitPoints,
-    floorItem,
-    floorStairs,
-  });
+  const visibleActors = roomSceneActors ?? [];
   const bounceOffset = getBounceOffset(animationFrame.bounceElapsed);
   const sceneScale = getSceneScale(visibleActors.length + 1);
 
@@ -79,7 +69,7 @@ export function GameViewPanel({
       <View style={styles.sceneBox}>
         {hardTurnCounter !== null ? (
           <Text
-            accessibilityLabel="Hard mode turns remaining"
+            accessibilityLabel="Turns remaining"
             style={styles.turnCounter}
             testID="hard-turn-counter"
           >
@@ -93,55 +83,20 @@ export function GameViewPanel({
           bounceOffset={bounceOffset}
           doorways={roomDoorways}
           enemyHealthLossAmount={enemyHealthLossAmount}
-          enemyMaxHitPoints={enemyMaxHitPoints}
           playerEnergyLossAmount={playerEnergyLossAmount}
           playerHealthLossAmount={playerHealthLossAmount}
           playerPosition={playerPosition}
           playerSprite={PLAYER_SPRITE}
           sceneScale={sceneScale}
+          canUnlockDoors={canUnlockDoors}
+          disabled={disabled}
+          onActorPress={onActorPress}
+          onDoorwayPress={onDoorwayPress}
+          onPlayerPress={onPlayerPress}
         />
       </View>
     </View>
   );
-}
-
-function createSceneActors({
-  enemy,
-  enemyMaxHitPoints,
-  floorItem,
-  floorStairs,
-}: Pick<GameViewPanelProps, "enemy" | "enemyMaxHitPoints" | "floorItem" | "floorStairs">) {
-  const actors: RoomSceneActor[] = [];
-
-  if (enemy) {
-    actors.push({
-      currentHealth: enemy.hitPoints,
-      sprite: enemy.sprite,
-      kind: "enemy",
-      label: enemy.name,
-      maxHealth: enemyMaxHitPoints ?? enemy.hitPoints,
-    });
-  }
-
-  if (floorStairs) {
-    actors.push({
-      sprite: STAIRS_SPRITE,
-      kind: "stairs",
-      label: "Stairs",
-      position: "center",
-    });
-  }
-
-  if (floorItem && !enemy) {
-    actors.push({
-      sprite: floorItem,
-      kind: "item",
-      label: "Floor item",
-      position: "center",
-    });
-  }
-
-  return actors;
 }
 
 function getSceneScale(actorCount: number) {
@@ -168,7 +123,9 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     panel: {
       backgroundColor: "transparent",
+      flexGrow: 1,
       gap: 6,
+      justifyContent: "flex-end",
     },
     sceneBox: {
       alignItems: "center",

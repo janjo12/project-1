@@ -6,8 +6,8 @@ import { GameEngine } from "react-native-game-engine";
 
 import { Container, Header, Row, StyledModal, Title } from "@/components/displays";
 import { DungeonMap } from "@/components/dungeon-map";
-import { ActionControls, type PlayerAction } from "@/components/game-controls";
-import { GameViewPanel } from "@/components/game-view-panel";
+import { ItemControl } from "@/components/game-controls";
+import { GameViewPanel, type RoomSceneActor, type ScenePosition } from "@/components/game-view-panel";
 import { DestructiveButton, NormalButton, PrimaryButton, ToggleButton } from "@/components/inputs";
 import { DebugBar, ResourceBar, ResourceBarGroup } from "@/components/resource-bar";
 import { ScreenShell } from "@/components/screen-shell";
@@ -54,7 +54,6 @@ export default function GameScreen() {
 }
 
 function GameContent({ onSettingsChange, settings }: GameContentProps) {
-  const isLeftHanded = settings.handedness === "left";
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const colors = useThemeColors();
   const game = useRunGame({
@@ -66,11 +65,6 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
       }),
     seed: settings.seed.trim(),
     vibrationEnabled: settings.vibrationEnabled,
-  });
-  const disabledActions = getDisabledActions({
-    hasLost: game.hasLost,
-    hasRoomEnemy: game.hasRoomEnemy,
-    playerEnergy: game.playerEnergy,
   });
   const gameLoopEntities = useMemo(
     () => ({
@@ -96,18 +90,33 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
     <DungeonMap currentRoomId={game.currentRoomId} map={game.dungeonMap} />
   );
   const controls = (
-    <ActionControls
-      disabledActions={disabledActions}
-      disabledDirections={game.disabledDirections}
-      floorItemLabel={game.currentRoomItemLabel}
-      isItemDisabled={game.isItemDisabled}
-      isBusy={game.isResolving}
+    <ItemControl
+      activationDescription={game.inventoryItemActivationDescription}
       itemLabel={game.inventoryItemLabel}
       itemSprite={game.inventoryItemSprite}
-      nextLevelNumber={game.roomHasStairs ? game.level + 1 : null}
-      playerAction={game.playerAction}
     />
   );
+
+  function handleActorPress(actor: RoomSceneActor) {
+    if (actor.kind === "enemy") {
+      game.attackMonster(actor.id);
+    } else if (actor.kind === "item") {
+      void game.pickupItem();
+    } else {
+      game.descend();
+    }
+  }
+
+  function handleDoorwayPress(position: Exclude<ScenePosition, "center">) {
+    const directions = {
+      bottom: "south",
+      left: "west",
+      right: "east",
+      top: "north",
+    } as const;
+
+    void game.moveToRoom(directions[position]);
+  }
 
   function confirmQuitToTitle() {
     Alert.alert("Quit to Title?", "Your current run will be lost.", [
@@ -124,7 +133,7 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
   }
 
   return (
-    <ScreenShell>
+    <ScreenShell compact>
       <GameEngine
         key={game.turnNumber}
         entities={gameLoopEntities}
@@ -143,20 +152,14 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
         />
       </Header>
 
-      <GameViewPanel
-        animationFrame={game.animationFrame}
-        enemy={game.currentEnemy}
-        enemyHealthLossAmount={game.enemyHealthLossAmount}
-        enemyMaxHitPoints={game.currentEnemyMaxHitPoints}
-        floorItem={game.currentRoomItemSprite}
-        floorStairs={game.roomHasStairs}
-        hardTurnCounter={game.hardTurnCounter}
-        playerPosition={game.playerScenePosition}
-        roomDoorways={game.roomDoorways}
-        roomSceneActors={game.roomSceneActors}
-        playerEnergyLossAmount={game.playerEnergyLossAmount}
-        playerHealthLossAmount={game.playerHealthLossAmount}
-      />
+      <DebugBar accessibilityLabel="Turn status" accessibilityRole="text">
+        {game.turnStatus}
+      </DebugBar>
+
+      <Row>
+        {map}
+        {controls}
+      </Row>
 
       <ResourceBarGroup>
         <ResourceBar
@@ -190,14 +193,21 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
         ) : null}
       </ResourceBarGroup>
 
-      <DebugBar accessibilityLabel="Turn status" accessibilityRole="text">
-        {game.turnStatus}
-      </DebugBar>
-
-      <Row>
-        {isLeftHanded ? controls : map}
-        {isLeftHanded ? map : controls}
-      </Row>
+      <GameViewPanel
+        animationFrame={game.animationFrame}
+        canUnlockDoors={game.inventoryItem === "key"}
+        disabled={game.isResolving || game.hasLost}
+        enemyHealthLossAmount={game.enemyHealthLossAmount}
+        hardTurnCounter={game.hardTurnCounter}
+        onActorPress={handleActorPress}
+        onDoorwayPress={handleDoorwayPress}
+        onPlayerPress={game.defend}
+        playerPosition={game.playerScenePosition}
+        roomDoorways={game.roomDoorways}
+        roomSceneActors={game.roomSceneActors}
+        playerEnergyLossAmount={game.playerEnergyLossAmount}
+        playerHealthLossAmount={game.playerHealthLossAmount}
+      />
 
       <PauseMenu
         onBackToGame={() => setIsMenuOpen(false)}
@@ -208,26 +218,6 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
       />
     </ScreenShell>
   );
-}
-
-function getDisabledActions({
-  hasLost,
-  hasRoomEnemy,
-  playerEnergy,
-}: {
-  hasLost: boolean;
-  hasRoomEnemy: boolean;
-  playerEnergy: number;
-}): PlayerAction[] {
-  if (hasLost || !hasRoomEnemy) {
-    return ["attack", "defend", "special"] satisfies PlayerAction[];
-  }
-
-  if (playerEnergy <= 0) {
-    return ["special"] satisfies PlayerAction[];
-  }
-
-  return [] satisfies PlayerAction[];
 }
 
 export function PauseMenu({
