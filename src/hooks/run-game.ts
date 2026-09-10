@@ -1,3 +1,4 @@
+import { createSceneFrameStore } from "@/utils/scene-frame-store";
 //#region imports
 import * as Haptics from "expo-haptics";
 import {
@@ -10,8 +11,6 @@ import {
 import type { ScenePosition } from "@/components/game-view-panel";
 import {
   advanceAnimationFrame,
-  createCombatAnimationFrame,
-  type CombatAnimationFrame,
 } from "@/entities";
 import {
   createLevelMap,
@@ -84,24 +83,19 @@ export function useRunGame({
   vibrationEnabled,
 }: UseGameRunOptions) {
   //#region state and refs
-  const initialDungeonMapRef = useRef<DungeonMapType | null>(null);
   const [level, setLevel] = useState(1);
   const [clearedLevels, setClearedLevels] = useState(0);
-  const [dungeonMap, setDungeonMap] = useState(() => {
-    const map = createLevelMap(seed, 1, undefined, difficulty !== "easy");
-
-    initialDungeonMapRef.current = map;
-
-    return map;
-  });
+  const [dungeonMap, setDungeonMap] = useState(() =>
+    createLevelMap(seed, 1, undefined, difficulty !== "easy"),
+  );
   const [inventoryItem, setInventoryItem] = useState<ItemId | null>(null);
   const timeoutIds = useRef<ReturnType<typeof setTimeout>[]>([]);
   const clearedLevelsRef = useRef(0);
   const hardTurnGameOverScheduledRef = useRef(false);
   const werewolfHasBeenEncounteredRef = useRef(false);
   const nextLevelStartingPositionRef = useRef<GridPosition | null>(null);
-  const [animationFrame, setAnimationFrame] =
-    useState<CombatAnimationFrame>(createCombatAnimationFrame);
+  const [sceneFrameStore] = useState(createSceneFrameStore);
+  const setAnimationFrame = sceneFrameStore.setFrame;
   const [enemyHealthLossAmount, setEnemyHealthLossAmount] = useState(0);
   const [activeMonsterId, setActiveMonsterId] = useState<string | null>(null);
   const [isResolving, setIsResolving] = useState(false);
@@ -114,9 +108,7 @@ export function useRunGame({
   const [turnCounter, setTurnCounter] = useState(() =>
     getHardTurnLimit({
       difficulty,
-      map:
-        initialDungeonMapRef.current ??
-        createLevelMap(seed, 1, undefined, difficulty !== "easy"),
+      map: dungeonMap,
     }),
   );
   const [turnNumber, setTurnNumber] = useState(0);
@@ -406,7 +398,7 @@ export function useRunGame({
         finishNonMoveTurn({ mapAtEnd: finalMap, roomId });
       });
     },
-    [commitMap, finishNonMoveTurn, inventoryItem, onGameOver, schedule, triggerDamageHaptic],
+    [commitMap, finishNonMoveTurn, inventoryItem, onGameOver, schedule, triggerDamageHaptic, setAnimationFrame],
   );
 
   const finishPlayerAction = useCallback(
@@ -456,7 +448,7 @@ export function useRunGame({
 
       return nextEnergy;
     });
-  }, [inventoryItem]);
+  }, [inventoryItem, setAnimationFrame]);
 
   const animatePlayerAttack = useCallback((healthLost: number) => {
     restartAnimations(setAnimationFrame, ["playerAttackElapsed"]);
@@ -468,7 +460,7 @@ export function useRunGame({
         "enemyHealthLossElapsed",
       ]);
     });
-  }, [schedule]);
+  }, [schedule, setAnimationFrame]);
 
   const commitPlayerAttack = useCallback((monster: WorldMonster, damage: number) => {
     schedule(GAME_PARAMETERS.animation.attackDurationMs, () => {
@@ -572,10 +564,10 @@ export function useRunGame({
       setAnimationFrame((frame) => advanceAnimationFrame(frame, delta));
 
       if (typeof nextTurnTimeRemaining === "number") {
-        setTurnTimeRemaining(Math.max(0, nextTurnTimeRemaining));
+        setTurnTimeRemaining(Math.ceil(Math.max(0, nextTurnTimeRemaining) / 100) * 100);
       }
     },
-    [],
+    [setAnimationFrame],
   );
 
   const expireTurn = useCallback(() => {
@@ -645,7 +637,7 @@ export function useRunGame({
   //#endregion
 
   return {
-    animationFrame,
+    sceneFrameStore,
     currentEnemy,
     currentEnemyMaxHitPoints,
     currentRoomItem,

@@ -37,7 +37,7 @@ export function CombatantSprite({
         },
       ]}
     >
-      <Text accessibilityLabel={accessibilityLabel} style={styles.sprite}>
+      <Text allowFontScaling={false} accessibilityLabel={accessibilityLabel} style={styles.sprite}>
         {sprite}
       </Text>
     </View>
@@ -74,7 +74,7 @@ const styles = StyleSheet.create({
   sprite: {
     alignItems: "center",
     justifyContent: "center",
-    fontSize: 54,
-    lineHeight: 62,
+    fontSize: 32,
+    lineHeight: 38,
   },
 });

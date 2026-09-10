@@ -1,3 +1,5 @@
+import { useMemo, useState, type ReactNode } from "react";
+import { ACTOR_ENVELOPE, SCENE_WIDTH, SCENE_HEIGHT, layoutRoomActors } from "@/utils/room-scene-layout";
 import { Pressable, View, type ViewStyle } from "react-native";
 
 import { CombatantSprite } from "@/components/combatant-sprite";
@@ -16,7 +18,7 @@ export type RoomSceneActor = {
   id: string;
   currentHealth?: number;
   sprite: string;
-  kind: "enemy" | "item" | "stairs";
+  kind: "enemy" | "item" | "stairs" | "player";
   label: string;
   position?: ScenePosition;
   isActive?: boolean;
@@ -30,6 +32,7 @@ type RoomSceneProps = {
   doorways: RoomDoorways;
   enemyHealthLossAmount: number;
   actors: RoomSceneActor[];
+  floorLayer?: ReactNode;
   playerEnergyLossAmount: number;
   playerHealthLossAmount: number;
   playerPosition: ScenePosition;
@@ -41,10 +44,11 @@ type RoomSceneProps = {
   onPlayerPress?: () => void;
 };
 
-const SCENE_SPRITE_HALF_SIZE = 32;
+
 
 export function RoomScene({
   actors,
+  floorLayer,
   animationFrame,
   bounceOffset,
   doorways,
@@ -63,8 +67,24 @@ export function RoomScene({
   const colors = useThemeColors();
   const styles = createStyles(colors);
 
+  const [width, setWidth] = useState(0);
+  const slots = useMemo(() => layoutRoomActors([
+    ...actors.map(actor => ({ id: `${actor.kind}:${actor.id}`, position: actor.position })),
+    { id: "local-player", position: playerPosition },
+  ]), [actors, playerPosition]);
+  const worldScale = width / SCENE_WIDTH;
+  function slotStyle(id: string): ViewStyle {
+    const slot = slots[id];
+    return { left: slot.x, top: slot.y, width: slot.size, height: slot.size };
+  }
+
   return (
-    <View style={styles.sceneArea}>
+    <View style={[styles.sceneArea, { height: width > 0 ? width * SCENE_HEIGHT / SCENE_WIDTH + 10 : 240 }]}
+      onLayout={event => setWidth(Math.max(0, event.nativeEvent.layout.width - 10))}>
+      <View pointerEvents="box-none" style={{ position: "absolute", left: 0, top: 0,
+        width: SCENE_WIDTH, height: SCENE_HEIGHT, transformOrigin: "top left",
+        transform: [{ scale: worldScale }], opacity: width > 0 ? 1 : 0 }}>
+      <View pointerEvents="none" testID="room-floor-layer" style={{ position: "absolute", width: SCENE_WIDTH, height: SCENE_HEIGHT }}>{floorLayer}</View>
       <RoomWalls
         canUnlockDoors={canUnlockDoors}
         disabled={disabled}
@@ -72,13 +92,15 @@ export function RoomScene({
         onPress={onDoorwayPress}
       />
 
-      {actors.map((actor, index) => (
+      {actors.map((actor) => (
         <SceneActor
           actor={actor}
           animationFrame={animationFrame}
           bounceOffset={bounceOffset}
           enemyHealthLossAmount={enemyHealthLossAmount}
-          key={`${actor.kind}-${actor.label}-${index}`}
+          key={`${actor.kind}:${actor.id}`}
+          positionStyle={slotStyle(`${actor.kind}:${actor.id}`)}
+          slotScale={slots[`${actor.kind}:${actor.id}`].size / ACTOR_ENVELOPE}
           disabled={disabled}
           onPress={onActorPress}
           sceneScale={sceneScale}
@@ -90,12 +112,14 @@ export function RoomScene({
         bounceOffset={bounceOffset}
         energyLossAmount={playerEnergyLossAmount}
         healthLossAmount={playerHealthLossAmount}
-        position={playerPosition}
+        positionStyle={slotStyle("local-player")}
+        slotScale={slots["local-player"].size / ACTOR_ENVELOPE}
         sceneScale={sceneScale}
         sprite={playerSprite}
         disabled={disabled}
         onPress={onPlayerPress}
       />
+      </View>
     </View>
   );
 }
@@ -106,6 +130,8 @@ type SceneActorProps = {
   bounceOffset: number;
   enemyHealthLossAmount: number;
   sceneScale: number;
+  positionStyle: ViewStyle;
+  slotScale: number;
   disabled: boolean;
   onPress?: (actor: RoomSceneActor) => void;
 };
@@ -116,6 +142,8 @@ function SceneActor({
   bounceOffset,
   enemyHealthLossAmount,
   sceneScale,
+  positionStyle,
+  slotScale,
   disabled,
   onPress,
 }: SceneActorProps) {
@@ -129,14 +157,14 @@ function SceneActor({
       accessibilityRole="button"
       accessibilityState={{ disabled }}
       disabled={disabled}
-      hitSlop={8}
       onPress={() => onPress?.(actor)}
       style={({ pressed }) => [
         styles.actorPosition,
-        getActorPosition(actor.position ?? "center"),
+        positionStyle,
         pressed && styles.pressedActor,
       ]}
     >
+      <View style={{ width: ACTOR_ENVELOPE, height: ACTOR_ENVELOPE, alignItems: "center", justifyContent: "center", transform: [{ scale: slotScale }] }}>
       {actor.kind === "enemy" ? (
         <View style={styles.actorContent}>
           {isActive ? (
@@ -190,6 +218,7 @@ function SceneActor({
           scale={sceneScale}
         />
       )}
+      </View>
     </Pressable>
   );
 }
@@ -199,9 +228,10 @@ type PlayerActorProps = {
   bounceOffset: number;
   energyLossAmount: number;
   healthLossAmount: number;
-  position: ScenePosition;
   sceneScale: number;
   sprite: string;
+  positionStyle: ViewStyle;
+  slotScale: number;
   disabled: boolean;
   onPress?: () => void;
 };
@@ -211,9 +241,10 @@ function PlayerActor({
   bounceOffset,
   energyLossAmount,
   healthLossAmount,
-  position,
   sceneScale,
   sprite,
+  positionStyle,
+  slotScale,
   disabled,
   onPress,
 }: PlayerActorProps) {
@@ -227,14 +258,14 @@ function PlayerActor({
       accessibilityRole="button"
       accessibilityState={{ disabled }}
       disabled={disabled}
-      hitSlop={8}
       onPress={onPress}
       style={({ pressed }) => [
         styles.actorPosition,
-        getActorPosition(position),
+        positionStyle,
         pressed && styles.pressedActor,
       ]}
     >
+      <View style={{ width: ACTOR_ENVELOPE, height: ACTOR_ENVELOPE, alignItems: "center", justifyContent: "center", transform: [{ scale: slotScale }] }}>
       <FloatingResourceLoss
         amount={healthLossAmount}
         color={colors.health}
@@ -270,6 +301,7 @@ function PlayerActor({
         sprite={sprite}
         scale={sceneScale}
       />
+      </View>
     </Pressable>
   );
 }
@@ -290,44 +322,3 @@ export function getBounceOffset(elapsed: number) {
   return Math.sin(progress * Math.PI * 2) * COMBAT_ANIMATION.bounceDistance;
 }
 
-function getActorPosition(position: ScenePosition): ViewStyle {
-  switch (position) {
-    case "top":
-      return {
-        top: 10,
-        left: "50%",
-        transform: [{ translateX: -SCENE_SPRITE_HALF_SIZE }],
-      };
-
-    case "bottom":
-      return {
-        bottom: 10,
-        left: "50%",
-        transform: [{ translateX: -SCENE_SPRITE_HALF_SIZE }],
-      };
-
-    case "left":
-      return {
-        left: 10,
-        top: "50%",
-        transform: [{ translateY: -SCENE_SPRITE_HALF_SIZE }],
-      };
-
-    case "right":
-      return {
-        right: 10,
-        top: "50%",
-        transform: [{ translateY: -SCENE_SPRITE_HALF_SIZE }],
-      };
-
-    case "center":
-      return {
-        left: "50%",
-        top: "50%",
-        transform: [
-          { translateX: -SCENE_SPRITE_HALF_SIZE },
-          { translateY: -SCENE_SPRITE_HALF_SIZE },
-        ],
-      };
-  }
-}

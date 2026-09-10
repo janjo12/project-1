@@ -11,7 +11,7 @@ import {
 } from "@/hooks/run-game-policies";
 import { createSeededDungeonMap } from "@/utils/dungeon-generation";
 import {
-  getDoorwayGuardPlacement,
+  getDoorwayGuardPlacements,
   POSSIBLE_ITEMS,
   type Direction,
   type DungeonMap as DungeonMapType,
@@ -331,8 +331,9 @@ export function getRoomSceneActors({
     }
   });
 
-  getGuardedDirections(dungeonMap, room.id).forEach((direction) => {
-    const guard = getDoorwayGuardPlacement(dungeonMap, room.id, direction);
+  getGuardedDirections(dungeonMap, room.id).flatMap((direction) =>
+    getDoorwayGuardPlacements(dungeonMap, room.id, direction).map((guard) => ({ direction, guard })),
+  ).forEach(({ direction, guard }) => {
     const monster = guard ? dungeonMap.entities.monsters[guard.monsterId] : null;
 
     if (!monster || monster.currentHealth <= 0 || seenMonsterIds.has(monster.id)) {

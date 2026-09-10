@@ -371,12 +371,12 @@ export function getNeighborRoom(rooms: DungeonMapJson, roomId: string, direction
   return neighbor ? findRoomInGrid(rooms, getRoomId(neighbor)) : null;
 }
 
-export function getDoorwayGuardPlacement(
+export function getDoorwayGuardPlacements(
   map: DungeonMap,
   roomId: string,
   direction: Direction,
 ) {
-  return Object.values(map.entities.doorwayGuards).find((guard) =>
+  return Object.values(map.entities.doorwayGuards).filter((guard) =>
     (guard.roomId === roomId && guard.direction === direction) ||
     (() => {
       const neighborRoom = getNeighborRoom(map.rooms, roomId, direction);
@@ -388,6 +388,11 @@ export function getDoorwayGuardPlacement(
       );
     })(),
   );
+}
+
+// Compatibility helper for callers that only need to know whether a door is guarded.
+export function getDoorwayGuardPlacement(map: DungeonMap, roomId: string, direction: Direction) {
+  return getDoorwayGuardPlacements(map, roomId, direction)[0];
 }
 
 export function createItem(itemId: ItemId, id: string) {
@@ -427,7 +432,7 @@ export function placeItem(
       Boolean(
         room &&
           !room.isCurrentPosition &&
-          !room.contents.some((content) => content.type === "stairs"),
+          !room.contents.some((content) => content.type === "stairs" || content.type === "item"),
       ),
     );
   const room = candidates[Math.floor(random() * candidates.length)];

@@ -194,7 +194,7 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
       </ResourceBarGroup>
 
       <GameViewPanel
-        animationFrame={game.animationFrame}
+        sceneFrameStore={game.sceneFrameStore}
         canUnlockDoors={game.inventoryItem === "key"}
         disabled={game.isResolving || game.hasLost}
         enemyHealthLossAmount={game.enemyHealthLossAmount}

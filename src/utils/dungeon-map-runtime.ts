@@ -1,7 +1,7 @@
 import {
   createItem,
   directionDeltas,
-  getDoorwayGuardPlacement,
+  getDoorwayGuardPlacements,
   getGridPosition,
   getNeighbor,
   getRoomId,
@@ -129,7 +129,7 @@ export function getTargetableMonsters(
       .map((monsterRef) => getLivingMonster(map, monsterRef.id))
       .filter((monster): monster is WorldMonster => Boolean(monster)),
     ...(Object.keys(directionDeltas) as Direction[])
-      .map((direction) => getDoorwayGuardPlacement(map, room.id, direction))
+      .flatMap((direction) => getDoorwayGuardPlacements(map, room.id, direction))
       .map((guard) => (guard ? getLivingMonster(map, guard.monsterId) : null))
       .filter((monster): monster is WorldMonster => Boolean(monster)),
   ];
@@ -248,6 +248,13 @@ export function damageMonsterInRoom(
 
   if (!doorwayGuard || nextHealth > 0) {
     return nextMap;
+  }
+
+  const otherLivingGuards = getDoorwayGuardPlacements(nextMap, doorwayGuard.roomId, doorwayGuard.direction)
+    .some((guard) => guard.monsterId !== monsterId && (nextMap.entities.monsters[guard.monsterId]?.currentHealth ?? 0) > 0);
+  if (otherLivingGuards) {
+    const { [monsterId]: removed, ...remaining } = nextMap.entities.doorwayGuards;
+    return { ...nextMap, entities: { ...nextMap.entities, doorwayGuards: remaining } };
   }
 
   const sourceRoom = getRoom(nextMap, doorwayGuard.roomId);

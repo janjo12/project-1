@@ -92,7 +92,7 @@ export function SceneSprite({
 
   return (
     <View style={{ transform: [{ scale }] }}>
-      <Text accessibilityLabel={accessibilityLabel} style={styles.sprite}>
+      <Text allowFontScaling={false} accessibilityLabel={accessibilityLabel} style={styles.sprite}>
         {sprite}
       </Text>
     </View>

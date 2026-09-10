@@ -9,6 +9,7 @@ export function createStyles(colors: ThemeColors) {
       justifyContent: "center",
     },
     actorPosition: {
+      overflow: "hidden",
       alignItems: "center",
       justifyContent: "center",
       position: "absolute",
@@ -38,10 +39,10 @@ export function createStyles(colors: ThemeColors) {
     enemyHealthBarTrack: {
       backgroundColor: "rgba(239, 68, 68, 0.18)",
       height: 4,
-      left: 7,
+      left: 0,
       overflow: "hidden",
       top: 3,
-      width: 56,
+      width: 32,
     },
     floatingLoss: {
       alignItems: "center",
@@ -76,13 +77,14 @@ export function createStyles(colors: ThemeColors) {
     sceneArea: {
       borderColor: colors.ink,
       borderWidth: 5,
-      height: 220,
+
       overflow: "visible",
       position: "relative",
       width: "100%",
     },
     sprite: {
-      fontSize: 64,
+      fontSize: 32,
+      lineHeight: 38,
     },
     topDoorwayGap: {
       top: -7,

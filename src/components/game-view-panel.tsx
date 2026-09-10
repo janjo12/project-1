@@ -1,3 +1,5 @@
+import { type ReactNode, useSyncExternalStore } from "react";
+import { createSceneFrameStore, type SceneFrameStore } from "@/utils/scene-frame-store";
 //#region imports
 import { StyleSheet, Text, View } from "react-native";
 
@@ -10,7 +12,6 @@ import {
 } from "@/components/room-scene";
 import { useThemeColors, type ThemeColors } from "@/components/theme";
 import {
-  createCombatAnimationFrame,
   type CombatAnimationFrame,
 } from "@/entities";
 //#endregion
@@ -21,6 +22,8 @@ export type { RoomDoorways, RoomSceneActor, ScenePosition };
 type GameViewPanelProps = {
   canUnlockDoors?: boolean;
   animationFrame?: CombatAnimationFrame;
+  sceneFrameStore?: SceneFrameStore;
+  floorLayer?: ReactNode;
   enemyHealthLossAmount?: number;
   hardTurnCounter?: number | null;
   playerPosition?: ScenePosition;
@@ -35,6 +38,7 @@ type GameViewPanelProps = {
 };
 //#endregion
 
+const fallbackFrameStore = createSceneFrameStore();
 const PLAYER_SPRITE = "\uD83E\uDD3A";
 const defaultRoomDoorways: RoomDoorways = {
   bottom: "wall",
@@ -45,7 +49,9 @@ const defaultRoomDoorways: RoomDoorways = {
 
 export function GameViewPanel({
   canUnlockDoors = false,
-  animationFrame = createCombatAnimationFrame(),
+  floorLayer,
+  animationFrame: suppliedFrame,
+  sceneFrameStore = fallbackFrameStore,
   enemyHealthLossAmount = 0,
   hardTurnCounter = null,
   playerPosition = "center",
@@ -58,11 +64,13 @@ export function GameViewPanel({
   onDoorwayPress,
   onPlayerPress,
 }: GameViewPanelProps) {
+  const storedFrame = useSyncExternalStore(sceneFrameStore.subscribe, sceneFrameStore.getSnapshot, sceneFrameStore.getSnapshot);
+  const animationFrame = suppliedFrame ?? storedFrame;
   const colors = useThemeColors();
   const styles = createStyles(colors);
   const visibleActors = roomSceneActors ?? [];
   const bounceOffset = getBounceOffset(animationFrame.bounceElapsed);
-  const sceneScale = getSceneScale(visibleActors.length + 1);
+  const sceneScale = 1;
 
   return (
     <View style={styles.panel}>
@@ -79,6 +87,7 @@ export function GameViewPanel({
 
         <RoomScene
           actors={visibleActors}
+          floorLayer={floorLayer}
           animationFrame={animationFrame}
           bounceOffset={bounceOffset}
           doorways={roomDoorways}
@@ -97,26 +106,6 @@ export function GameViewPanel({
       </View>
     </View>
   );
-}
-
-function getSceneScale(actorCount: number) {
-  if (actorCount <= 2) {
-    return 1;
-  }
-
-  if (actorCount === 3) {
-    return 0.92;
-  }
-
-  if (actorCount === 4) {
-    return 0.84;
-  }
-
-  if (actorCount === 5) {
-    return 0.78;
-  }
-
-  return 0.72;
 }
 
 function createStyles(colors: ThemeColors) {
