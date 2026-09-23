@@ -1,28 +1,25 @@
-# Manual WebRTC multiplayer
+# Same-Wi-Fi multiplayer
 
-This module is a networking foundation. The current single-player screens do not import it yet. One playing device hosts the state; no dedicated game device or signaling service is needed.
+## Play
 
-## Usage flow
+1. On each device choose **Multiplayer**, then continue through difficulty/seed selection.
+2. Choose **Host game** on one device and **Join game** on the others. The host's settings apply to everyone.
+3. Host: select **Add player**, long-press the invitation text to copy it, and transfer it to the guest.
+4. Guest: paste the invitation and choose **Create reply**. Copy the reply back to the host.
+5. Host: paste it and select **Accept reply**. Wait until the player is connected. Repeat for more devices, then **Start together**.
 
-1. Host creates `createHostSession({ hostPlayerId, initialState, resolveTurn, onState })`.
-2. For each guest, `await session.addPlayer(playerId)` returns offer text to share as QR data or copyable text. Each guest needs a separate offer.
-3. Guest calls `await createClientConnection(offerText, { onOpen, onMessage, onError })`, then shares its `answerText` back.
-4. Host calls `await session.acceptAnswer(playerId, answerText)` for that guest. Channel opening is asynchronous after signaling.
-5. Once every channel opens, `session.start()` sends `INITIAL_STATE` and fixes the participant roster.
-6. Guest calls `client.send({ type: "SUBMIT_ACTION", turn, action })`. Host calls `session.submitHostAction(turn, action)`.
-7. When all participants submit, the host calls your synchronous `resolveTurn(state, actions)`. Return a serializable state with an increased `turn`. Guests apply `TURN_RESULT` in `onMessage`.
-8. Call `client.close()` / `session.close()` when leaving. A closed guest channel removes that participant. Use `removePlayer` for an abandoned or failed peer.
+There is no signaling server or third game-host device. This first version uses copy/paste signaling; QR scanning and automatic discovery are not implemented. Both sides use `iceServers: []`, so no STUN/TURN service is contacted. Wi-Fi client isolation can prevent peers from connecting even on the same SSID.
 
-Only the first action per participant per turn is accepted. Peer connections supply identity; stale/future actions and unsolicited state packets cannot modify host state. Validate game-specific legality in the resolver and the actual state schema in guest callbacks.
+## Gameplay
 
-For timed turns, the game owns the timer and calls `session.finishTurn()` on expiry. The resolver decides how missing actions behave. Reset/cancel that timer on every `onState` and when leaving. No automatic host migration is provided.
+Each device controls its own character, position, inventory, health and energy in a shared dungeon. Choose one action per team turn by tapping doors, enemies, items or your character (defend). Charge modifies the next action. The host resolves actions in stable roster order, so contested loot goes to the first player in that order. Shared enemy health and doors update on all devices.
 
-## Integration still needed
+Hard mode uses a host-owned timer with missing actions defaulting to defend; easy/normal wait for each living player. All living players must gather at the stairs before one chooses to descend. Fallen players spectate and revive on the next level. The run ends when everyone falls or the shared turn budget runs out. Multiplayer uses simultaneous team turns rather than the single-player animation sequence or charged free-turn mechanic.
 
-Add a host/join lobby with text or QR exchange, define serializable multiplayer state with per-player positions, and adapt the existing single-player logic into the host resolver. Full SDP can require multiple QR codes; QR rendering/scanning is not provided by this module.
+Keep the host foregrounded. Host migration/rejoining an active run is not implemented. A closed peer is removed; leave and create a new lobby if the host disconnects. A Wi-Fi failure can take time for WebRTC to detect. Connecting or failed lobby peers can be removed and invited again.
 
-The installed native WebRTC dependency requires a rebuilt development/production app, not Expo Go. Its config plugin is registered in `app.json`; TypeScript now checks the multiplayer folder.
+## Build and verify
 
-Default STUN helps discover addresses; gameplay does not pass through it. Override `connectionOptions.configuration` on the host or `configuration` on the client to supply your own ICE servers, or `{ iceServers: [] }` for local discovery. Direct connectivity depends on firewalls/NAT; some networks require a TURN relay. This removes the dedicated game server requirement, but does not guarantee connectivity on every network without infrastructure.
+WebRTC requires a native development/production build; Expo Go cannot host or join. The WebRTC config plugin is already registered in `app.json`. Build/install the Android app with `npx expo run:android` in a configured Android development environment (repeat installation for the second device). No native build is generated by these source changes.
 
-Tests use mocked native transport. Real connectivity still needs verification with two devices running native builds.
+Run `npx tsc --noEmit` and `npm test`. Networking tests mock native transport, and resolver tests cover independent positions, shared loot, target validation and level transitions. Verify the invitation/reply handshake and matching state on two real devices before calling the LAN transport tested.

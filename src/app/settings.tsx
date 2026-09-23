@@ -21,7 +21,7 @@ export default function SettingsRoute() {
               accessibilityLabel="Back"
               accessibilityRole="button"
               label="Back"
-              onPress={() => router.replace("/")}
+              onPress={() => router.canGoBack() ? router.back() : router.replace("/")}
             />
           </Header>
 

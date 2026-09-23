@@ -1,25 +1,25 @@
-import {
-  applyWerewolfChaseAfterAction,
-  getHardTurnLimit,
-  getEnemyAttackOutcome,
-  getTurnDuration,
-  hasTurnLimit,
-  hasTurnTimer,
-  runGameLoop,
-  TURN_DURATION,
-} from "@/hooks/run-game";
-import {
-  getInventoryItemActivationDescription,
-  resolveEnergyLoss,
-  resolveHealthLoss,
-  resolveTurnLoss,
-} from "@/hooks/run-game-helpers";
 import { canPressDoorway } from "@/components/room-walls";
+import {
+    getInventoryItemActivationDescription,
+    resolveEnergyLoss,
+    resolveHealthLoss,
+    resolveTurnLoss,
+} from "@/hooks/run-game-helpers";
+import {
+    applyWerewolfChaseAfterAction,
+    getEnemyAttackOutcome,
+    getHardTurnLimit,
+    getTurnDuration,
+    hasTurnLimit,
+    hasTurnTimer,
+    runGameLoop,
+    TURN_DURATION,
+} from "@/hooks/run-game-singleplayer";
 import { createSeededDungeonMap } from "@/utils/dungeon-generation";
 import {
-  type DungeonMap,
-  type DungeonRoom,
-  type WorldMonster,
+    type DungeonMap,
+    type DungeonRoom,
+    type WorldMonster,
 } from "@/utils/dungeon-map";
 import { getRoom, getRoomMonster, moveWerewolfToRoom } from "@/utils/dungeon-map-runtime";
 

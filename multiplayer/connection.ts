@@ -17,7 +17,7 @@ const channelEvents = (channel: GameChannel) => channel as unknown as EventSourc
 }>;
 type Configuration = NonNullable<ConstructorParameters<typeof RTCPeerConnection>[0]>;
 export type GameState = { turn: number; [key: string]: unknown };
-export type PlayerAction = { type: "MOVE" | "ATTACK" | "DEFEND"; target?: string };
+export type PlayerAction = { type: "MOVE" | "ATTACK" | "DEFEND" | "PICKUP" | "DESCEND"; target?: string; charged?: boolean };
 export type NetworkMessage =
   | { type: "PLAYER_INFO"; playerId: string; name: string }
   | { type: "SUBMIT_ACTION"; turn: number; action: PlayerAction }
@@ -73,7 +73,8 @@ function validTurn(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 }
 function validAction(value: unknown): value is PlayerAction {
-  return record(value) && ["MOVE", "ATTACK", "DEFEND"].includes(String(value.type)) &&
+  return record(value) && ["MOVE", "ATTACK", "DEFEND", "PICKUP", "DESCEND"].includes(String(value.type)) &&
+    (value.charged === undefined || typeof value.charged === "boolean") &&
     (value.target === undefined || typeof value.target === "string");
 }
 function parseDescription(text: string, type: "offer" | "answer") {
@@ -125,6 +126,9 @@ function bindChannel(channel: GameChannel, options: ConnectionOptions) {
 export async function createHostConnection(options: ConnectionOptions = {}) {
   const pc = createPeerConnection(options.configuration);
   const channel = pc.createDataChannel("game", { ordered: true });
+  peerEvents(pc).addEventListener("connectionstatechange", () => {
+    if (pc.connectionState === "failed") { channel.close(); pc.close(); options.onError?.(new Error("Player connection failed.")); }
+  });
   bindChannel(channel, options);
   try {
     await pc.setLocalDescription(await pc.createOffer());
@@ -146,6 +150,9 @@ export async function createClientConnection(offerText: string, options: Connect
   const offer = parseDescription(offerText, "offer");
   const pc = createPeerConnection(options.configuration);
   let channel: GameChannel | undefined;
+  peerEvents(pc).addEventListener("connectionstatechange", () => {
+    if (pc.connectionState === "failed") { channel?.close(); pc.close(); options.onError?.(new Error("Host connection failed.")); }
+  });
   peerEvents(pc).addEventListener("datachannel", (event) => {
     if (channel || event.channel.label !== "game") { event.channel.close(); return; }
     channel = event.channel;
@@ -186,6 +193,8 @@ export type HostSessionOptions<State extends GameState> = {
   onState?: (state: State) => void;
   onError?: (error: Error) => void;
   connectionOptions?: Pick<ConnectionOptions, "configuration" | "iceTimeoutMs">;
+  onPlayersChange?: () => void;
+  isActivePlayer?: (state: State, playerId: string) => boolean;
 };
 
 /** One host owns all peers and runs game rules. Call finishTurn from a game timer if desired. */
@@ -212,6 +221,7 @@ export function createHostSession<State extends GameState>(options: HostSessionO
     if (!validTurn(next.turn) || next.turn <= state.turn) throw new Error("The resolver must advance the turn.");
     state = next;
     actions.clear();
+    participants = new Set([options.hostPlayerId, ...connections.keys()].filter(id => options.isActivePlayer?.(state, id) ?? true));
     broadcast({ type: "TURN_RESULT", turn: state.turn, state });
     options.onState?.(state);
   }
@@ -229,11 +239,13 @@ export function createHostSession<State extends GameState>(options: HostSessionO
     participants.delete(playerId);
     actions.delete(playerId);
     player?.close();
-    if (started && !closed && actions.size === participants.size) finishTurn();
+    options.onPlayersChange?.();
+    if (started && !closed && participants.size > 0 && actions.size === participants.size) finishTurn();
   }
   return {
     get state() { return state; },
     get playerIds() { return [...connections.keys()]; },
+    get readyPlayerIds() { return [...connections.values()].filter(p => p.channel.readyState === "open").map(p => p.id); },
     async addPlayer(playerId: string) {
       if (closed || started) throw new Error("Players can only join an open lobby.");
       if (!playerId || playerId === options.hostPlayerId || connections.has(playerId) || pending.has(playerId)) {
@@ -244,6 +256,7 @@ export function createHostSession<State extends GameState>(options: HostSessionO
         const connection = await createHostConnection({
           ...options.connectionOptions,
           onError: options.onError,
+          onOpen: () => options.onPlayersChange?.(),
           onMessage: (message) => {
             // Identity comes from this peer, never an ID supplied in a packet.
             if (message.type === "SUBMIT_ACTION") submit(playerId, message.turn, message.action);
@@ -260,11 +273,12 @@ export function createHostSession<State extends GameState>(options: HostSessionO
       if (!player) throw new Error("No offer exists for this player.");
       await acceptAnswer(player.pc, answerText);
     },
-    start() {
+    start(initialState?: State) {
       if (closed || started || pending.size || [...connections.values()].some(p => p.channel.readyState !== "open")) {
         throw new Error("Wait for every player channel to open before starting.");
       }
       participants = new Set([options.hostPlayerId, ...connections.keys()]);
+      if (initialState) state = initialState;
       started = true;
       broadcast({ type: "INITIAL_STATE", turn: state.turn, state });
       options.onState?.(state);

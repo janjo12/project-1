@@ -1,9 +1,9 @@
-import { act, renderHook } from "@testing-library/react-native";
-import { useRunGame, PLAYER_MAX_ENERGY } from "@/hooks/run-game";
 import { GAME_PARAMETERS } from "@/gameparameters";
+import { PLAYER_MAX_ENERGY, useRunGame } from "@/hooks/run-game-singleplayer";
 import { createSeededDungeonMap } from "@/utils/dungeon-generation";
-import { getRoom } from "@/utils/dungeon-map-runtime";
 import type { DungeonMap } from "@/utils/dungeon-map";
+import { getRoom } from "@/utils/dungeon-map-runtime";
+import { act, renderHook } from "@testing-library/react-native";
 
 jest.mock("@/utils/dungeon-map-storage", () => ({
   createAndSaveSeededDungeonMap: jest.fn(async () => null),

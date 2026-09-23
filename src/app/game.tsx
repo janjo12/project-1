@@ -13,14 +13,14 @@ import { DebugBar, ResourceBar, ResourceBarGroup } from "@/components/resource-b
 import { ScreenShell } from "@/components/screen-shell";
 import { ThemeProvider, useThemeColors } from "@/components/theme";
 
-import {
-  GameLoopTimer,
-  PLAYER_MAX_ENERGY,
-  PLAYER_MAX_HEALTH,
-  runGameLoop,
-  useRunGame,
-} from "@/hooks/run-game";
 import { GAME_PARAMETERS } from "@/gameparameters";
+import {
+    GameLoopTimer,
+    PLAYER_MAX_ENERGY,
+    PLAYER_MAX_HEALTH,
+    runGameLoop,
+    useRunGame,
+} from "@/hooks/run-game-singleplayer";
 import { useGameSettings } from "@/hooks/use-game-settings";
 import type { GameSettings } from "@/utils/settings-storage";
 //#endregion
