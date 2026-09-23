@@ -17,6 +17,8 @@ export const GAME_PARAMETERS = Object.freeze({
     resourceLossDurationMs: 680,
   }),
   combat: Object.freeze({
+    chargeEnergyCost: 1,
+    chargedCounterattackDamage: 2,
     counterattackDamage: 1,
     defendDamageMultiplier: 0.5,
     normalAttackDamage: 1,
@@ -25,6 +27,8 @@ export const GAME_PARAMETERS = Object.freeze({
     werewolfMeleeDamage: 0,
   }),
   dungeon: Object.freeze({
+    mapWidthRooms: 12,
+    mapHeightRooms: 6,
     baseRoomCount: 7,
     doorwayGuardsPerRoom: 0.5,
     extraRoomCountRange: 5,

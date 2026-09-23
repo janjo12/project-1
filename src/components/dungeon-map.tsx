@@ -45,7 +45,7 @@ export function DungeonMap({
         })}
       </View>
 
-      <View style={styles.body}>
+      <View style={[styles.body, { aspectRatio: map.rows.length / map.columns.length }]}>
         <View style={styles.rowLabels}>
           {map.columns.map((rowLetter) => {
             const isCurrentRow = rowLetter === currentRoomPosition?.column;
@@ -155,14 +155,10 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     wrapper: {
       alignSelf: "stretch",
-      flex: 1,
       gap: 4,
-      maxWidth: 244,
-      minHeight: 352,
-      minWidth: 188,
+      width: "100%",
     },
     body: {
-      flex: 1,
       flexDirection: "row",
       gap: 4,
     },
@@ -187,7 +183,7 @@ function createStyles(colors: ThemeColors) {
       fontSize: 17,
       fontVariant: ["tabular-nums"],
       fontWeight: "900",
-      lineHeight: 15,
+      lineHeight: 20,
       textAlign: "center",
     },
     currentAxisLabel: {

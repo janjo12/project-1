@@ -1,3 +1,4 @@
+import { PixelSprite } from "@/components/pixel-sprite";
 import { useMemo, useState, type ReactNode } from "react";
 import { ACTOR_ENVELOPE, SCENE_WIDTH, SCENE_HEIGHT, layoutRoomActors } from "@/utils/room-scene-layout";
 import { Pressable, View, type ViewStyle } from "react-native";
@@ -84,7 +85,13 @@ export function RoomScene({
       <View pointerEvents="box-none" style={{ position: "absolute", left: 0, top: 0,
         width: SCENE_WIDTH, height: SCENE_HEIGHT, transformOrigin: "top left",
         transform: [{ scale: worldScale }], opacity: width > 0 ? 1 : 0 }}>
-      <View pointerEvents="none" testID="room-floor-layer" style={{ position: "absolute", width: SCENE_WIDTH, height: SCENE_HEIGHT }}>{floorLayer}</View>
+      <View pointerEvents="none" testID="room-floor-layer" style={{ position: "absolute", width: SCENE_WIDTH, height: SCENE_HEIGHT }}>{floorLayer ?? (
+        <View style={{ width: SCENE_WIDTH, height: SCENE_HEIGHT, overflow: "hidden", flexDirection: "row", flexWrap: "wrap", opacity: 0.25 }}>
+          {Array.from({ length: Math.ceil(SCENE_WIDTH / 32) * Math.ceil(SCENE_HEIGHT / 32) }, (_, index) => (
+            <PixelSprite key={index} sprite="stone-floor" label="" />
+          ))}
+        </View>
+      )}</View>
       <RoomWalls
         canUnlockDoors={canUnlockDoors}
         disabled={disabled}

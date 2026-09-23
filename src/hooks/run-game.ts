@@ -88,7 +88,12 @@ export function useRunGame({
   const [dungeonMap, setDungeonMap] = useState(() =>
     createLevelMap(seed, 1, undefined, difficulty !== "easy"),
   );
-  const [inventoryItem, setInventoryItem] = useState<ItemId | null>(null);
+  const [inventoryItem, setInventoryItemState] = useState<ItemId | null>(null);
+  const inventoryItemRef = useRef<ItemId | null>(null);
+  const setInventoryItem = useCallback((item: ItemId | null) => {
+    inventoryItemRef.current = item;
+    setInventoryItemState(item);
+  }, []);
   const timeoutIds = useRef<ReturnType<typeof setTimeout>[]>([]);
   const clearedLevelsRef = useRef(0);
   const hardTurnGameOverScheduledRef = useRef(false);
@@ -99,6 +104,9 @@ export function useRunGame({
   const [enemyHealthLossAmount, setEnemyHealthLossAmount] = useState(0);
   const [activeMonsterId, setActiveMonsterId] = useState<string | null>(null);
   const [isResolving, setIsResolving] = useState(false);
+  const [isCharged, setIsCharged] = useState(false);
+  const chargedRef = useRef(false);
+  const preserveTurnRef = useRef(false);
   const [playerEnergy, setPlayerEnergy] = useState(PLAYER_MAX_ENERGY);
   const [playerEnergyLossAmount, setPlayerEnergyLossAmount] = useState(0);
   const [playerHealth, setPlayerHealth] = useState(PLAYER_MAX_HEALTH);
@@ -260,6 +268,8 @@ export function useRunGame({
       resetFeedback();
       setPlayerHealth(PLAYER_MAX_HEALTH);
       setPlayerEnergy(PLAYER_MAX_ENERGY);
+      chargedRef.current = false;
+      setIsCharged(false);
       setPlayerScenePosition("center");
       setTurnCounter(nextTurnCounter);
       hardTurnGameOverScheduledRef.current = false;
@@ -276,7 +286,16 @@ export function useRunGame({
     setIsResolving(false);
     setTurnNumber((number) => number + 1);
 
-    if (hasTurnLimit(difficulty)) {
+    if (chargedRef.current && playerEnergy === 0 && inventoryItemRef.current === "energy-meal") {
+      setPlayerEnergy(resolveEnergyLoss(0, 0, inventoryItemRef.current).nextEnergy);
+      setInventoryItem(null);
+    }
+    const preservesTurn = preserveTurnRef.current;
+    preserveTurnRef.current = false;
+    chargedRef.current = false;
+    setIsCharged(false);
+
+    if (hasTurnLimit(difficulty) && !preservesTurn) {
       setTurnCounter((counter) => {
         const { nextCounter, usesClock } = resolveTurnLoss(counter, inventoryItem, level);
 
@@ -293,7 +312,7 @@ export function useRunGame({
         return nextCounter;
       });
     }
-  }, [difficulty, inventoryItem, level, onGameOver, schedule, turnDuration]);
+  }, [difficulty, inventoryItem, level, onGameOver, playerEnergy, schedule, setInventoryItem, turnDuration]);
 
   const finishNonMoveTurn = useCallback(
     ({
@@ -336,10 +355,14 @@ export function useRunGame({
     }) => {
       restartAnimations(setAnimationFrame, ["enemyAttackElapsed"]);
 
-      const { counterattackDamage, damageTaken } = getEnemyAttackOutcome({
+      const outcome = getEnemyAttackOutcome({
         isDefending,
         monsterDamage,
       });
+
+      const counterattackDamage = isDefending && chargedRef.current
+        ? GAME_PARAMETERS.combat.chargedCounterattackDamage : outcome.counterattackDamage;
+      const damageTaken = isDefending && chargedRef.current ? 0 : outcome.damageTaken;
 
       schedule(GAME_PARAMETERS.animation.attackImpactDelayMs, () => {
           setPlayerHealthLossAmount(damageTaken);
@@ -398,7 +421,7 @@ export function useRunGame({
         finishNonMoveTurn({ mapAtEnd: finalMap, roomId });
       });
     },
-    [commitMap, finishNonMoveTurn, inventoryItem, onGameOver, schedule, triggerDamageHaptic, setAnimationFrame],
+    [commitMap, finishNonMoveTurn, inventoryItem, onGameOver, schedule, setInventoryItem, triggerDamageHaptic, setAnimationFrame],
   );
 
   const finishPlayerAction = useCallback(
@@ -432,23 +455,22 @@ export function useRunGame({
     [dungeonMap, finishNonMoveTurn, startEnemyMove],
   );
 
-  const spendSpecialEnergy = useCallback(() => {
-    setPlayerEnergyLossAmount(GAME_PARAMETERS.combat.strongAttackEnergyCost);
-    restartAnimations(setAnimationFrame, ["playerEnergyLossElapsed"]);
-    setPlayerEnergy((energy) => {
-      const { nextEnergy, usesMeal } = resolveEnergyLoss(
-        energy,
-        GAME_PARAMETERS.combat.strongAttackEnergyCost,
-        inventoryItem,
-      );
-
-      if (usesMeal) {
-        setInventoryItem(null);
-      }
-
-      return nextEnergy;
-    });
-  }, [inventoryItem, setAnimationFrame]);
+  const toggleCharge = useCallback(() => {
+    if (isResolving || hasLost) return;
+    const cost = GAME_PARAMETERS.combat.chargeEnergyCost;
+    if (chargedRef.current) {
+      chargedRef.current = false;
+      setIsCharged(false);
+      setPlayerEnergy((energy) => Math.min(PLAYER_MAX_ENERGY, energy + cost));
+      setPlayerEnergyLossAmount(0);
+    } else if (playerEnergy >= cost) {
+      chargedRef.current = true;
+      setIsCharged(true);
+      setPlayerEnergy((energy) => energy - cost);
+      setPlayerEnergyLossAmount(cost);
+      restartAnimations(setAnimationFrame, ["playerEnergyLossElapsed"]);
+    }
+  }, [hasLost, isResolving, playerEnergy, setAnimationFrame]);
 
   const animatePlayerAttack = useCallback((healthLost: number) => {
     restartAnimations(setAnimationFrame, ["playerAttackElapsed"]);
@@ -482,6 +504,7 @@ export function useRunGame({
       }
 
       if (!hasRoomEnemy) {
+        preserveTurnRef.current = chargedRef.current;
         finishNonMoveTurn({ roomId: currentRoomId });
         return;
       }
@@ -521,7 +544,7 @@ export function useRunGame({
       }
 
       const usesSilverBullet = monster.chases && inventoryItem === "silver-bullet";
-      const hasEnergy = playerEnergy >= GAME_PARAMETERS.combat.strongAttackEnergyCost;
+      const hasEnergy = chargedRef.current;
       const damage = usesSilverBullet
         ? monster.currentHealth
         : getPlayerAttackDamage(monster, hasEnergy);
@@ -533,8 +556,6 @@ export function useRunGame({
 
       if (usesSilverBullet) {
         setInventoryItem(null);
-      } else if (hasEnergy) {
-        spendSpecialEnergy();
       }
 
       animatePlayerAttack(healthLost);
@@ -547,8 +568,7 @@ export function useRunGame({
       hasLost,
       isResolving,
       inventoryItem,
-      playerEnergy,
-      spendSpecialEnergy,
+      setInventoryItem,
     ],
   );
 
@@ -583,6 +603,7 @@ export function useRunGame({
       return;
     }
 
+    preserveTurnRef.current = chargedRef.current;
     const nextInventoryItem = currentRoomItem;
 
     const nextMap = commitMap((map) =>
@@ -614,6 +635,7 @@ export function useRunGame({
       return;
     }
 
+    preserveTurnRef.current = chargedRef.current;
     const nextRoom = getRoom(dungeonMap, nextRoomId);
 
     resetFeedback();
@@ -637,6 +659,8 @@ export function useRunGame({
   //#endregion
 
   return {
+    isCharged,
+    toggleCharge,
     sceneFrameStore,
     currentEnemy,
     currentEnemyMaxHitPoints,

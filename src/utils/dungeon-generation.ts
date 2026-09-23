@@ -429,6 +429,7 @@ export function createDungeonMap(
   };
   const totalRooms = Math.min(
     GAME_PARAMETERS.dungeon.maxRoomCount,
+    mapColumns.length * mapRows.length,
     GAME_PARAMETERS.dungeon.baseRoomCount +
       level +
       Math.floor(random() * GAME_PARAMETERS.dungeon.extraRoomCountRange),

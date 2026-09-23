@@ -103,21 +103,14 @@ export type RoomConnection = {
 //#endregion
 
 //#region constant declarations
-export const mapColumns = [
-  "A",
-  "B",
-  "C",
-  "D",
-  "E",
-  "F",
-  "G",
-  "H",
-  "I",
-  "J",
-  "K",
-  "L",
-];
-export const mapRows = Array.from({ length: 6 }, (_, index) => index + 1);
+// Legacy axis names: letters run vertically, numbers horizontally.
+export const mapColumns = Array.from(
+  { length: GAME_PARAMETERS.dungeon.mapHeightRooms },
+  (_, index) => String.fromCharCode(65 + index),
+);
+export const mapRows = Array.from(
+  { length: GAME_PARAMETERS.dungeon.mapWidthRooms }, (_, index) => index + 1,
+);
 
 export const POSSIBLE_MONSTERS: Omit<WorldMonster, "currentHealth" | "id">[] =
   GAME_PARAMETERS.monsters.map((monster) => ({ ...monster, type: "monster" as const }));

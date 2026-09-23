@@ -1,3 +1,4 @@
+import { PixelSprite } from "@/components/pixel-sprite";
 import { Pressable, Text, View } from "react-native";
 
 import { createStyles } from "@/components/room-scene-styles";
@@ -88,13 +89,9 @@ export function SceneSprite({
   sprite: string;
   scale: number;
 }) {
-  const styles = createStyles(useThemeColors());
-
   return (
     <View style={{ transform: [{ scale }] }}>
-      <Text allowFontScaling={false} accessibilityLabel={accessibilityLabel} style={styles.sprite}>
-        {sprite}
-      </Text>
+      <PixelSprite sprite={sprite} label={accessibilityLabel} />
     </View>
   );
 }

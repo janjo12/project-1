@@ -1,4 +1,5 @@
-import { StyleSheet, Text, View } from "react-native";
+import { PixelSprite } from "@/components/pixel-sprite";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { type ThemeColors, useThemeColors } from "@/components/theme";
 
@@ -23,7 +24,7 @@ export function ItemControl({
         style={styles.itemPanel}
         testID="item-status"
       >
-        {itemSprite ? <Text style={styles.sprite}>{itemSprite}</Text> : null}
+        {itemSprite ? <PixelSprite sprite={itemSprite} label={itemLabel ?? "Item"} size={24} /> : null}
         <Text style={styles.label}>{itemLabel ?? "No Item"}</Text>
         <Text style={styles.description}>
           {activationDescription ?? "Pick up an item to hold it."}
@@ -62,4 +63,36 @@ function createStyles(colors: ThemeColors) {
     },
     sprite: { fontSize: 20 },
   });
+}
+
+export function ChargeControl({ charged, disabled, onPress }: {
+  charged: boolean;
+  disabled: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={charged ? "Cancel Charge Up" : "Charge Up"}
+      accessibilityState={{ selected: charged, disabled }}
+      accessibilityHint="Reserves one energy for the next action. Press again to cancel and refund it."
+      disabled={disabled}
+      onPress={onPress}
+      testID="charge-up-button"
+      style={({ pressed }) => ({
+        flex: 1, minHeight: 72, borderRadius: 12, padding: 12,
+        justifyContent: "center", alignItems: "center",
+        backgroundColor: charged ? "#14532d" : "#21833e",
+        borderColor: charged ? "#a3e635" : "#166534",
+        borderWidth: 2, opacity: disabled ? 0.45 : pressed ? 0.75 : 1,
+      })}
+    >
+      <Text style={{ color: "white", fontSize: 18, fontWeight: "800" }}>
+        {charged ? "Charged ⚡ · Cancel" : "Charge Up ⚡"}
+      </Text>
+      <Text style={{ color: "#ecfccb", fontSize: 12, textAlign: "center" }}>
+        {charged ? "Tap to refund 1 energy" : "Next action · 1 energy"}
+      </Text>
+    </Pressable>
+  );
 }

@@ -1,4 +1,5 @@
-import { StyleSheet, Text, View } from "react-native";
+import { PixelSprite } from "@/components/pixel-sprite";
+import { StyleSheet, View } from "react-native";
 import { GAME_PARAMETERS } from "@/gameparameters";
 
 type CombatantSpriteProps = {
@@ -37,9 +38,7 @@ export function CombatantSprite({
         },
       ]}
     >
-      <Text allowFontScaling={false} accessibilityLabel={accessibilityLabel} style={styles.sprite}>
-        {sprite}
-      </Text>
+      <PixelSprite sprite={sprite} label={accessibilityLabel} />
     </View>
   );
 }

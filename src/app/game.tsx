@@ -1,12 +1,12 @@
 //#region imports
 import { router } from "expo-router";
 import { useMemo, useState } from "react";
-import { Alert } from "react-native";
+import { Alert, Text } from "react-native";
 import { GameEngine } from "react-native-game-engine";
 
 import { Container, Header, Row, StyledModal, Title } from "@/components/displays";
 import { DungeonMap } from "@/components/dungeon-map";
-import { ItemControl } from "@/components/game-controls";
+import { ChargeControl, ItemControl } from "@/components/game-controls";
 import { GameViewPanel, type RoomSceneActor, type ScenePosition } from "@/components/game-view-panel";
 import { DestructiveButton, NormalButton, PrimaryButton, ToggleButton } from "@/components/inputs";
 import { DebugBar, ResourceBar, ResourceBarGroup } from "@/components/resource-bar";
@@ -20,6 +20,7 @@ import {
   runGameLoop,
   useRunGame,
 } from "@/hooks/run-game";
+import { GAME_PARAMETERS } from "@/gameparameters";
 import { useGameSettings } from "@/hooks/use-game-settings";
 import type { GameSettings } from "@/utils/settings-storage";
 //#endregion
@@ -156,10 +157,18 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
         {game.turnStatus}
       </DebugBar>
 
+      {map}
       <Row>
-        {map}
         {controls}
+        <ChargeControl
+          charged={game.isCharged}
+          disabled={game.isResolving || game.hasLost || (!game.isCharged && game.playerEnergy < GAME_PARAMETERS.combat.chargeEnergyCost)}
+          onPress={game.toggleCharge}
+        />
       </Row>
+      <Text style={{ color: colors.sepia, fontSize: 12, textAlign: "center" }}>
+        Charge: stronger attack, full block + counter, or move / pick up without using a turn.
+      </Text>
 
       <ResourceBarGroup>
         <ResourceBar
