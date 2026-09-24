@@ -61,6 +61,7 @@ function createTestMap(): DungeonMap {
     columns: ["A", "B"],
     entities: {
       doorwayGuards: {},
+      equipment: {},
       items: {},
       monsters: {},
     },
@@ -159,7 +160,7 @@ describe("run-game policies", () => {
 
   it("uses recovery items only when health or energy reaches zero", () => {
     expect(resolveHealthLoss(1, 1, "health-potion")).toEqual({
-      nextHealth: 5,
+      nextHealth: 50,
       usesPotion: true,
     });
     expect(resolveHealthLoss(2, 1, "health-potion")).toEqual({
@@ -167,7 +168,7 @@ describe("run-game policies", () => {
       usesPotion: false,
     });
     expect(resolveEnergyLoss(1, 1, "energy-meal")).toEqual({
-      nextEnergy: 3,
+      nextEnergy: 50,
       usesMeal: true,
     });
   });

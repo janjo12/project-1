@@ -2,21 +2,32 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export type Difficulty = "easy" | "normal" | "hard";
 export type Appearance = "system" | "light" | "dark";
+export type Handedness = "left" | "right";
 
 export type GameSettings = {
   appearance: Appearance;
   difficulty: Difficulty;
   seed: string;
   vibrationEnabled: boolean;
+  reducedMotion: boolean;
+  handedness: Handedness;
 };
 
 const SETTINGS_STORAGE_KEY = "project-1:game-settings";
+
+function getBrowserStorage(): Storage | null {
+  return typeof globalThis.window?.localStorage === "undefined"
+    ? null
+    : globalThis.window.localStorage;
+}
 
 export const DEFAULT_GAME_SETTINGS: GameSettings = {
   appearance: "system",
   difficulty: "easy",
   seed: "",
   vibrationEnabled: true,
+  reducedMotion: false,
+  handedness: "right",
 };
 
 function isDifficulty(value: unknown): value is Difficulty {
@@ -26,6 +37,10 @@ function isDifficulty(value: unknown): value is Difficulty {
 
 function isAppearance(value: unknown): value is Appearance {
   return value === "system" || value === "light" || value === "dark";
+}
+
+function isHandedness(value: unknown): value is Handedness {
+  return value === "left" || value === "right";
 }
 
 function normalizeSettings(value: unknown): GameSettings {
@@ -50,12 +65,21 @@ function normalizeSettings(value: unknown): GameSettings {
       typeof candidate.vibrationEnabled === "boolean"
         ? candidate.vibrationEnabled
         : DEFAULT_GAME_SETTINGS.vibrationEnabled,
+    reducedMotion: typeof candidate.reducedMotion === "boolean"
+      ? candidate.reducedMotion
+      : DEFAULT_GAME_SETTINGS.reducedMotion,
+    handedness: isHandedness(candidate.handedness)
+      ? candidate.handedness
+      : DEFAULT_GAME_SETTINGS.handedness,
   };
 }
 
 export async function loadGameSettings(): Promise<GameSettings> {
   try {
-    const storedSettings = await AsyncStorage.getItem(SETTINGS_STORAGE_KEY);
+    const browserStorage = getBrowserStorage();
+    const storedSettings = browserStorage
+      ? browserStorage.getItem(SETTINGS_STORAGE_KEY)
+      : await AsyncStorage.getItem(SETTINGS_STORAGE_KEY);
 
     if (!storedSettings) {
       await saveGameSettings(DEFAULT_GAME_SETTINGS);
@@ -69,8 +93,11 @@ export async function loadGameSettings(): Promise<GameSettings> {
 }
 
 export async function saveGameSettings(settings: GameSettings) {
-  await AsyncStorage.setItem(
-    SETTINGS_STORAGE_KEY,
-    JSON.stringify(normalizeSettings(settings)),
-  );
+  const serialized = JSON.stringify(normalizeSettings(settings));
+  const browserStorage = getBrowserStorage();
+  if (browserStorage) {
+    browserStorage.setItem(SETTINGS_STORAGE_KEY, serialized);
+  } else {
+    await AsyncStorage.setItem(SETTINGS_STORAGE_KEY, serialized);
+  }
 }

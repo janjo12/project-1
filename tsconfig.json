@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "strict": true,
-    "jsx": "react-native",
+    "jsx": "preserve",
     "types": [
       "jest"
     ],
@@ -13,15 +13,26 @@
         "./assets/*"
       ]
     },
+    "baseUrl": ".",
+    "ignoreDeprecations": "6.0",
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
     "target": "ES2020",
     "module": "esnext",
     "lib": [
-      "ES2020"
+      "ES2020",
+      "DOM",
+      "DOM.Iterable"
     ],
     "moduleResolution": "bundler",
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "allowJs": true
+    "allowJs": true,
+    "incremental": true,
+    "isolatedModules": true
   },
   "include": [
     "multiplayer/**/*.ts",
@@ -30,7 +41,9 @@
     "__tests__/**/*.ts",
     "__tests__/**/*.tsx",
     ".expo/types/**/*.ts",
-    "expo-env.d.ts"
+    "expo-env.d.ts",
+    ".next/types/**/*.ts",
+    "next-env.d.ts"
   ],
   "extends": "expo/tsconfig.base"
 }

@@ -83,17 +83,27 @@ export function DungeonMap({
                   (content) => content.type === "stairs",
                 );
                 const hasWerewolf = Boolean(getRoomMonster(map, room)?.chases);
+                const hasMonster = Boolean(getRoomMonster(map, room));
+                const hasItem = Boolean(room?.contents.some(content => content.type === "item"));
+                const hasEquipment = Boolean(room?.contents.some(content => content.type === "equipment"));
+                const roomColor = isCurrentRoom
+                  ? colors.mapCurrentRoom
+                  : hasStairs
+                    ? colors.mapStairsRoom
+                    : hasMonster
+                      ? colors.mapEnemyRoom
+                      : hasItem
+                        ? colors.mapItemRoom
+                        : hasEquipment
+                          ? colors.mapStairsRoom
+                        : colors.mapExploredRoom;
 
                 return (
                   <View key={columnNumber} style={styles.gridCell}>
                     {room && isRevealed ? (
                       <View
-                        accessibilityLabel={`Room ${rowLetter}${columnNumber}`}
-                        style={[
-                          styles.room,
-                          room.contents.length === 0 && styles.emptyRoom,
-                          isCurrentRoom && styles.currentRoom,
-                        ]}
+                        accessibilityLabel={`Room ${rowLetter}${columnNumber}${isCurrentRoom ? ", your room" : ""}${hasMonster ? ", monster" : ""}${hasItem ? ", item" : ""}${hasEquipment ? ", equipment" : ""}${hasStairs ? ", stairs" : ""}`}
+                        style={[styles.room, { backgroundColor: roomColor }, isCurrentRoom && styles.currentRoom]}
                         testID={`map-room-${rowLetter}${columnNumber}`}
                       >
                         {room.north === "open" ? (
@@ -147,8 +157,19 @@ export function DungeonMap({
           ))}
         </View>
       </View>
+      <View style={styles.legend} accessibilityLabel="Map color key">
+        <LegendChip color={colors.mapCurrentRoom} label="You" styles={styles} />
+        <LegendChip color={colors.mapEnemyRoom} label="Monster" styles={styles} />
+        <LegendChip color={colors.mapItemRoom} label="Item" styles={styles} />
+        <LegendChip color={colors.mapStairsRoom} label="Stairs" styles={styles} />
+        <LegendChip color={colors.mapExploredRoom} label="Explored" styles={styles} />
+      </View>
     </View>
   );
+}
+
+function LegendChip({ color, label, styles }: { color: string; label: string; styles: ReturnType<typeof createStyles> }) {
+  return <View style={styles.legendItem}><View style={[styles.legendSwatch, { backgroundColor: color }]} /><Text style={styles.legendLabel}>{label}</Text></View>;
 }
 
 function createStyles(colors: ThemeColors) {
@@ -204,7 +225,7 @@ function createStyles(colors: ThemeColors) {
       textAlignVertical: "center",
     },
     grid: {
-      borderColor: colors.fadedInk,
+      borderColor: colors.mapGrid,
       borderLeftWidth: 1,
       borderTopWidth: 1,
       flex: 1,
@@ -216,7 +237,7 @@ function createStyles(colors: ThemeColors) {
     gridCell: {
       alignItems: "center",
       borderBottomWidth: 1,
-      borderColor: colors.fadedInk,
+      borderColor: colors.mapGrid,
       borderRightWidth: 1,
       flex: 1,
       justifyContent: "center",
@@ -224,26 +245,30 @@ function createStyles(colors: ThemeColors) {
     },
     room: {
       alignItems: "center",
-      backgroundColor: colors.ink,
+      backgroundColor: colors.mapExploredRoom,
+      borderColor: colors.ink,
+      borderWidth: 1,
       height: "60%",
       justifyContent: "center",
       position: "relative",
       width: "60%",
     },
-    emptyRoom: {
-      backgroundColor: colors.ink,
-    },
     currentRoom: {
-      backgroundColor: colors.mapCurrentRoom,
+      borderColor: colors.accent,
+      borderWidth: 3,
     },
+    legend: { flexDirection: "row", flexWrap: "wrap", gap: 8, justifyContent: "center", paddingTop: 4 },
+    legendItem: { alignItems: "center", flexDirection: "row", gap: 4 },
+    legendSwatch: { borderColor: colors.fadedInk, borderRadius: 3, borderWidth: 1, height: 12, width: 12 },
+    legendLabel: { color: colors.ink, fontSize: 10, fontWeight: "700" },
     stairsIcon: {
-      color: colors.paper,
+      color: colors.ink,
       fontSize: 11,
       fontWeight: "900",
       lineHeight: 13,
     },
     lockIcon: {
-      color: colors.paper,
+      color: colors.ink,
       fontSize: 9,
       fontWeight: "900",
       lineHeight: 11,

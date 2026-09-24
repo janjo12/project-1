@@ -41,6 +41,13 @@ export default function SettingsRoute() {
                 updateSettings({ vibrationEnabled: value });
               }}
             />
+            <ToggleButton
+              label="Left-handed controls"
+              value={settings.handedness === "left"}
+              onValueChange={(value) => {
+                updateSettings({ handedness: value ? "left" : "right" });
+              }}
+            />
           </Container>
         </Container>
       </ScreenShell>

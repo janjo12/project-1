@@ -21,17 +21,31 @@ export function ItemControl({
       <View
         accessibilityLabel={itemLabel ? `${itemLabel}. ${activationDescription}` : "No item held"}
         accessibilityRole="text"
-        style={styles.itemPanel}
+      style={[styles.itemPanel, { maxWidth: 105, minWidth: 88, minHeight: 48 }]}
         testID="item-status"
       >
-        {itemSprite ? <PixelSprite sprite={itemSprite} label={itemLabel ?? "Item"} size={24} /> : null}
+        {itemSprite ? <PixelSprite sprite={itemSprite} label={itemLabel ?? "Item"} size={18} /> : null}
         <Text style={styles.label}>{itemLabel ?? "No Item"}</Text>
-        <Text style={styles.description}>
+        <Text style={[styles.description, { fontSize: 9, lineHeight: 11 }]}>
           {activationDescription ?? "Pick up an item to hold it."}
         </Text>
       </View>
     </View>
   );
+}
+
+export function EquipmentControl({ label, description, sprite, onDrop, disabled = false }: {
+  label?: string | null; description?: string | null; sprite?: string | null; onDrop?: () => void; disabled?: boolean;
+}) {
+  const colors = useThemeColors();
+  return <Pressable accessibilityRole="button" accessibilityLabel={label ? `${label}. Drop equipment` : "Equipment slot empty"}
+    accessibilityHint="Tap to drop your equipment without using a turn" disabled={disabled || !label} onPress={onDrop}
+    testID="equipment-slot" style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.paperLight,
+      borderColor: colors.sepia, borderWidth: 2, borderRadius: 12, minHeight: 48, padding: 6 }}>
+    {sprite ? <PixelSprite sprite={sprite} label={label ?? "Equipment"} size={20} /> : null}
+    <Text style={{ color: colors.ink, fontSize: 12, fontWeight: "900" }}>{label ?? "Equipment"}</Text>
+    <Text style={{ color: colors.sepia, fontSize: 9, textAlign: "center" }}>{description ?? "Tap to drop"}</Text>
+  </Pressable>;
 }
 
 function createStyles(colors: ThemeColors) {

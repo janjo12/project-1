@@ -22,6 +22,19 @@ const generation = load('@/utils/dungeon-generation');
 const domain = load('@/utils/dungeon-map');
 const runtime = load('@/utils/dungeon-map-runtime');
 const layout = load('@/utils/room-scene-layout');
+const transition = load('@/utils/room-transition');
+assert.equal(transition.getAdjacentRoomTransition('A1', 'A2'), 'right');
+assert.equal(transition.getAdjacentRoomTransition('A2', 'A1'), 'left');
+assert.equal(transition.getAdjacentRoomTransition('A1', 'B1'), 'down');
+assert.equal(transition.getAdjacentRoomTransition('B1', 'A1'), 'up');
+for (const [from, to] of [['A1', 'A3'], ['A1', 'C1'], ['A1', 'A1'], [undefined, 'A1']])
+  assert.equal(transition.getAdjacentRoomTransition(from, to), null);
+const floorSource = fs.readFileSync(path.join(root, 'src/components/room-floor.tsx'), 'utf8');
+assert.match(floorSource, /SPRITE_SIZE/);
+assert.match(floorSource, /stone-floor/);
+const sceneSource = fs.readFileSync(path.join(root, 'src/components/room-scene.tsx'), 'utf8');
+assert.match(sceneSource, /room-transition-snapshot/);
+assert.match(sceneSource, /reduceMotionChanged/);
 for (let seed = 0; seed < 200; seed++) {
   for (const level of [1, 5, 20]) {
     const map = generation.createSeededDungeonMap(String(seed), level, undefined, true);

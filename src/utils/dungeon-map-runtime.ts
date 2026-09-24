@@ -1,6 +1,6 @@
 import {
+  createEquipment,
   createItem,
-  directionDeltas,
   getDoorwayGuardPlacements,
   getGridPosition,
   getNeighbor,
@@ -9,6 +9,7 @@ import {
   type Direction,
   type DungeonMap,
   type DungeonRoom,
+  type EquipmentId,
   type ItemId,
   type RoomContents,
   type RoomItemRef,
@@ -16,16 +17,38 @@ import {
   type WorldMonster,
 } from "@/utils/dungeon-map";
 
+const DIRECTIONS: Direction[] = ["north", "east", "south", "west"];
+
+function findRoomLocation(map: DungeonMap, roomId: string) {
+  for (const [rowIndex, row] of map.rooms.entries()) {
+    const roomIndex = row.findIndex((room) => room.id === roomId);
+
+    if (roomIndex !== -1) {
+      return { room: row[roomIndex], rowIndex, roomIndex };
+    }
+  }
+
+  return null;
+}
+
 export function getRooms(map: DungeonMap) {
   return map.rooms.flat();
 }
 
 export function getRoom(map: DungeonMap, roomId: string) {
-  return getRooms(map).find((room) => room.id === roomId);
+  return findRoomLocation(map, roomId)?.room;
 }
 
 export function getCurrentRoom(map: DungeonMap) {
-  return getRooms(map).find((room) => room.isCurrentPosition);
+  for (const row of map.rooms) {
+    const room = row.find((candidate) => candidate.isCurrentPosition);
+
+    if (room) {
+      return room;
+    }
+  }
+
+  return undefined;
 }
 
 export function getCurrentRoomId(map: DungeonMap) {
@@ -53,33 +76,29 @@ export function getConnectedRoomId(
 }
 
 export function getOpenDirections(map: DungeonMap, roomId: string) {
-  const directions: Direction[] = ["north", "east", "south", "west"];
-
-  return directions.filter(
+  return DIRECTIONS.filter(
     (direction) => getConnectedRoomId(map, roomId, direction) !== null,
   );
 }
 
 export function getLockedDirections(map: DungeonMap, roomId: string) {
   const room = getRoom(map, roomId);
-  const directions: Direction[] = ["north", "east", "south", "west"];
 
   if (!room) {
     return [];
   }
 
-  return directions.filter((direction) => room[direction] === "locked");
+  return DIRECTIONS.filter((direction) => room[direction] === "locked");
 }
 
 export function getGuardedDirections(map: DungeonMap, roomId: string) {
   const room = getRoom(map, roomId);
-  const directions: Direction[] = ["north", "east", "south", "west"];
 
   if (!room) {
     return [];
   }
 
-  return directions.filter((direction) => room[direction] === "guarded");
+  return DIRECTIONS.filter((direction) => room[direction] === "guarded");
 }
 
 function prioritizeRoomContentsForTargeting(map: DungeonMap, contents: RoomContents) {
@@ -128,7 +147,7 @@ export function getTargetableMonsters(
     ...getTargetableRoomMonsterRefs(map, room)
       .map((monsterRef) => getLivingMonster(map, monsterRef.id))
       .filter((monster): monster is WorldMonster => Boolean(monster)),
-    ...(Object.keys(directionDeltas) as Direction[])
+    ...DIRECTIONS
       .flatMap((direction) => getDoorwayGuardPlacements(map, room.id, direction))
       .map((guard) => (guard ? getLivingMonster(map, guard.monsterId) : null))
       .filter((monster): monster is WorldMonster => Boolean(monster)),
@@ -169,12 +188,38 @@ export function getRoomItemId(map: DungeonMap, room: DungeonRoom | undefined) {
   return getRoomItem(map, room)?.itemId ?? null;
 }
 
+export function getRoomEquipment(map: DungeonMap, room: DungeonRoom | undefined) {
+  const ref = room?.contents.find((content) => content.type === "equipment");
+  return ref?.type === "equipment" ? map.entities.equipment?.[ref.id] ?? null : null;
+}
+
+export function revealRooms(map: DungeonMap, currentRoomId: string, revealAdjacent = false): DungeonMap {
+  const current = getRoom(map, currentRoomId);
+  const adjacentIds = new Set<string>();
+  if (revealAdjacent && current) DIRECTIONS.forEach(direction => {
+    const neighbor = getNeighbor(current, direction);
+    if (neighbor) adjacentIds.add(getRoomId(neighbor));
+  });
+  return { ...map, rooms: map.rooms.map(row => row.map(room => ({
+    ...room, isCurrentPosition: room.id === currentRoomId,
+    isRevealed: room.id === currentRoomId || adjacentIds.has(room.id) || (!revealAdjacent && room.isRevealed),
+  }))) };
+}
+
 export function hasRoomStairs(room: DungeonRoom | undefined) {
   return Boolean(room?.contents.some((content) => content.type === "stairs"));
 }
 
 export function getStairsRoom(map: DungeonMap) {
-  return getRooms(map).find((room) => hasRoomStairs(room));
+  for (const row of map.rooms) {
+    const room = row.find(hasRoomStairs);
+
+    if (room) {
+      return room;
+    }
+  }
+
+  return undefined;
 }
 
 export function unlockDoor(
@@ -182,21 +227,20 @@ export function unlockDoor(
   roomId: string,
   direction: Direction,
 ): DungeonMap {
+  const sourceLocation = findRoomLocation(map, roomId);
+  const neighbor = sourceLocation
+    ? getNeighbor(sourceLocation.room, direction)
+    : null;
+  const neighborId = neighbor ? getRoomId(neighbor) : null;
+
   return {
     ...map,
     rooms: map.rooms.map((row) =>
       row.map((room) => {
-        if (room.id === roomId) {
-          return { ...room, [direction]: "open" };
-        }
-
-        const sourceRoom = getRoom(map, roomId);
-        const neighbor = sourceRoom ? getNeighbor(sourceRoom, direction) : null;
-
-        if (neighbor && room.id === getRoomId(neighbor)) {
+        if (room.id === roomId) return { ...room, [direction]: "open" };
+        if (neighborId && room.id === neighborId) {
           return { ...room, [oppositeDirections[direction]]: "open" };
         }
-
         return room;
       }),
     ),
@@ -204,17 +248,24 @@ export function unlockDoor(
 }
 
 export function moveCurrentPosition(map: DungeonMap, nextRoomId: string) {
-  return {
-    ...map,
-    rooms: map.rooms.map((row) =>
-      row.map((room) => ({
-        ...room,
-        isCurrentPosition: room.id === nextRoomId,
-        isRevealed:
-          room.isRevealed || room.isCurrentPosition || room.id === nextRoomId,
-      })),
-    ),
-  };
+  const previousRoomId = map.rooms.flat().find(room => room.isCurrentPosition)?.id;
+  const next = revealRooms(map, nextRoomId, false);
+  if (!previousRoomId) return next;
+  return { ...next, rooms: next.rooms.map(row => row.map(room => room.id === previousRoomId ? { ...room, isRevealed: true } : room)) };
+}
+
+export function removeEquipmentFromRoom(map: DungeonMap, roomId: string, id: string) {
+  const equipment = map.entities.equipment?.[id];
+  if (!equipment) return map;
+  const { [id]: _removed, ...remaining } = map.entities.equipment ?? {};
+  return { ...map, entities: { ...map.entities, equipment: remaining }, rooms: map.rooms.map(row => row.map(room => room.id === roomId
+    ? { ...room, contents: room.contents.filter(content => !(content.type === "equipment" && content.id === id)) } : room)) };
+}
+
+export function addEquipmentToRoom(map: DungeonMap, roomId: string, equipmentId: EquipmentId) {
+  const equipment = createEquipment(equipmentId, `${equipmentId}:${roomId}:${Date.now()}:${Math.floor(Math.random() * 1_000_000)}`);
+  return { ...map, entities: { ...map.entities, equipment: { ...map.entities.equipment, [equipment.id]: equipment } },
+    rooms: map.rooms.map(row => row.map(room => room.id === roomId ? { ...room, contents: [...room.contents, { id: equipment.id, type: "equipment" as const }] } : room)) };
 }
 
 export function damageMonsterInRoom(
@@ -378,12 +429,13 @@ export function moveWerewolfToRoom(map: DungeonMap, roomId: string) {
 }
 
 export function getActiveRooms(map: DungeonMap) {
-  return getRooms(map).filter(
-    (room) =>
-      room.isRevealed ||
-      room.contents.length > 0 ||
-      getOpenDirections(map, room.id).length > 0 ||
-      getGuardedDirections(map, room.id).length > 0,
+  return map.rooms.flatMap((row) =>
+    row.filter(
+      (room) =>
+        room.isRevealed ||
+        room.contents.length > 0 ||
+        DIRECTIONS.some((direction) => room[direction] === "open" || room[direction] === "guarded"),
+    ),
   );
 }
 

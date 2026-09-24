@@ -17,7 +17,7 @@ const channelEvents = (channel: GameChannel) => channel as unknown as EventSourc
 }>;
 type Configuration = NonNullable<ConstructorParameters<typeof RTCPeerConnection>[0]>;
 export type GameState = { turn: number; [key: string]: unknown };
-export type PlayerAction = { type: "MOVE" | "ATTACK" | "DEFEND" | "PICKUP" | "DESCEND"; target?: string; charged?: boolean };
+export type PlayerAction = { type: "MOVE" | "ATTACK" | "DEFEND" | "SUPPORT" | "CLASS_READY" | "PICKUP" | "PICKUP_EQUIPMENT" | "DROP_EQUIPMENT" | "DESCEND"; target?: string; charged?: boolean; microgameScore?: number };
 export type NetworkMessage =
   | { type: "PLAYER_INFO"; playerId: string; name: string }
   | { type: "SUBMIT_ACTION"; turn: number; action: PlayerAction }
@@ -73,8 +73,9 @@ function validTurn(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 }
 function validAction(value: unknown): value is PlayerAction {
-  return record(value) && ["MOVE", "ATTACK", "DEFEND", "PICKUP", "DESCEND"].includes(String(value.type)) &&
+  return record(value) && ["MOVE", "ATTACK", "DEFEND", "SUPPORT", "CLASS_READY", "PICKUP", "PICKUP_EQUIPMENT", "DROP_EQUIPMENT", "DESCEND"].includes(String(value.type)) &&
     (value.charged === undefined || typeof value.charged === "boolean") &&
+    (value.microgameScore === undefined || (typeof value.microgameScore === "number" && Number.isFinite(value.microgameScore) && value.microgameScore >= 0 && value.microgameScore <= 100)) &&
     (value.target === undefined || typeof value.target === "string");
 }
 function parseDescription(text: string, type: "offer" | "answer") {
@@ -217,7 +218,14 @@ export function createHostSession<State extends GameState>(options: HostSessionO
   }
   function finishTurn() {
     if (!started || closed) throw new Error("Start an active session before resolving turns.");
-    const next = options.resolveTurn(state, new Map(actions));
+    let next: State;
+    try {
+      next = options.resolveTurn(state, new Map(actions));
+    } catch (error) {
+      actions.clear();
+      options.onError?.(error instanceof Error ? error : new Error(String(error)));
+      throw error;
+    }
     if (!validTurn(next.turn) || next.turn <= state.turn) throw new Error("The resolver must advance the turn.");
     state = next;
     actions.clear();
@@ -229,7 +237,10 @@ export function createHostSession<State extends GameState>(options: HostSessionO
     if (!started || closed || !participants.has(playerId) || turn !== state.turn ||
         actions.has(playerId) || !validAction(action)) return false;
     actions.set(playerId, { ...action });
-    if (actions.size === participants.size) finishTurn();
+    if (actions.size === participants.size) {
+      try { finishTurn(); }
+      catch { return true; }
+    }
     return true;
   }
   function removePlayer(playerId: string) {

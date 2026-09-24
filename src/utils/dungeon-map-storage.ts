@@ -5,12 +5,27 @@ import type { DungeonMap, GridPosition } from "@/utils/dungeon-map";
 
 const MAP_STORAGE_KEY = "project-1:dungeon-map";
 
+function getBrowserStorage(): Storage | null {
+  return typeof globalThis.window?.localStorage === "undefined"
+    ? null
+    : globalThis.window.localStorage;
+}
+
 export async function saveDungeonMap(map: DungeonMap) {
-  await AsyncStorage.setItem(MAP_STORAGE_KEY, JSON.stringify(map));
+  const serialized = JSON.stringify(map);
+  const browserStorage = getBrowserStorage();
+  if (browserStorage) {
+    browserStorage.setItem(MAP_STORAGE_KEY, serialized);
+  } else {
+    await AsyncStorage.setItem(MAP_STORAGE_KEY, serialized);
+  }
 }
 
 export async function loadDungeonMap() {
-  const storedMap = await AsyncStorage.getItem(MAP_STORAGE_KEY);
+  const browserStorage = getBrowserStorage();
+  const storedMap = browserStorage
+    ? browserStorage.getItem(MAP_STORAGE_KEY)
+    : await AsyncStorage.getItem(MAP_STORAGE_KEY);
   return storedMap ? (JSON.parse(storedMap) as DungeonMap) : null;
 }
 

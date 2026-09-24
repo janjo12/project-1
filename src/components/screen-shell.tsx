@@ -46,6 +46,8 @@ function createStyles(colors: ThemeColors) {
     },
     compactScrollContent: {
       backgroundColor: colors.paper,
+      flexGrow: 1,
+      justifyContent: "center",
     },
     phoneFrame: {
       backgroundColor: colors.paper,
@@ -57,6 +59,8 @@ function createStyles(colors: ThemeColors) {
     compactPhoneFrame: {
       gap: 10,
       padding: 14,
+      flexGrow: 1,
+      minHeight: "100%",
     },
   });
 }

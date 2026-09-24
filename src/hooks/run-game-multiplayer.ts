@@ -1,60 +1,239 @@
 import { useEffect, useRef, useState } from "react";
 import { AppState } from "react-native";
+
 import type { createClientConnection, createHostSession, GameState, PlayerAction } from "../../multiplayer/connection";
 import { GAME_PARAMETERS } from "@/gameparameters";
-import { getRunSnapshot, createLevelMap, getPlayerAttackDamage, resolveEnergyLoss, resolveHealthLoss, resolveTurnLoss, PLAYER_MAX_ENERGY, PLAYER_MAX_HEALTH } from "@/hooks/run-game-helpers";
+import { createLevelMap } from "@/hooks/run-game-level";
+import { getRunSnapshot } from "@/hooks/run-game-snapshot";
+import { PLAYER_MAX_ENERGY, PLAYER_MAX_HEALTH } from "@/hooks/run-game-types";
 import { getEnemyAttackOutcome, getHardTurnLimit, getTurnDuration, hasTurnLimit } from "@/hooks/run-game-policies";
-import type { Direction, DungeonMap } from "@/utils/dungeon-map";
-import { addItemToRoom, damageMonsterInRoom, getConnectedRoomId, getRoom, getRoomItem, getRoomMonster, getTargetableMonsters, hasRoomStairs, moveCurrentPosition, unlockDoor } from "@/utils/dungeon-map-runtime";
+import { POSSIBLE_EQUIPMENT, POSSIBLE_ITEMS, type Direction, type DungeonMap } from "@/utils/dungeon-map";
+import {
+  addEquipmentToRoom,
+  addItemToRoom,
+  damageMonsterInRoom,
+  getConnectedRoomId,
+  getRoom,
+  getRoomEquipment,
+  getRoomItem,
+  getRoomMonster,
+  getTargetableMonsters,
+  hasRoomStairs,
+  moveCurrentPosition,
+  removeEquipmentFromRoom,
+  unlockDoor,
+} from "@/utils/dungeon-map-runtime";
+import { applyDefense, getEquipmentStats, resolveEnergyLoss, resolveHealthLoss, resolveTurnLoss } from "@/hooks/run-game-items";
+import { randomGameClass, type GameClassId } from "@/game-classes";
 import type { Difficulty, GameSettings } from "@/utils/settings-storage";
 
-export type MultiplayerPlayer = { id: string; roomId: string; health: number; energy: number; item: string | null };
+export type MultiplayerPlayer = {
+  id: string;
+  roomId: string;
+  health: number;
+  energy: number;
+  item: string | null;
+  equipment: string | null;
+  classId: GameClassId;
+  defenseBuff: number;
+  vanguard: number;
+  vanguardSource: string | null;
+};
 export type MultiplayerState = GameState & {
-  version: 1; seed: string; difficulty: Difficulty; level: number; map: DungeonMap;
-  players: Record<string, MultiplayerPlayer>; turnsLeft: number; ended: boolean;
+  version: 1;
+  seed: string;
+  difficulty: Difficulty;
+  level: number;
+  map: DungeonMap;
+  phase: "briefing" | "playing";
+  briefingReady: string[];
+  players: Record<string, MultiplayerPlayer>;
+  turnsLeft: number;
+  ended: boolean;
 };
 export function createMultiplayerState(seed: string, difficulty: Difficulty, ids: string[]): MultiplayerState {
   const map = createLevelMap(seed, 1, undefined, difficulty !== "easy");
-  return { version: 1, turn: 0, seed, difficulty, level: 1, map, ended: false,
+  const players = Object.fromEntries(ids.map(id => [id, {
+    id,
+    roomId: map.startingRoomId,
+    health: PLAYER_MAX_HEALTH,
+    energy: PLAYER_MAX_ENERGY,
+    item: null,
+    equipment: null,
+    classId: randomGameClass().id,
+    defenseBuff: 0,
+    vanguard: 0,
+    vanguardSource: null,
+  }]));
+
+  return {
+    version: 1,
+    turn: 0,
+    seed,
+    difficulty,
+    level: 1,
+    map,
+    ended: false,
+    phase: "briefing",
+    briefingReady: [],
     turnsLeft: getHardTurnLimit({ difficulty, map }),
-    players: Object.fromEntries(ids.map(id => [id, { id, roomId: map.startingRoomId, health: PLAYER_MAX_HEALTH, energy: PLAYER_MAX_ENERGY, item: null }])) };
+    players,
+  };
+}
+
+function applyPlayerDamage(player: MultiplayerPlayer, damage: number) {
+  const result = resolveHealthLoss(player.health, damage, player.item);
+  player.health = result.nextHealth;
+  if (result.usesPotion) player.item = null;
+
+  if (player.health <= 0 && !result.usesPotion && player.classId === "cleric" && player.energy > 0) {
+    player.health = player.energy;
+    player.energy = 0;
+  }
+}
+
+function grantThiefReward(state: MultiplayerState, target: MultiplayerPlayer) {
+  if (Math.random() < 0.5) {
+    const item = POSSIBLE_ITEMS[Math.floor(Math.random() * POSSIBLE_ITEMS.length)];
+    if (target.item) {
+      state.map = addItemToRoom(state.map, target.roomId, item.id);
+    } else {
+      target.item = item.id;
+    }
+    return;
+  }
+
+  const equipment = POSSIBLE_EQUIPMENT[Math.floor(Math.random() * POSSIBLE_EQUIPMENT.length)];
+  if (target.equipment) {
+    state.map = addEquipmentToRoom(state.map, target.roomId, equipment.equipmentId);
+  } else {
+    target.equipment = equipment.equipmentId;
+  }
 }
 
 /** Stable player order makes contested items/attacks independent of packet arrival order. */
-export function resolveMultiplayerTurn(previous: MultiplayerState, actions: ReadonlyMap<string, PlayerAction>): MultiplayerState {
-  const state: MultiplayerState = { ...previous, turn: previous.turn + 1,
-    players: Object.fromEntries(Object.entries(previous.players).map(([id, player]) => [id, { ...player }])) };
+export function resolveMultiplayerTurn(
+  previous: MultiplayerState,
+  actions: ReadonlyMap<string, PlayerAction>,
+): MultiplayerState {
+  const state: MultiplayerState = {
+    ...previous,
+    turn: previous.turn + 1,
+    players: Object.fromEntries(
+      Object.entries(previous.players).map(([id, player]) => [id, { ...player }]),
+    ),
+  };
   if (state.ended) return state;
+  if (state.phase === "briefing") {
+    for (const playerId of Object.keys(state.players)) {
+      if (actions.get(playerId)?.type === "CLASS_READY" && !state.briefingReady.includes(playerId)) {
+        state.briefingReady.push(playerId);
+      }
+    }
+    if (Object.keys(state.players).every(id => state.briefingReady.includes(id))) {
+      state.phase = "playing";
+    }
+    return state;
+  }
+  // Resolve support before any player takes a hit so it works regardless of player ID order.
+  for (const [id, source] of Object.entries(state.players)) {
+    const action = actions.get(id);
+    if (action?.type !== "SUPPORT") continue;
+    const target = state.players[action.target ?? id];
+    if (!source || !target || source.health <= 0 || target.health <= 0 || source.roomId !== target.roomId) continue;
+    const chargeCost = getEquipmentStats(source.equipment).chargeCost;
+    const charged = !!action.charged && source.energy >= chargeCost;
+    if (charged) {
+      const energy = resolveEnergyLoss(source.energy, chargeCost, source.item);
+      source.energy = energy.nextEnergy;
+      if (energy.usesMeal) source.item = null;
+    }
+    if (source.classId === "warrior") {
+      target.vanguard = 1;
+      target.vanguardSource = source.id === target.id ? null : source.id;
+      if (charged) source.defenseBuff = Math.max(source.defenseBuff, 1);
+    } else if (source.classId === "cleric") {
+      target.defenseBuff = Math.max(target.defenseBuff, 2);
+      if (charged) target.health = Math.min(PLAYER_MAX_HEALTH, target.health + 10);
+    } else if (Math.random() < (charged ? 0.2 : 0.1)) {
+      grantThiefReward(state, target);
+    }
+  }
   for (const player of Object.values(state.players)) {
     if (player.health <= 0) continue;
     const action = actions.get(player.id) ?? { type: "DEFEND" };
-    const charged = !!action.charged && player.energy >= GAME_PARAMETERS.combat.chargeEnergyCost;
+    const room = getRoom(state.map, player.roomId);
+    if (action.type === "DROP_EQUIPMENT") {
+      if (player.equipment) {
+        state.map = addEquipmentToRoom(state.map, player.roomId, player.equipment);
+        player.equipment = null;
+      }
+      if (action.charged) {
+        player.energy = Math.min(
+          PLAYER_MAX_ENERGY,
+          player.energy + GAME_PARAMETERS.combat.chargeEnergyCost,
+        );
+      }
+      continue;
+    }
+    const isChargeableAction = ["ATTACK", "DEFEND", "MOVE", "PICKUP", "PICKUP_EQUIPMENT"].includes(action.type);
+    const chargeCost = getEquipmentStats(player.equipment ?? null).chargeCost;
+    const charged = isChargeableAction && !!action.charged && player.energy >= chargeCost;
     if (charged) {
-      const result = resolveEnergyLoss(player.energy, GAME_PARAMETERS.combat.chargeEnergyCost, player.item);
+      const result = resolveEnergyLoss(player.energy, chargeCost, player.item);
       player.energy = result.nextEnergy;
       if (result.usesMeal) player.item = null;
     }
-    const room = getRoom(state.map, player.roomId);
+    const isThiefLockPick = action.type === "MOVE" &&
+      player.classId === "thief" && player.item !== "key" &&
+      room?.[action.target as Direction] === "locked";
+    const isFreeAction = action.type === "MOVE" || action.type === "PICKUP" || action.type === "PICKUP_EQUIPMENT";
+    if (charged && isFreeAction && !isThiefLockPick) {
+      player.energy = Math.min(PLAYER_MAX_ENERGY, player.energy + chargeCost);
+    }
     if (action.type === "MOVE" && ["north", "east", "south", "west"].includes(action.target ?? "")) {
       const direction = action.target as Direction;
-      if (room?.[direction] === "locked" && player.item === "key") {
+      const wasLocked = room?.[direction] === "locked";
+      const hadKey = player.item === "key";
+      if (wasLocked && (player.item === "key" || player.classId === "thief")) {
         state.map = unlockDoor(state.map, player.roomId, direction);
-        player.item = null;
+        if (player.item === "key") player.item = null;
       }
       const destination = getConnectedRoomId(state.map, player.roomId, direction);
       if (destination) {
-        player.roomId = destination;
-        state.map = moveCurrentPosition(state.map, destination);
-        continue;
+        const thiefMustSpendTurnToPick = wasLocked && player.classId === "thief" && !charged && !hadKey;
+        if (!thiefMustSpendTurnToPick) {
+          player.roomId = destination;
+          state.map = moveCurrentPosition(state.map, destination);
+          continue;
+        }
       }
     }
     if (action.type === "ATTACK") {
       const monster = getTargetableMonsters(state.map, room).find(m => m.id === action.target);
       if (monster) {
         const silver = monster.chases && player.item === "silver-bullet";
-        state.map = damageMonsterInRoom(state.map, player.roomId, monster.id,
-          silver ? monster.currentHealth : getPlayerAttackDamage(monster, charged));
+        const attackScore = action.microgameScore ?? 100;
+        const baseDamage = Math.floor(GAME_PARAMETERS.player.attack * attackScore / 100);
+        const damage = silver
+          ? monster.currentHealth
+          : baseDamage + getEquipmentStats(player.equipment).attack + (charged ? 5 : 0);
+        state.map = damageMonsterInRoom(
+          state.map,
+          player.roomId,
+          monster.id,
+          applyDefense(damage, monster.defense ?? 0),
+        );
         if (silver) player.item = null;
+      }
+    }
+    if (action.type === "SUPPORT") continue;
+    if (action.type === "PICKUP_EQUIPMENT" || (action.type === "PICKUP" && getRoomEquipment(state.map, room))) {
+      const held = getRoomEquipment(state.map, getRoom(state.map, player.roomId));
+      if (held) {
+        state.map = removeEquipmentFromRoom(state.map, player.roomId, held.id);
+        if (player.equipment) state.map = addEquipmentToRoom(state.map, player.roomId, player.equipment);
+        player.equipment = held.equipmentId;
       }
     }
     if (action.type === "PICKUP") {
@@ -71,12 +250,39 @@ export function resolveMultiplayerTurn(previous: MultiplayerState, actions: Read
     if (enemy) {
       const defending = action.type === "DEFEND";
       const outcome = getEnemyAttackOutcome({ isDefending: defending, monsterDamage: enemy.damage });
-      const health = resolveHealthLoss(player.health, defending && charged ? 0 : outcome.damageTaken, player.item);
-      player.health = health.nextHealth;
-      if (health.usesPotion) player.item = null;
+      const protector = player.vanguardSource ? state.players[player.vanguardSource] : null;
+      const recipient = protector && protector.health > 0 && protector.roomId === player.roomId ? protector : player;
+      const recipientClassDefense = recipient.classId === "warrior" ? 15 : GAME_PARAMETERS.player.defense;
+      const chargedBlock = defending && charged && recipient.id === player.id;
+      const protectorDefenseBonus = chargedBlock && recipient.classId === "warrior" ? 5 : 0;
+      const incomingDamage = chargedBlock ? 0 : applyDefense(
+        outcome.damageTaken,
+        recipientClassDefense +
+          getEquipmentStats(recipient.equipment).defense +
+          recipient.defenseBuff +
+          protectorDefenseBonus,
+      );
+      applyPlayerDamage(recipient, incomingDamage);
+      if (player.vanguard > 0) {
+        state.map = damageMonsterInRoom(
+          state.map,
+          player.roomId,
+          enemy.id,
+          applyDefense(outcome.damageTaken, enemy.defense ?? 0),
+        );
+        player.vanguard = 0;
+      }
+      player.vanguardSource = null;
       if (defending) state.map = damageMonsterInRoom(state.map, player.roomId, enemy.id,
         charged ? GAME_PARAMETERS.combat.chargedCounterattackDamage : outcome.counterattackDamage);
     }
+  }
+  for (const player of Object.values(state.players)) {
+    player.defenseBuff = Math.max(0, player.defenseBuff - 1);
+    if (player.health <= 0) continue;
+    const curseDamage = getEquipmentStats(player.equipment ?? null).turnDamage;
+    if (curseDamage <= 0) continue;
+    applyPlayerDamage(player, curseDamage);
   }
   const alive = Object.values(state.players).filter(p => p.health > 0);
   // Everyone alive must reach the stairs; one player then chooses Descend.
@@ -100,11 +306,29 @@ export function resolveMultiplayerTurn(previous: MultiplayerState, actions: Read
 
 export function isMultiplayerState(value: GameState): value is MultiplayerState {
   const state = value as MultiplayerState;
-  return state.version === 1 && typeof state.seed === "string" && ["easy", "normal", "hard"].includes(state.difficulty) &&
-    Number.isInteger(state.level) && state.level > 0 && typeof state.ended === "boolean" && Number.isFinite(state.turnsLeft) &&
-    !!state.map && Array.isArray(state.map.rooms) && !!state.map.entities && !!state.players &&
-    Object.values(state.players).every(p => typeof p.id === "string" && typeof p.roomId === "string" &&
-      Number.isFinite(p.health) && Number.isFinite(p.energy));
+  const validPlayer = (player: MultiplayerPlayer) =>
+    typeof player.id === "string" &&
+    typeof player.roomId === "string" &&
+    Number.isFinite(player.health) &&
+    Number.isFinite(player.energy) &&
+    (player.item === null || typeof player.item === "string") &&
+    (player.equipment === null || typeof player.equipment === "string") &&
+    ["warrior", "cleric", "thief"].includes(player.classId) &&
+    Number.isFinite(player.defenseBuff) &&
+    Number.isFinite(player.vanguard) &&
+    (player.vanguardSource === null || typeof player.vanguardSource === "string");
+
+  return state.version === 1 &&
+    typeof state.seed === "string" &&
+    ["easy", "normal", "hard"].includes(state.difficulty) &&
+    Number.isInteger(state.level) && state.level > 0 &&
+    typeof state.ended === "boolean" &&
+    Number.isFinite(state.turnsLeft) &&
+    (state.phase === "briefing" || state.phase === "playing") &&
+    Array.isArray(state.briefingReady) &&
+    state.briefingReady.every(id => typeof id === "string") &&
+    !!state.map && Array.isArray(state.map.rooms) && !!state.map.entities &&
+    !!state.players && Object.values(state.players).every(validPlayer);
 }
 
 type Host = ReturnType<typeof createHostSession<MultiplayerState>>;
@@ -134,6 +358,7 @@ export function useRunMultiplayerGame(settings: GameSettings) {
   const [connected, setConnected] = useState(false);
   const [submitted, setSubmitted] = useState<number | null>(null);
   const [charged, setCharged] = useState(false);
+  const [microgameScore, setMicrogameScore] = useState<number | null>(null);
   const [seconds, setSeconds] = useState(0);
   const [disconnected, setDisconnected] = useState(false);
   const [foreground, setForeground] = useState(true);
@@ -148,7 +373,7 @@ export function useRunMultiplayerGame(settings: GameSettings) {
     return () => { mounted.current = false; subscription.remove(); host.current?.close(); client.current?.close(); };
   }, []);
   useEffect(() => {
-    if (!state || state.ended || role !== "host" || state.difficulty !== "hard" || !foreground) return;
+    if (!state || state.ended || state.phase !== "playing" || role !== "host" || state.difficulty !== "hard" || !foreground) return;
     const duration = getTurnDuration({ difficulty: state.difficulty, level: state.level });
     const deadline = Date.now() + duration;
 
@@ -228,18 +453,20 @@ export function useRunMultiplayerGame(settings: GameSettings) {
     if (!state || state.ended || disconnected || submitted === state.turn) return;
     setSubmitted(state.turn); setError("");
     try {
-      const complete = { ...action, charged };
+      const complete = { ...action, charged, ...(microgameScore === null ? {} : { microgameScore }) };
       if (host.current) {
         if (!host.current.submitHostAction(state.turn, complete)) setSubmitted(null);
       } else client.current!.send({ type: "SUBMIT_ACTION", turn: state.turn, action: complete });
+      setMicrogameScore(null);
     } catch (e) { setSubmitted(null); report(e); }
   }
 
   const player = state?.players[playerId];
   const map = state && player ? moveCurrentPosition(state.map, player.roomId) : null;
   const snapshot = state && player && map ? getRunSnapshot({ activeMonsterId: null, clearedLevels: state.level - 1,
-    difficulty: state.difficulty, dungeonMap: map, inventoryItem: player.item, isResolving: false, level: state.level,
+    difficulty: state.difficulty, dungeonMap: map, inventoryItem: player.item, equipment: player.equipment ?? null, isResolving: false, level: state.level,
     playerEnergy: player.energy, playerHealth: player.health, turnCounter: state.turnsLeft }) : null;
+  const visibleMap = snapshot?.visibleDungeonMap ?? map;
   function removePlayer(id: string) {
     host.current?.removePlayer(id);
     if (id === pendingId) { setPendingId(""); setOutgoing(""); }
@@ -247,12 +474,12 @@ export function useRunMultiplayerGame(settings: GameSettings) {
   return {
     role, playerId, state, outgoing, incoming, setIncoming, pendingId, ready,
     lobbyPlayers, error, busy, connected, submitted, charged, seconds, disconnected,
-    player, map, snapshot, hostGame, start, submit, removePlayer,
+    player, map: visibleMap, snapshot, hostGame, start, submit, removePlayer,
     chooseGuest: () => setRole("guest"),
     addGuest: () => run(addGuest),
     join: () => run(join),
     accept: () => run(accept),
     cancelInvitation: () => removePlayer(pendingId),
-    toggleCharge: () => setCharged(value => !value),
+    toggleCharge: () => setCharged(value => !value), microgameScore, setMicrogameScore,
   };
 }

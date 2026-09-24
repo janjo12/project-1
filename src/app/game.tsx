@@ -1,13 +1,14 @@
 //#region imports
 import { router } from "expo-router";
-import { useMemo, useState } from "react";
-import { Alert, Text } from "react-native";
+import { useMemo, useRef, useState } from "react";
+import { Alert, Text, View } from "react-native";
 import { GameEngine } from "react-native-game-engine";
 
 import { Container, Header, Row, StyledModal, Title } from "@/components/displays";
 import { DungeonMap } from "@/components/dungeon-map";
-import { ChargeControl, ItemControl } from "@/components/game-controls";
+import { ChargeControl, EquipmentControl, ItemControl } from "@/components/game-controls";
 import { GameViewPanel, type RoomSceneActor, type ScenePosition } from "@/components/game-view-panel";
+import { ClassBriefing } from "@/components/class-briefing";
 import { DestructiveButton, NormalButton, PrimaryButton, ToggleButton } from "@/components/inputs";
 import { DebugBar, ResourceBar, ResourceBarGroup } from "@/components/resource-bar";
 import { ScreenShell } from "@/components/screen-shell";
@@ -22,6 +23,8 @@ import {
     useRunGame,
 } from "@/hooks/run-game-singleplayer";
 import { useGameSettings } from "@/hooks/use-game-settings";
+import { MicrogameOverlay } from "@/components/microgame-overlay";
+import { useMicrogame } from "@/hooks/use-microgame";
 import type { GameSettings } from "@/utils/settings-storage";
 //#endregion
 
@@ -67,6 +70,15 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
     seed: settings.seed.trim(),
     vibrationEnabled: settings.vibrationEnabled,
   });
+  const [microgameScore, setMicrogameScore] = useState<number | null>(null);
+  const [classIntroPage, setClassIntroPage] = useState(0);
+  const pendingAttack = useRef<string | null>(null);
+  const microgame = useMicrogame(score => {
+    setMicrogameScore(score);
+    const target = pendingAttack.current;
+    pendingAttack.current = null;
+    if (target) game.attackMonster(target, score);
+  });
   const gameLoopEntities = useMemo(
     () => ({
       gameLoop: {
@@ -88,21 +100,23 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
     ],
   );
   const map = (
-    <DungeonMap currentRoomId={game.currentRoomId} map={game.dungeonMap} />
+    <DungeonMap currentRoomId={game.currentRoomId} map={game.visibleDungeonMap} />
   );
   const controls = (
-    <ItemControl
-      activationDescription={game.inventoryItemActivationDescription}
-      itemLabel={game.inventoryItemLabel}
-      itemSprite={game.inventoryItemSprite}
-    />
+    <View style={{ flex: 1, gap: 4 }}>
+      <EquipmentControl label={game.equipmentLabel} description={game.equipmentDescription} sprite={game.equipmentSprite} onDrop={game.dropEquipment} />
+      <ItemControl activationDescription={game.inventoryItemActivationDescription} itemLabel={game.inventoryItemLabel} itemSprite={game.inventoryItemSprite} />
+    </View>
   );
 
   function handleActorPress(actor: RoomSceneActor) {
     if (actor.kind === "enemy") {
-      game.attackMonster(actor.id);
+      pendingAttack.current = actor.id;
+      microgame.start(game.playerClass.microgame, settings.handedness);
     } else if (actor.kind === "item") {
       void game.pickupItem();
+    } else if (actor.kind === "equipment") {
+      game.pickupEquipment();
     } else {
       game.descend();
     }
@@ -139,7 +153,7 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
         key={game.turnNumber}
         entities={gameLoopEntities}
         renderer={() => null}
-        running={game.isGameLoopRunning() && !isMenuOpen}
+        running={game.isGameLoopRunning() && !isMenuOpen && !microgame.active && classIntroPage < 0}
         systems={[runGameLoop]}
         timer={new GameLoopTimer()}
       />
@@ -154,17 +168,31 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
       </Header>
 
       <DebugBar accessibilityLabel="Turn status" accessibilityRole="text">
-        {game.turnStatus}
+        {microgameScore === null ? game.turnStatus : `${game.turnStatus} · Last microgame ${microgameScore}/100`}
       </DebugBar>
+      <NormalButton accessibilityLabel="Practice attack microgame" accessibilityRole="button" label="Practice Attack" onPress={() => microgame.start(game.playerClass.microgame, settings.handedness)} />
 
       {map}
       <Row>
-        {controls}
-        <ChargeControl
-          charged={game.isCharged}
-          disabled={game.isResolving || game.hasLost || (!game.isCharged && game.playerEnergy < GAME_PARAMETERS.combat.chargeEnergyCost)}
-          onPress={game.toggleCharge}
-        />
+        {settings.handedness === "left" ? (
+          <>
+            <ChargeControl
+              charged={game.isCharged}
+              disabled={game.isResolving || game.hasLost || (!game.isCharged && game.playerEnergy < GAME_PARAMETERS.combat.chargeEnergyCost)}
+              onPress={game.toggleCharge}
+            />
+            {controls}
+          </>
+        ) : (
+          <>
+            {controls}
+            <ChargeControl
+              charged={game.isCharged}
+              disabled={game.isResolving || game.hasLost || (!game.isCharged && game.playerEnergy < GAME_PARAMETERS.combat.chargeEnergyCost)}
+              onPress={game.toggleCharge}
+            />
+          </>
+        )}
       </Row>
       <Text style={{ color: colors.sepia, fontSize: 12, textAlign: "center" }}>
         Charge: stronger attack, full block + counter, or move / pick up without using a turn.
@@ -202,21 +230,52 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
         ) : null}
       </ResourceBarGroup>
 
+      <Text style={{ color: colors.ink, fontSize: 13, fontWeight: "700", textAlign: "center" }}>
+        Tap a monster to attack, an item to pick it up, a doorway to move, your hero to defend, or stairs to descend.
+      </Text>
+
       <GameViewPanel
         sceneFrameStore={game.sceneFrameStore}
-        canUnlockDoors={game.inventoryItem === "key"}
-        disabled={game.isResolving || game.hasLost}
+        canUnlockDoors={game.inventoryItem === "key" || game.playerClass.id === "thief"}
+        disabled={game.isResolving || game.hasLost || microgame.active || classIntroPage >= 0}
         enemyHealthLossAmount={game.enemyHealthLossAmount}
         hardTurnCounter={game.hardTurnCounter}
         onActorPress={handleActorPress}
         onDoorwayPress={handleDoorwayPress}
-        onPlayerPress={game.defend}
+        onPlayerPress={game.supportSelf}
         playerPosition={game.playerScenePosition}
+        playerLabel={game.playerLabel}
+        playerSprite={game.playerClass.sprite}
+        roomId={game.currentRoomId}
+        reducedMotion={settings.reducedMotion}
         roomDoorways={game.roomDoorways}
         roomSceneActors={game.roomSceneActors}
         playerEnergyLossAmount={game.playerEnergyLossAmount}
         playerHealthLossAmount={game.playerHealthLossAmount}
       />
+
+      <MicrogameOverlay
+        visible={microgame.active}
+        kind={microgame.kind}
+        elapsed={microgame.elapsed}
+        targetDelay={microgame.targetDelay}
+        targetSpot={microgame.targetSpot}
+        clicks={microgame.clicks}
+        leftHanded={settings.handedness === "left"}
+        onTap={microgame.tap}
+      />
+      {classIntroPage >= 0 ? (
+        <ClassBriefing
+          page={classIntroPage}
+          classId={game.playerClass.id}
+          damage={game.playerAttack}
+          multiplayer={false}
+          onNext={() => setClassIntroPage(1)}
+          onBack={() => setClassIntroPage(0)}
+          onPractice={() => microgame.start(game.playerClass.microgame, settings.handedness)}
+          onStart={() => setClassIntroPage(-1)}
+        />
+      ) : null}
 
       <PauseMenu
         onBackToGame={() => setIsMenuOpen(false)}

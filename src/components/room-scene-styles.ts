@@ -6,10 +6,11 @@ export function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     actorContent: {
       alignItems: "center",
+      gap: 2,
       justifyContent: "center",
     },
     actorPosition: {
-      overflow: "hidden",
+      overflow: "visible",
       alignItems: "center",
       justifyContent: "center",
       position: "absolute",
@@ -30,6 +31,13 @@ export function createStyles(colors: ThemeColors) {
       lineHeight: 20,
       textAlign: "center",
     },
+    doorwayArrow: {
+      color: colors.accent,
+      fontSize: 14,
+      fontWeight: "900",
+      lineHeight: 12,
+      textAlign: "center",
+    },
     bottomDoorwayGap: {
       bottom: -7,
     },
@@ -39,10 +47,8 @@ export function createStyles(colors: ThemeColors) {
     enemyHealthBarTrack: {
       backgroundColor: "rgba(239, 68, 68, 0.18)",
       height: 4,
-      left: 0,
       overflow: "hidden",
-      top: 3,
-      width: 32,
+      width: 48,
     },
     floatingLoss: {
       alignItems: "center",
@@ -83,8 +89,34 @@ export function createStyles(colors: ThemeColors) {
       width: "100%",
     },
     sprite: {
-      fontSize: 32,
-      lineHeight: 38,
+      fontSize: 48,
+      lineHeight: 54,
+    },
+    actorLabel: {
+      backgroundColor: colors.paperLight,
+      borderColor: colors.sepia,
+      borderRadius: 6,
+      borderWidth: 1,
+      color: colors.ink,
+      fontSize: 10,
+      fontWeight: "800",
+      lineHeight: 13,
+      maxWidth: 76,
+      overflow: "hidden",
+      paddingHorizontal: 4,
+      textAlign: "center",
+    },
+    playerLabel: {
+      backgroundColor: colors.paperLight,
+      borderColor: colors.sepia,
+      borderRadius: 6,
+      borderWidth: 1,
+      color: colors.ink,
+      fontSize: 11,
+      fontWeight: "900",
+      lineHeight: 15,
+      paddingHorizontal: 6,
+      textAlign: "center",
     },
     topDoorwayGap: {
       top: -7,

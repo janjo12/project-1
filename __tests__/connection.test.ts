@@ -2,6 +2,11 @@ import { RTCPeerConnection } from "react-native-webrtc";
 import { acceptAnswer, createClientConnection, createHostConnection, createHostSession, parseMessage, sendMessage, waitForIceGathering } from "../multiplayer/connection";
 
 jest.mock("react-native-webrtc", () => {
+  const failures: { offer: boolean; answer: boolean; localDescription: boolean } = {
+    offer: false,
+    answer: false,
+    localDescription: false,
+  };
   class Channel {
     label = "game";
     readyState = "connecting";
@@ -13,6 +18,7 @@ jest.mock("react-native-webrtc", () => {
   }
   class Peer {
     static instances: Peer[] = [];
+    static failures = failures;
     iceGatheringState = "complete";
     connectionState = "new";
     signalingState = "stable";
@@ -23,19 +29,36 @@ jest.mock("react-native-webrtc", () => {
     addEventListener(type: string, fn: Function) { (this.listeners[type] ??= []).push(fn); }
     removeEventListener(type: string, fn: Function) { this.listeners[type] = this.listeners[type]?.filter(f => f !== fn); }
     createDataChannel() { return this.channel; }
-    async createOffer() { return { type: "offer", sdp: "offer-with-candidates" }; }
-    async createAnswer() { return { type: "answer", sdp: "answer-with-candidates" }; }
+    async createOffer() {
+      if (failures.offer) throw new Error("offer failed");
+      return { type: "offer", sdp: "offer-with-candidates" };
+    }
+    async createAnswer() {
+      if (failures.answer) throw new Error("answer failed");
+      return { type: "answer", sdp: "answer-with-candidates" };
+    }
     async setLocalDescription(value: any) {
       this.localDescription = { ...value, toJSON: () => value };
       this.signalingState = value.type === "offer" ? "have-local-offer" : "stable";
     }
     setRemoteDescription = jest.fn(async () => { this.signalingState = "stable"; });
-    close() { this.connectionState = "closed"; }
+    close() { this.connectionState = "closed"; this.channel.close(); }
   }
   return { RTCPeerConnection: Peer, RTCSessionDescription: class { constructor(value: object) { Object.assign(this, value); } } };
 });
 const peers = () => (RTCPeerConnection as any).instances as any[];
-beforeEach(() => { peers().length = 0; });
+const failures = () => (RTCPeerConnection as any).failures;
+type MockChannel = {
+  readyState: string;
+  send: jest.Mock;
+  emit: (type: string, event?: {}) => void;
+  close: () => void;
+};
+const mockChannels = () => peers().map(peer => peer.channel as MockChannel);
+beforeEach(() => {
+  peers().length = 0;
+  Object.assign(failures(), { offer: false, answer: false, localDescription: false });
+});
 
 test("exports complete offer and answer text and applies the answer to its host peer", async () => {
   const host = await createHostConnection();
@@ -52,8 +75,31 @@ test("rejects malformed signaling and messages and sending before open", async (
   await expect(createClientConnection('{"type":"answer","sdp":"x"}')).rejects.toThrow("offer");
   expect(peers()).toHaveLength(0);
   expect(() => parseMessage('{"type":"SUBMIT_ACTION","turn":0,"action":{"type":"CHEAT"}}')).toThrow();
+  expect(() => parseMessage("{" )).toThrow(SyntaxError);
+  expect(() => parseMessage(JSON.stringify({ type: "TURN_RESULT", turn: 2, state: { turn: 1 } }))).toThrow("Invalid game message");
+  expect(() => parseMessage(JSON.stringify({ type: "SUBMIT_ACTION", turn: -1, action: { type: "DEFEND" } }))).toThrow("Invalid game message");
   const host = await createHostConnection();
   expect(() => sendMessage(host.channel, { type: "SUBMIT_ACTION", turn: 0, action: { type: "DEFEND" } })).toThrow("not open");
+});
+
+test("failed native offer creation closes the partially created peer", async () => {
+  failures().offer = true;
+  await expect(createHostConnection()).rejects.toThrow("offer failed");
+  expect(peers()[0].connectionState).toBe("closed");
+  expect(peers()[0].channel.readyState).toBe("closed");
+});
+
+test("channel reports malformed and non-text packets without forwarding them", async () => {
+  const onError = jest.fn();
+  const onMessage = jest.fn();
+  const host = await createHostConnection({ onError, onMessage });
+  (host.channel as unknown as MockChannel).emit("message", { data: "not-json" });
+  (host.channel as unknown as MockChannel).emit("message", { data: new ArrayBuffer(2) });
+  expect(onError).toHaveBeenCalledTimes(2);
+  expect(onMessage).not.toHaveBeenCalled();
+  (host.channel as unknown as MockChannel).emit("error");
+  expect(onError).toHaveBeenLastCalledWith(new Error("Game channel failed."));
+  host.close();
 });
 
 test("ICE completion waits and timeout removes listeners", async () => {
@@ -77,7 +123,7 @@ test("host collects one action per participant, rejects stale turns, and broadca
   expect(() => session.start()).toThrow("Wait");
   peers().forEach(p => { p.channel.readyState = "open"; });
   session.start();
-  const receive = (index: number, turn = 0) => peers()[index].channel.emit("message", {
+  const receive = (index: number, turn = 0) => mockChannels()[index].emit("message", {
     data: JSON.stringify({ type: "SUBMIT_ACTION", turn, action: { type: "DEFEND" } }),
   });
   receive(0, 99);
@@ -103,5 +149,42 @@ test("explicit timeout can resolve missing actions and disconnect drops a partic
   session.submitHostAction(1, { type: "DEFEND" });
   session.removePlayer("p2");
   expect(resolver).toHaveBeenCalledTimes(2);
+  session.close();
+});
+
+test("host session rejects duplicate identities, invalid resolvers, and operations after close", async () => {
+  const session = createHostSession({
+    hostPlayerId: "host",
+    initialState: { turn: 0 },
+    resolveTurn: state => ({ turn: state.turn }),
+  });
+  await expect(session.addPlayer("host")).rejects.toThrow("unique");
+  await session.addPlayer("guest");
+  await expect(session.addPlayer("guest")).rejects.toThrow("unique");
+  peers()[0].channel.readyState = "open";
+  session.start();
+  expect(() => session.finishTurn()).toThrow("advance the turn");
+  session.close();
+  expect(() => session.finishTurn()).toThrow("active session");
+  await expect(session.addPlayer("late")).rejects.toThrow("open lobby");
+  expect(peers()).toHaveLength(1);
+});
+
+test("resolver failures allow the host to retry the turn", async () => {
+  const onError = jest.fn();
+  const resolveTurn = jest.fn()
+    .mockImplementationOnce(() => { throw new Error("temporary resolver failure"); })
+    .mockImplementationOnce(state => ({ turn: state.turn + 1 }));
+  const session = createHostSession({ hostPlayerId: "host", initialState: { turn: 0 }, resolveTurn, onError });
+  await session.addPlayer("guest");
+  peers()[0].channel.readyState = "open";
+  session.start();
+  expect(() => session.submitHostAction(0, { type: "DEFEND" })).not.toThrow();
+  mockChannels()[0].emit("message", { data: JSON.stringify({ type: "SUBMIT_ACTION", turn: 0, action: { type: "DEFEND" } }) });
+  expect(resolveTurn).toHaveBeenCalledTimes(1);
+  expect(onError).toHaveBeenCalledWith(new Error("temporary resolver failure"));
+  expect(session.state.turn).toBe(0);
+  expect(() => session.finishTurn()).not.toThrow();
+  expect(session.state.turn).toBe(1);
   session.close();
 });

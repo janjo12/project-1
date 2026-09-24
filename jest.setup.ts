@@ -24,13 +24,14 @@ jest.mock("expo-haptics", () => ({
 
 jest.mock("react-native-reanimated", () =>
   (() => {
-    const { View } = require("react-native");
+    const { Text, View } = require("react-native");
     const passthrough = (value: unknown) => value;
 
     return {
       __esModule: true,
       cancelAnimation: jest.fn(),
       default: {
+        Text,
         View,
       },
       useAnimatedStyle: (factory: () => unknown) => factory(),

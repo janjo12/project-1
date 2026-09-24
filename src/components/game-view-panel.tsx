@@ -27,6 +27,8 @@ type GameViewPanelProps = {
   enemyHealthLossAmount?: number;
   hardTurnCounter?: number | null;
   playerPosition?: ScenePosition;
+  playerLabel?: string;
+  playerSprite?: string;
   roomDoorways?: RoomDoorways;
   roomSceneActors?: RoomSceneActor[];
   playerEnergyLossAmount?: number;
@@ -35,6 +37,8 @@ type GameViewPanelProps = {
   onActorPress?: (actor: RoomSceneActor) => void;
   onDoorwayPress?: (position: Exclude<ScenePosition, "center">) => void;
   onPlayerPress?: () => void;
+  roomId?: string;
+  reducedMotion?: boolean;
 };
 //#endregion
 
@@ -55,6 +59,8 @@ export function GameViewPanel({
   enemyHealthLossAmount = 0,
   hardTurnCounter = null,
   playerPosition = "center",
+  playerLabel = "Player",
+  playerSprite = PLAYER_SPRITE,
   roomDoorways = defaultRoomDoorways,
   roomSceneActors,
   playerEnergyLossAmount = 0,
@@ -63,6 +69,8 @@ export function GameViewPanel({
   onActorPress,
   onDoorwayPress,
   onPlayerPress,
+  roomId,
+  reducedMotion,
 }: GameViewPanelProps) {
   const storedFrame = useSyncExternalStore(sceneFrameStore.subscribe, sceneFrameStore.getSnapshot, sceneFrameStore.getSnapshot);
   const animationFrame = suppliedFrame ?? storedFrame;
@@ -87,6 +95,8 @@ export function GameViewPanel({
 
         <RoomScene
           actors={visibleActors}
+          roomId={roomId}
+          reducedMotion={reducedMotion}
           floorLayer={floorLayer}
           animationFrame={animationFrame}
           bounceOffset={bounceOffset}
@@ -95,7 +105,8 @@ export function GameViewPanel({
           playerEnergyLossAmount={playerEnergyLossAmount}
           playerHealthLossAmount={playerHealthLossAmount}
           playerPosition={playerPosition}
-          playerSprite={PLAYER_SPRITE}
+          playerLabel={playerLabel}
+          playerSprite={playerSprite}
           sceneScale={sceneScale}
           canUnlockDoors={canUnlockDoors}
           disabled={disabled}

@@ -1,7 +1,6 @@
-import { PixelSprite } from "@/components/pixel-sprite";
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, useEffect, useRef, type ReactNode } from "react";
 import { ACTOR_ENVELOPE, SCENE_WIDTH, SCENE_HEIGHT, layoutRoomActors } from "@/utils/room-scene-layout";
-import { Pressable, View, type ViewStyle } from "react-native";
+import { Pressable, Text, View, type ViewStyle } from "react-native";
 
 import { CombatantSprite } from "@/components/combatant-sprite";
 import { EnemyHealthBar, FloatingResourceLoss } from "@/components/room-combat-feedback";
@@ -9,6 +8,9 @@ import { RoomWalls, SceneSprite } from "@/components/room-walls";
 import { createStyles } from "@/components/room-scene-styles";
 import { useThemeColors } from "@/components/theme";
 import { COMBAT_ANIMATION, type CombatAnimationFrame } from "@/entities";
+import { RoomFloor } from "@/components/room-floor";
+import { Animated, Easing, AccessibilityInfo } from "react-native";
+import { getAdjacentRoomTransition } from "@/utils/room-transition";
 
 export type ScenePosition = "top" | "bottom" | "left" | "right" | "center";
 type DoorPosition = Exclude<ScenePosition, "center">;
@@ -19,7 +21,7 @@ export type RoomSceneActor = {
   id: string;
   currentHealth?: number;
   sprite: string;
-  kind: "enemy" | "item" | "stairs" | "player";
+  kind: "enemy" | "item" | "equipment" | "stairs" | "player";
   label: string;
   position?: ScenePosition;
   isActive?: boolean;
@@ -38,11 +40,14 @@ type RoomSceneProps = {
   playerHealthLossAmount: number;
   playerPosition: ScenePosition;
   playerSprite: string;
+  playerLabel?: string;
   sceneScale: number;
   disabled?: boolean;
   onActorPress?: (actor: RoomSceneActor) => void;
   onDoorwayPress?: (position: DoorPosition) => void;
   onPlayerPress?: () => void;
+  roomId?: string;
+  reducedMotion?: boolean;
 };
 
 
@@ -58,17 +63,48 @@ export function RoomScene({
   playerHealthLossAmount,
   playerPosition,
   playerSprite,
+  playerLabel = "Player",
   sceneScale,
   canUnlockDoors = false,
   disabled = false,
   onActorPress,
   onDoorwayPress,
   onPlayerPress,
+  roomId,
+  reducedMotion = false,
 }: RoomSceneProps) {
   const colors = useThemeColors();
   const styles = createStyles(colors);
 
   const [width, setWidth] = useState(0);
+  const [systemReducedMotion, setSystemReducedMotion] = useState(false);
+  const [transition, setTransition] = useState<{ key: number } | null>(null);
+  const previousRoomId = useRef(roomId);
+  const transitionProgress = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    let mounted = true;
+    AccessibilityInfo.isReduceMotionEnabled().then(value => { if (mounted) setSystemReducedMotion(value); }).catch(() => undefined);
+    const subscription = AccessibilityInfo.addEventListener("reduceMotionChanged", setSystemReducedMotion);
+    return () => { mounted = false; subscription.remove(); };
+  }, []);
+  useEffect(() => {
+    if (previousRoomId.current !== roomId) {
+      const isAdjacent = getAdjacentRoomTransition(previousRoomId.current, roomId);
+      previousRoomId.current = roomId;
+      if (!isAdjacent || reducedMotion || systemReducedMotion) { setTransition(null); return; }
+      transitionProgress.stopAnimation();
+      transitionProgress.setValue(0);
+      setTransition(current => ({ key: (current?.key ?? 0) + 1 }));
+    }
+  }, [roomId, reducedMotion, systemReducedMotion, transitionProgress]);
+  useEffect(() => {
+    if (!transition) return;
+    const animation = Animated.timing(transitionProgress, {
+      toValue: 1, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: true,
+    });
+    animation.start(({ finished }) => { if (finished) setTransition(null); });
+    return () => animation.stop();
+  }, [transition, transitionProgress]);
   const slots = useMemo(() => layoutRoomActors([
     ...actors.map(actor => ({ id: `${actor.kind}:${actor.id}`, position: actor.position })),
     { id: "local-player", position: playerPosition },
@@ -82,20 +118,21 @@ export function RoomScene({
   return (
     <View style={[styles.sceneArea, { height: width > 0 ? width * SCENE_HEIGHT / SCENE_WIDTH + 10 : 240 }]}
       onLayout={event => setWidth(Math.max(0, event.nativeEvent.layout.width - 10))}>
-      <View pointerEvents="box-none" style={{ position: "absolute", left: 0, top: 0,
+      <Animated.View pointerEvents="box-none" style={{ position: "absolute", left: 0, top: 0,
         width: SCENE_WIDTH, height: SCENE_HEIGHT, transformOrigin: "top left",
         transform: [{ scale: worldScale }], opacity: width > 0 ? 1 : 0 }}>
-      <View pointerEvents="none" testID="room-floor-layer" style={{ position: "absolute", width: SCENE_WIDTH, height: SCENE_HEIGHT }}>{floorLayer ?? (
-        <View style={{ width: SCENE_WIDTH, height: SCENE_HEIGHT, overflow: "hidden", flexDirection: "row", flexWrap: "wrap", opacity: 0.25 }}>
-          {Array.from({ length: Math.ceil(SCENE_WIDTH / 32) * Math.ceil(SCENE_HEIGHT / 32) }, (_, index) => (
-            <PixelSprite key={index} sprite="stone-floor" label="" />
-          ))}
-        </View>
-      )}</View>
+      {transition ? <Animated.View pointerEvents="none" testID="room-transition-snapshot" style={{
+        position: "absolute", zIndex: 5, width: SCENE_WIDTH, height: SCENE_HEIGHT,
+        opacity: transitionProgress.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
+      }}><RoomSnapshot actors={actors} playerPosition={playerPosition} playerSprite={playerSprite} floorLayer={floorLayer} doorways={doorways} /></Animated.View> : null}
+      <Animated.View testID="room-incoming-snapshot" style={{ width: SCENE_WIDTH, height: SCENE_HEIGHT,
+        opacity: transition ? transitionProgress : 1 }}>
+      <View pointerEvents="none" testID="room-floor-layer" style={{ position: "absolute", width: SCENE_WIDTH, height: SCENE_HEIGHT }}>{floorLayer ?? <RoomFloor />}</View>
       <RoomWalls
         canUnlockDoors={canUnlockDoors}
         disabled={disabled}
         doorways={doorways}
+        reducedMotion={reducedMotion || systemReducedMotion}
         onPress={onDoorwayPress}
       />
 
@@ -123,12 +160,24 @@ export function RoomScene({
         slotScale={slots["local-player"].size / ACTOR_ENVELOPE}
         sceneScale={sceneScale}
         sprite={playerSprite}
+        playerLabel={playerLabel}
         disabled={disabled}
         onPress={onPlayerPress}
       />
+      </Animated.View>
+      </Animated.View>
       </View>
-    </View>
   );
+}
+
+function RoomSnapshot({ actors, playerPosition, playerSprite, floorLayer, doorways }: Pick<RoomSceneProps, "actors" | "playerPosition" | "playerSprite" | "floorLayer" | "doorways">) {
+  const slots = layoutRoomActors([...actors.map(actor => ({ id: `${actor.kind}:${actor.id}`, position: actor.position })), { id: "local-player", position: playerPosition }]);
+  return <View style={{ width: SCENE_WIDTH, height: SCENE_HEIGHT }}>
+    <View pointerEvents="none" style={{ position: "absolute" }}>{floorLayer ?? <RoomFloor />}</View>
+    <RoomWalls canUnlockDoors={false} disabled doorways={doorways} reducedMotion />
+    {actors.map(actor => <View key={`${actor.kind}:${actor.id}`} style={{ position: "absolute", left: slots[`${actor.kind}:${actor.id}`].x, top: slots[`${actor.kind}:${actor.id}`].y, width: slots[`${actor.kind}:${actor.id}`].size, height: slots[`${actor.kind}:${actor.id}`].size, alignItems: "center", justifyContent: "center" }}><SceneSprite accessibilityLabel="" sprite={actor.sprite} scale={1} size={48} /></View>)}
+    <View style={{ position: "absolute", left: slots["local-player"].x, top: slots["local-player"].y, width: slots["local-player"].size, height: slots["local-player"].size, alignItems: "center", justifyContent: "center" }}><SceneSprite accessibilityLabel="" sprite={playerSprite} scale={1} /></View>
+  </View>;
 }
 
 type SceneActorProps = {
@@ -171,7 +220,7 @@ function SceneActor({
         pressed && styles.pressedActor,
       ]}
     >
-      <View style={{ width: ACTOR_ENVELOPE, height: ACTOR_ENVELOPE, alignItems: "center", justifyContent: "center", transform: [{ scale: slotScale }] }}>
+      <View pointerEvents="none" style={{ width: ACTOR_ENVELOPE, height: ACTOR_ENVELOPE, alignItems: "center", justifyContent: "center", transform: [{ scale: slotScale }] }}>
       {actor.kind === "enemy" ? (
         <View style={styles.actorContent}>
           {isActive ? (
@@ -208,6 +257,7 @@ function SceneActor({
               }
               sprite={actor.sprite}
               scale={sceneScale}
+              size={48}
             />
             <EnemyHealthBar
               accessibilityLabel="Enemy health"
@@ -217,13 +267,13 @@ function SceneActor({
               testID="enemy-health-bar"
             />
           </View>
+          <Text style={styles.actorLabel} numberOfLines={1}>{actor.label}</Text>
         </View>
       ) : (
-        <SceneSprite
-          accessibilityLabel={actor.label}
-          sprite={actor.sprite}
-          scale={sceneScale}
-        />
+        <View style={styles.actorContent}>
+          <SceneSprite accessibilityLabel={actor.label} sprite={actor.sprite} scale={sceneScale} size={48} />
+          <Text style={styles.actorLabel} numberOfLines={1}>{actor.label}</Text>
+        </View>
       )}
       </View>
     </Pressable>
@@ -237,6 +287,7 @@ type PlayerActorProps = {
   healthLossAmount: number;
   sceneScale: number;
   sprite: string;
+  playerLabel: string;
   positionStyle: ViewStyle;
   slotScale: number;
   disabled: boolean;
@@ -250,6 +301,7 @@ function PlayerActor({
   healthLossAmount,
   sceneScale,
   sprite,
+  playerLabel,
   positionStyle,
   slotScale,
   disabled,
@@ -260,8 +312,8 @@ function PlayerActor({
 
   return (
     <Pressable
-      accessibilityLabel="Defend"
-      accessibilityHint="Halves incoming damage and counterattacks"
+      accessibilityLabel={playerLabel}
+      accessibilityHint="Use your class support ability"
       accessibilityRole="button"
       accessibilityState={{ disabled }}
       disabled={disabled}
@@ -272,7 +324,7 @@ function PlayerActor({
         pressed && styles.pressedActor,
       ]}
     >
-      <View style={{ width: ACTOR_ENVELOPE, height: ACTOR_ENVELOPE, alignItems: "center", justifyContent: "center", transform: [{ scale: slotScale }] }}>
+      <View pointerEvents="none" style={{ width: ACTOR_ENVELOPE, height: ACTOR_ENVELOPE, alignItems: "center", justifyContent: "center", transform: [{ scale: slotScale }] }}>
       <FloatingResourceLoss
         amount={healthLossAmount}
         color={colors.health}
@@ -294,7 +346,7 @@ function PlayerActor({
         testID="player-energy-loss"
       />
       <CombatantSprite
-        accessibilityLabel="Player warrior"
+        accessibilityLabel={playerLabel}
         attackDirection="left"
         attackProgress={getProgress(
           animationFrame.playerAttackElapsed,
@@ -307,7 +359,9 @@ function PlayerActor({
         )}
         sprite={sprite}
         scale={sceneScale}
+        size={48}
       />
+      <Text style={styles.playerLabel}>{playerLabel}</Text>
       </View>
     </Pressable>
   );

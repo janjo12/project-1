@@ -10,6 +10,7 @@ type CombatantSpriteProps = {
   damageProgress?: number | null;
   sprite: string;
   scale?: number;
+  size?: number;
 };
 
 export function CombatantSprite({
@@ -20,6 +21,7 @@ export function CombatantSprite({
   damageProgress = null,
   sprite,
   scale = 1,
+  size = 48,
 }: CombatantSpriteProps) {
   const attackOffset = getAttackOffset(attackProgress, attackDirection);
   const opacity = getDamageOpacity(damageProgress);
@@ -38,7 +40,7 @@ export function CombatantSprite({
         },
       ]}
     >
-      <PixelSprite sprite={sprite} label={accessibilityLabel} />
+      <PixelSprite sprite={sprite} label={accessibilityLabel} size={size} />
     </View>
   );
 }

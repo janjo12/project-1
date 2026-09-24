@@ -8,6 +8,8 @@ export type ItemId = string;
 export type RoomBoundary = "locked" | "guarded" | "open" | "wall";
 
 export type WorldMonster = {
+  attack?: number;
+  defense?: number;
   currentHealth: number;
   damage: number;
   id: string;
@@ -19,11 +21,23 @@ export type WorldMonster = {
 };
 
 export type WorldItem = {
+  description?: string;
   id: ItemId;
   itemId?: ItemId;
   sprite?: string;
   label: string;
   type: "item";
+};
+
+export type EquipmentCatalogEntry = { id: string; label: string; description: string; sprite: string; attack: number; defense: number; chargeCost?: number; turnDamage?: number; hiddenDescription?: boolean };
+
+export type EquipmentId = string;
+export type WorldEquipment = {
+  id: EquipmentId;
+  equipmentId: EquipmentId;
+  label: string;
+  sprite: string;
+  type: "equipment";
 };
 
 export type WorldStairs = {
@@ -54,7 +68,8 @@ export type DoorwayGuard = {
   roomId: string;
 };
 
-export type RoomContents = (RoomMonsterRef | RoomItemRef | RoomStairsRef)[];
+export type RoomEquipmentRef = { id: string; type: "equipment" };
+export type RoomContents = (RoomMonsterRef | RoomItemRef | RoomEquipmentRef | RoomStairsRef)[];
 
 export type GridPosition = {
   column: string;
@@ -78,6 +93,7 @@ export type DungeonMap = {
   columns: string[];
   entities: {
     items: Record<string, WorldItem>;
+  equipment: Record<string, WorldEquipment>;
     doorwayGuards: Record<string, DoorwayGuard>;
     monsters: Record<string, WorldMonster>;
   };
@@ -118,6 +134,11 @@ export const POSSIBLE_MONSTERS: Omit<WorldMonster, "currentHealth" | "id">[] =
 export const POSSIBLE_ITEMS: WorldItem[] = GAME_PARAMETERS.items.map((item) => ({
   ...item,
   type: "item" as const,
+}));
+export const POSSIBLE_EQUIPMENT: WorldEquipment[] = (GAME_PARAMETERS as unknown as { equipment: EquipmentCatalogEntry[] }).equipment.map((equipment) => ({
+  ...equipment,
+  equipmentId: equipment.id,
+  type: "equipment" as const,
 }));
 
 export const directionDeltas: Record<Direction, { column: number; row: number }> = {
@@ -398,6 +419,12 @@ export function createItem(itemId: ItemId, id: string) {
   } satisfies WorldItem;
 }
 
+export function createEquipment(equipmentId: EquipmentId, id: string): WorldEquipment {
+  const base = POSSIBLE_EQUIPMENT.find((equipment) => equipment.equipmentId === equipmentId);
+  if (!base) throw new Error(`Unknown equipment: ${equipmentId}`);
+  return { ...base, id };
+}
+
 export function placeDoorwayGuard(
   map: DungeonMap,
   roomId: string,
@@ -425,7 +452,7 @@ export function placeItem(
       Boolean(
         room &&
           !room.isCurrentPosition &&
-          !room.contents.some((content) => content.type === "stairs" || content.type === "item"),
+          !room.contents.some((content) => content.type === "stairs" || content.type === "item" || content.type === "equipment"),
       ),
     );
   const room = candidates[Math.floor(random() * candidates.length)];

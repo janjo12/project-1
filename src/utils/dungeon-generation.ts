@@ -1,6 +1,7 @@
 import { GAME_PARAMETERS } from "@/gameparameters";
 import {
   createEmptyGrid,
+  createEquipment,
   createItem,
   createMonster,
   createSeededRandom,
@@ -28,6 +29,7 @@ import {
   type RoomMonsterRef,
   type RoomStairsRef,
   type WorldItem,
+  type WorldEquipment,
   type WorldMonster,
 } from "@/utils/dungeon-map";
 export function createSeededDungeonMap(seed: string, level: number, startingPosition?: GridPosition, includeClock = false) {
@@ -377,26 +379,31 @@ function placeOptionalLoot(
   reachableRoomIds: string[],
   includeClock: boolean,
 ) {
-  if (context.random() < GAME_PARAMETERS.dungeon.optionalLootChance) {
-    placeItem(
-      createMapFromContext(context),
-      reachableRoomIds,
-      "health-potion",
-      context.random,
-    );
+  const candidates = shuffle(reachableRoomIds.filter(id => {
+    const room = findRoomInGrid(context.rooms, id);
+    return room && !room.isCurrentPosition && !room.contents.some(content => content.type === "stairs" || content.type === "item" || content.type === "equipment");
+  }), context.random);
+  const lootCandidates = candidates.filter(id => {
+    const room = findRoomInGrid(context.rooms, id);
+    return room && !room.contents.some(content => content.type === "item" || content.type === "equipment");
+  });
+  const itemCount = Math.min(lootCandidates.length, Math.floor(reachableRoomIds.length * GAME_PARAMETERS.dungeon.itemRoomChance));
+  const itemKinds = ["health-potion", "energy-meal", ...(includeClock ? ["clock"] : [])];
+  for (let index = 0; index < itemCount; index++) {
+    placeItem(createMapFromContext(context), [lootCandidates[index]], itemKinds[index % itemKinds.length], context.random);
   }
-
-  if (context.random() < GAME_PARAMETERS.dungeon.optionalLootChance) {
-    placeItem(
-      createMapFromContext(context),
-      reachableRoomIds,
-      "energy-meal",
-      context.random,
-    );
-  }
-
-  if (includeClock && context.random() < GAME_PARAMETERS.dungeon.optionalLootChance) {
-    placeItem(createMapFromContext(context), reachableRoomIds, "clock", context.random);
+  const equipmentCandidates = shuffle(candidates.filter(id => {
+    const room = findRoomInGrid(context.rooms, id);
+    return room && !room.contents.some(content => content.type === "item" || content.type === "equipment");
+  }), context.random);
+  const equipmentCount = Math.min(equipmentCandidates.length, Math.floor(reachableRoomIds.length * GAME_PARAMETERS.dungeon.equipmentRoomChance));
+  const equipmentKinds = GAME_PARAMETERS.equipment.map(equipment => equipment.id);
+  for (let index = 0; index < equipmentCount; index++) {
+    const room = findRoomInGrid(context.rooms, equipmentCandidates[index]);
+    if (!room) continue;
+    const equipment = createEquipment(equipmentKinds[Math.floor(context.random() * equipmentKinds.length)], `equipment:${room.id}:${Math.floor(context.random() * 1_000_000)}`);
+    context.entities.equipment[equipment.id] = equipment;
+    room.contents.push({ id: equipment.id, type: "equipment" });
   }
 }
 //#endregion
@@ -410,6 +417,7 @@ export function createDungeonMap(
   const rooms = createEmptyGrid();
   const entities = {
     items: {} as Record<string, WorldItem>,
+    equipment: {} as Record<string, WorldEquipment>,
     doorwayGuards: {} as Record<string, DoorwayGuard>,
     monsters: {} as Record<string, WorldMonster>,
   };
