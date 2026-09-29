@@ -1,15 +1,14 @@
-// #region imports
 import { router } from "expo-router";
 
-import { Container, Header, Title } from "@/components/displays";
-import { CancelButton, ToggleButton } from "@/components/inputs";
-import { ScreenShell } from "@/components/screen-shell";
-import { ThemeProvider } from "@/components/theme";
+import { Container, Header, Title } from "@/components/Common/Displays";
+import { CancelButton, ToggleButton } from "@/components/Controls/ActionButton";
+import { ScreenShell } from "@/components/Common/ScreenShell";
+import { ThemeProvider } from "@/components/Common/theme";
 
 import { useGameSettings } from "@/hooks/use-game-settings";
-//#endregion
 
 export default function SettingsRoute() {
+  // useGameSettings persists each toggle, so preferences survive leaving this screen or restarting.
   const { settings, updateSettings } = useGameSettings();
 
   return (

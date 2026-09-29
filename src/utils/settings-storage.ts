@@ -38,12 +38,12 @@ function isDifficulty(value: unknown): value is Difficulty {
 function isAppearance(value: unknown): value is Appearance {
   return value === "system" || value === "light" || value === "dark";
 }
-
 function isHandedness(value: unknown): value is Handedness {
   return value === "left" || value === "right";
 }
 
 function normalizeSettings(value: unknown): GameSettings {
+  // Validate persisted values individually so newly added settings receive safe defaults.
   if (!value || typeof value !== "object") {
     return DEFAULT_GAME_SETTINGS;
   }

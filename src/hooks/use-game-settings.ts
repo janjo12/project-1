@@ -13,6 +13,7 @@ type UseGameSettingsOptions = {
 };
 
 function settingsWithFreshSeed(settings: GameSettings) {
+  // Setup screens opt into a fresh layout each visit while retaining other saved preferences.
   return {
     ...settings,
     seed: generateRandomSeed(),
@@ -22,6 +23,7 @@ function settingsWithFreshSeed(settings: GameSettings) {
 export function useGameSettings({
   refreshSeedOnLoad = false,
 }: UseGameSettingsOptions = {}) {
+  // Start with defaults for a stable first render, then hydrate saved values after mount.
   const [settings, setSettings] = useState<GameSettings>(() =>
     refreshSeedOnLoad
       ? settingsWithFreshSeed(DEFAULT_GAME_SETTINGS)
@@ -46,6 +48,7 @@ export function useGameSettings({
   }
 
   function updateSettings(partialSettings: Partial<GameSettings>) {
+    // Merge partial edits so changing one control does not reset the other stored preferences.
     setSettings((currentSettings) => {
       const nextSettings = {
         ...currentSettings,

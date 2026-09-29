@@ -2,14 +2,16 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { GAME_PARAMETERS } from "@/gameparameters";
-import { GameLoopTimer, PLAYER_MAX_ENERGY, PLAYER_MAX_HEALTH, runGameLoop, useRunGame } from "@/hooks/run-game-singleplayer";
+import { GAME_PARAMETERS } from "@/game/config/gameparameters";
+import { GameLoopTimer, PLAYER_MAX_ENERGY, PLAYER_MAX_HEALTH, runGameLoop, useRunGame } from "@/game/engine/run-game-singleplayer";
 import { DEFAULT_GAME_SETTINGS, type GameSettings, loadGameSettings, saveGameSettings } from "@/utils/settings-storage";
 import { generateRandomSeed } from "@/utils/seed";
+import { isTestSeed } from "@/utils/seed";
 
 type Page = "title" | "setup" | "settings" | "game" | "over";
 
 export default function Home() {
+  // The web client mirrors the native single-player flow while reusing the shared game engine.
   const router = useRouter();
   const [page, setPage] = useState<Page>("title");
   const [settings, setSettings] = useState<GameSettings>(DEFAULT_GAME_SETTINGS);
@@ -44,7 +46,7 @@ export default function Home() {
 
 function Game({ settings, onGameOver, onExit }: { settings: GameSettings; onGameOver: (score: number) => void; onExit: () => void }) {
   const [paused, setPaused] = useState(false);
-  const game = useRunGame({ difficulty: settings.difficulty, onGameOver, seed: settings.seed.trim(), vibrationEnabled: settings.vibrationEnabled });
+  const game = useRunGame({ difficulty: settings.difficulty, istest: isTestSeed(settings.seed), onGameOver, seed: settings.seed.trim(), vibrationEnabled: settings.vibrationEnabled });
   const loop = useMemo(() => new GameLoopTimer(), []);
   useEffect(() => {
     loop.start();

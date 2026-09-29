@@ -1,9 +1,9 @@
 import React from "react";
 import { act, fireEvent, render } from "@testing-library/react-native";
 
-import { RoomScene, type RoomDoorways } from "@/components/room-scene";
-import { GameViewPanel } from "@/components/game-view-panel";
-import { createCombatAnimationFrame } from "@/entities";
+import { RoomScene, type RoomDoorways } from "@/components/Dungeon/Room";
+import { GameViewPanel } from "@/components/Dungeon/GameViewPanel";
+import { createCombatAnimationFrame } from "@/game/entities";
 
 const doorways: RoomDoorways = {
   bottom: "open",

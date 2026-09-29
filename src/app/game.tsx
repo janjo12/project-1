@@ -1,34 +1,31 @@
-//#region imports
 import { router } from "expo-router";
 import { useMemo, useRef, useState } from "react";
 import { Alert, Text, View } from "react-native";
 import { GameEngine } from "react-native-game-engine";
 
-import { Container, Header, Row, StyledModal, Title } from "@/components/displays";
-import { DungeonMap } from "@/components/dungeon-map";
-import { ChargeControl, EquipmentControl, ItemControl } from "@/components/game-controls";
-import { GameViewPanel, type RoomSceneActor, type ScenePosition } from "@/components/game-view-panel";
-import { ClassBriefing } from "@/components/class-briefing";
-import { DestructiveButton, NormalButton, PrimaryButton, ToggleButton } from "@/components/inputs";
-import { DebugBar, ResourceBar, ResourceBarGroup } from "@/components/resource-bar";
-import { ScreenShell } from "@/components/screen-shell";
-import { ThemeProvider, useThemeColors } from "@/components/theme";
+import { Container, Header, Row, StyledModal, Title } from "@/components/Common/Displays";
+import { DungeonMap } from "@/components/Dungeon/DungeonMap";
+import { ChargeControl, EquipmentControl, ItemControl } from "@/components/Controls/ActionMenu";
+import { GameViewPanel, type RoomSceneActor, type ScenePosition } from "@/components/Dungeon/GameViewPanel";
+import { ClassBriefing } from "@/components/Common/ClassBriefing";
+import { DestructiveButton, NormalButton, PrimaryButton, ToggleButton } from "@/components/Controls/ActionButton";
+import { DebugBar, ResourceBar, ResourceBarGroup } from "@/components/Player/PlayerHUD";
+import { ScreenShell } from "@/components/Common/ScreenShell";
+import { ThemeProvider, useThemeColors } from "@/components/Common/theme";
 
-import { GAME_PARAMETERS } from "@/gameparameters";
+import { GAME_PARAMETERS } from "@/game/config/gameparameters";
 import {
     GameLoopTimer,
     PLAYER_MAX_ENERGY,
     PLAYER_MAX_HEALTH,
     runGameLoop,
     useRunGame,
-} from "@/hooks/run-game-singleplayer";
+} from "@/game/engine/run-game-singleplayer";
 import { useGameSettings } from "@/hooks/use-game-settings";
-import { MicrogameOverlay } from "@/components/microgame-overlay";
-import { useMicrogame } from "@/hooks/use-microgame";
+import { MicrogameOverlay } from "@/components/Common/MicrogameOverlay";
+import { useMicrogame } from "@/game/actions/use-microgame";
 import type { GameSettings } from "@/utils/settings-storage";
-//#endregion
-
-//#region types
+import { isTestSeed } from "@/utils/seed";
 type PauseMenuProps = {
   onBackToGame: () => void;
   onQuitToTitle: () => void;
@@ -41,7 +38,6 @@ type GameContentProps = {
   onSettingsChange: (settings: Partial<GameSettings>) => void;
   settings: GameSettings;
 };
-//#endregion
 
 export default function GameScreen() {
   const { isLoading, settings, updateSettings } = useGameSettings();
@@ -62,6 +58,7 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
   const colors = useThemeColors();
   const game = useRunGame({
     difficulty: settings.difficulty,
+    istest: isTestSeed(settings.seed),
     onGameOver: (score) =>
       router.replace({
         pathname: "/game-over",
@@ -112,7 +109,7 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
   function handleActorPress(actor: RoomSceneActor) {
     if (actor.kind === "enemy") {
       pendingAttack.current = actor.id;
-      microgame.start(game.playerClass.microgame, settings.handedness);
+      microgame.start(game.playerClass.microgame, settings.handedness, { istest: isTestSeed(settings.seed) });
     } else if (actor.kind === "item") {
       void game.pickupItem();
     } else if (actor.kind === "equipment") {
@@ -168,9 +165,9 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
       </Header>
 
       <DebugBar accessibilityLabel="Turn status" accessibilityRole="text">
-        {microgameScore === null ? game.turnStatus : `${game.turnStatus} · Last microgame ${microgameScore}/100`}
+        {`${game.istest ? "TEST · " : ""}${microgameScore === null ? game.turnStatus : `${game.turnStatus} · Last microgame ${microgameScore}/100`}`}
       </DebugBar>
-      <NormalButton accessibilityLabel="Practice attack microgame" accessibilityRole="button" label="Practice Attack" onPress={() => microgame.start(game.playerClass.microgame, settings.handedness)} />
+      <NormalButton accessibilityLabel="Practice attack microgame" accessibilityRole="button" label="Practice Attack" onPress={() => microgame.start(game.playerClass.microgame, settings.handedness, { istest: isTestSeed(settings.seed) })} />
 
       {map}
       <Row>
@@ -262,6 +259,7 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
         targetSpot={microgame.targetSpot}
         clicks={microgame.clicks}
         leftHanded={settings.handedness === "left"}
+        istest={microgame.istest}
         onTap={microgame.tap}
       />
       {classIntroPage >= 0 ? (
@@ -272,7 +270,7 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
           multiplayer={false}
           onNext={() => setClassIntroPage(1)}
           onBack={() => setClassIntroPage(0)}
-          onPractice={() => microgame.start(game.playerClass.microgame, settings.handedness)}
+          onPractice={() => microgame.start(game.playerClass.microgame, settings.handedness, { istest: isTestSeed(settings.seed) })}
           onStart={() => setClassIntroPage(-1)}
         />
       ) : null}

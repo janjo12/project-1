@@ -9,6 +9,12 @@
       "@/*": [
         "./src/*"
       ],
+      "@/game/*": [
+        "./src/game/*"
+      ],
+      "@/multiplayer/*": [
+        "./src/multiplayer/*"
+      ],
       "@/assets/*": [
         "./assets/*"
       ]
@@ -35,7 +41,7 @@
     "isolatedModules": true
   },
   "include": [
-    "multiplayer/**/*.ts",
+    "src/multiplayer/**/*.ts",
     "src/**/*.ts",
     "src/**/*.tsx",
     "__tests__/**/*.ts",

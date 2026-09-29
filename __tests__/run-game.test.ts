@@ -1,10 +1,10 @@
-import { canPressDoorway } from "@/components/room-walls";
+import { canPressDoorway } from "@/components/Dungeon/Walls";
 import {
     getInventoryItemActivationDescription,
     resolveEnergyLoss,
     resolveHealthLoss,
     resolveTurnLoss,
-} from "@/hooks/run-game-helpers";
+} from "@/game/engine/run-game-helpers";
 import {
     applyWerewolfChaseAfterAction,
     getEnemyAttackOutcome,
@@ -14,14 +14,14 @@ import {
     hasTurnTimer,
     runGameLoop,
     TURN_DURATION,
-} from "@/hooks/run-game-singleplayer";
-import { createSeededDungeonMap } from "@/utils/dungeon-generation";
+} from "@/game/engine/run-game-singleplayer";
+import { createSeededDungeonMap } from "@/game/dungeon/generateDungeon";
 import {
     type DungeonMap,
     type DungeonRoom,
     type WorldMonster,
-} from "@/utils/dungeon-map";
-import { getRoom, getRoomMonster, moveWerewolfToRoom } from "@/utils/dungeon-map-runtime";
+} from "@/game/dungeon/types";
+import { getRoom, getRoomMonster, moveWerewolfToRoom } from "@/game/dungeon/rooms";
 
 function createRoom(
   id: string,

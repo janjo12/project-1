@@ -8,7 +8,7 @@ import Setup from "@/app/setup";
 jest.setTimeout(30000);
 let mockMode = "singleplayer";
 jest.mock("expo-router", () => ({ router: { push: jest.fn(), replace: jest.fn() }, useLocalSearchParams: () => ({ mode: mockMode }) }));
-jest.mock("@/components/screen-shell", () => ({ ScreenShell: ({ children }: { children: React.ReactNode }) => children }));
+jest.mock("@/components/Common/ScreenShell", () => ({ ScreenShell: ({ children }: { children: React.ReactNode }) => children }));
 jest.mock("@/hooks/use-game-settings", () => ({ useGameSettings: () => ({
   isLoading: false, settings: { appearance: "light", difficulty: "easy", seed: "test", vibrationEnabled: false },
   updateSettings: jest.fn(), saveSettings: jest.fn(async () => {}),

@@ -1,8 +1,8 @@
 import { router } from "expo-router";
-import { Title, StyledText } from "@/components/displays";
-import { PrimaryButton } from "@/components/inputs";
-import { ScreenShell } from "@/components/screen-shell";
-import { ThemeProvider } from "@/components/theme";
+import { Title, StyledText } from "@/components/Common/Displays";
+import { PrimaryButton } from "@/components/Controls/ActionButton";
+import { ScreenShell } from "@/components/Common/ScreenShell";
+import { ThemeProvider } from "@/components/Common/theme";
 import { useGameSettings } from "@/hooks/use-game-settings";
 
 export default function Index() {

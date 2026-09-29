@@ -1,4 +1,3 @@
-//#region imports
 import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 
@@ -10,19 +9,18 @@ import {
   StyledModal,
   StyledText,
   Title,
-} from "@/components/displays";
+} from "@/components/Common/Displays";
+import { ScreenShell } from "@/components/Common/ScreenShell";
+import { ThemeProvider } from "@/components/Common/theme";
 import {
   HelpButton,
   NormalButton,
   PrimaryButton,
   SegmentedButton,
   TextEntry
-} from "@/components/inputs";
-import { ScreenShell } from "@/components/screen-shell";
-import { ThemeProvider } from "@/components/theme";
+} from "@/components/Controls/ActionButton";
 import { useGameSettings } from "@/hooks/use-game-settings";
 import { generateRandomSeed } from "@/utils/seed";
-//#endregion
 
 const helpContent = {
   difficulty: {
@@ -38,6 +36,7 @@ const helpContent = {
 type HelpTopic = keyof typeof helpContent;
 
 export default function Setup() {
+  // Preserve the selected play mode while sharing difficulty and seed setup across both routes.
   const { mode } = useLocalSearchParams<{ mode?: string }>();
   const { isLoading, settings, updateSettings, saveSettings } =
     useGameSettings({ refreshSeedOnLoad: true });
@@ -45,6 +44,7 @@ export default function Setup() {
   const activeHelp = helpTopic ? helpContent[helpTopic] : null;
 
   const handleStartGame = async () => {
+    // Persist the resolved seed before routing so both play modes share the exact selected layout.
     const nextSettings = {
       ...settings,
       seed: settings.seed.trim() || generateRandomSeed(),
@@ -71,7 +71,7 @@ export default function Setup() {
               testID="open-settings-button"
             />
           </Header>
-          <Title>{"\n"}[Project 1]{"\n"}</Title>
+          <Title>[Project 1]</Title>
           <Container>
             <Row>
               <StyledText>Difficulty</StyledText>
@@ -138,4 +138,3 @@ export default function Setup() {
     </ThemeProvider>
   );
 }
-

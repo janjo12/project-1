@@ -18,10 +18,11 @@ function load(name, parent = root) {
   new Function('require', 'module', 'exports', code)(name => load(name, path.dirname(file)), module, module.exports);
   return module.exports;
 }
-const generation = load('@/utils/dungeon-generation');
-const domain = load('@/utils/dungeon-map');
-const runtime = load('@/utils/dungeon-map-runtime');
-const layout = load('@/utils/room-scene-layout');
+// Keep this standalone domain check pointed at the current feature-based module layout.
+const generation = load('@/game/dungeon/generateDungeon');
+const domain = load('@/game/dungeon/types');
+const runtime = load('@/game/dungeon/rooms');
+const layout = load('@/utils/coordinates');
 const transition = load('@/utils/room-transition');
 assert.equal(transition.getAdjacentRoomTransition('A1', 'A2'), 'right');
 assert.equal(transition.getAdjacentRoomTransition('A2', 'A1'), 'left');
@@ -29,10 +30,10 @@ assert.equal(transition.getAdjacentRoomTransition('A1', 'B1'), 'down');
 assert.equal(transition.getAdjacentRoomTransition('B1', 'A1'), 'up');
 for (const [from, to] of [['A1', 'A3'], ['A1', 'C1'], ['A1', 'A1'], [undefined, 'A1']])
   assert.equal(transition.getAdjacentRoomTransition(from, to), null);
-const floorSource = fs.readFileSync(path.join(root, 'src/components/room-floor.tsx'), 'utf8');
+const floorSource = fs.readFileSync(path.join(root, 'src/components/Dungeon/Floor.tsx'), 'utf8');
 assert.match(floorSource, /SPRITE_SIZE/);
 assert.match(floorSource, /stone-floor/);
-const sceneSource = fs.readFileSync(path.join(root, 'src/components/room-scene.tsx'), 'utf8');
+const sceneSource = fs.readFileSync(path.join(root, 'src/components/Dungeon/Room.tsx'), 'utf8');
 assert.match(sceneSource, /room-transition-snapshot/);
 assert.match(sceneSource, /reduceMotionChanged/);
 for (let seed = 0; seed < 200; seed++) {
@@ -78,7 +79,7 @@ for (const count of [1, 2, 5, 20, 100]) {
 const pair = layout.layoutRoomActors([{ id: 'a' }, { id: 'b' }]);
 assert.equal(pair.a.y, pair.b.y);
 assert.ok(pair.a.x < pair.b.x);
-const store = load('@/utils/scene-frame-store').createSceneFrameStore();
+const store = load('@/game/state/sceneFrameStore').createSceneFrameStore();
 let notifications = 0;
 const unsubscribe = store.subscribe(() => notifications++);
 store.setFrame(frame => ({ ...frame, bounceElapsed: 42 }));

@@ -1,5 +1,5 @@
 import { RTCPeerConnection } from "react-native-webrtc";
-import { acceptAnswer, createClientConnection, createHostConnection, createHostSession, parseMessage, sendMessage, waitForIceGathering } from "../multiplayer/connection";
+import { acceptAnswer, createClientConnection, createHostConnection, createHostSession, parseMessage, sendMessage, waitForIceGathering } from "@/multiplayer/connection";
 
 jest.mock("react-native-webrtc", () => {
   const failures: { offer: boolean; answer: boolean; localDescription: boolean } = {

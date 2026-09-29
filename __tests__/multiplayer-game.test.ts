@@ -1,8 +1,8 @@
-import { createMultiplayerState, resolveMultiplayerTurn } from "@/hooks/run-game-multiplayer";
-import { PLAYER_MAX_ENERGY, PLAYER_MAX_HEALTH } from "@/hooks/run-game-helpers";
-import type { PlayerAction } from "../multiplayer/connection";
-import { getConnectedRoomId, getRoom } from "@/utils/dungeon-map-runtime";
-import type { Direction } from "@/utils/dungeon-map";
+import { createMultiplayerState, resolveMultiplayerTurn } from "@/game/engine/run-game-multiplayer";
+import { PLAYER_MAX_ENERGY, PLAYER_MAX_HEALTH } from "@/game/engine/run-game-helpers";
+import type { PlayerAction } from "@/multiplayer/connection";
+import { getConnectedRoomId, getRoom } from "@/game/dungeon/rooms";
+import type { Direction } from "@/game/dungeon/types";
 
 const initial = () => { const state = createMultiplayerState("lan-test", "easy", ["host", "guest"]); state.phase = "playing"; return state; };
 test("two devices have independent positions in the same authoritative map", () => {

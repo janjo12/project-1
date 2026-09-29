@@ -2,23 +2,24 @@ import { router } from "expo-router";
 import { useRef, useState } from "react";
 import { Text, TextInput, View } from "react-native";
 
-import { DungeonMap } from "@/components/dungeon-map";
-import { ChargeControl, EquipmentControl, ItemControl } from "@/components/game-controls";
-import { ClassBriefing } from "@/components/class-briefing";
-import { Title, StyledText, Row } from "@/components/displays";
-import { GameViewPanel } from "@/components/game-view-panel";
-import { MicrogameOverlay } from "@/components/microgame-overlay";
-import { NormalButton, PrimaryButton } from "@/components/inputs";
-import { ResourceBar, ResourceBarGroup } from "@/components/resource-bar";
-import { ScreenShell } from "@/components/screen-shell";
-import { ThemeProvider, useThemeColors } from "@/components/theme";
-import { getGameClass } from "@/game-classes";
+import { ClassBriefing } from "@/components/Common/ClassBriefing";
+import { Row, StyledText, Title } from "@/components/Common/Displays";
+import { MicrogameOverlay } from "@/components/Common/MicrogameOverlay";
+import { ScreenShell } from "@/components/Common/ScreenShell";
+import { ThemeProvider, useThemeColors } from "@/components/Common/theme";
+import { NormalButton, PrimaryButton } from "@/components/Controls/ActionButton";
+import { ChargeControl, EquipmentControl, ItemControl } from "@/components/Controls/ActionMenu";
+import { DungeonMap } from "@/components/Dungeon/DungeonMap";
+import { GameViewPanel } from "@/components/Dungeon/GameViewPanel";
+import { ResourceBar, ResourceBarGroup } from "@/components/Player/PlayerHUD";
+import { getEquipmentStats } from "@/game/actions/items";
+import { useMicrogame } from "@/game/actions/use-microgame";
+import { getGameClass } from "@/game/config/game-classes";
+import { useRunMultiplayerGame } from "@/game/engine/run-game-multiplayer";
+import { PLAYER_MAX_ENERGY, PLAYER_MAX_HEALTH } from "@/game/state/types";
 import { useGameSettings } from "@/hooks/use-game-settings";
-import { getEquipmentStats } from "@/hooks/run-game-items";
-import { PLAYER_MAX_ENERGY, PLAYER_MAX_HEALTH } from "@/hooks/run-game-types";
-import { useMicrogame } from "@/hooks/use-microgame";
-import { useRunMultiplayerGame } from "@/hooks/run-game-multiplayer";
 import type { GameSettings } from "@/utils/settings-storage";
+import { isTestSeed } from "@/utils/seed";
 
 export default function MultiplayerRoute() {
   const { settings, isLoading } = useGameSettings();
@@ -149,11 +150,11 @@ function Multiplayer({ settings }: { settings: GameSettings }) {
         </>
       ) : player && map && snapshot ? (
         <>
-          <StyledText>Level {state.level} · Turn {state.turn + 1} · You: {playerId}</StyledText>
+          <StyledText>{isTestSeed(state.seed) ? "TEST · " : ""}Level {state.level} · Turn {state.turn + 1} · You: {playerId}</StyledText>
           {state.phase === "playing" ? (
             <ActionButton
               label="Practice attack game"
-              onPress={() => microgame.start(getGameClass(player.classId).microgame, settings.handedness)}
+              onPress={() => microgame.start(getGameClass(player.classId).microgame, settings.handedness, { istest: isTestSeed(state.seed) })}
               busy={busy || submitted === state.turn || player.health <= 0}
             />
           ) : null}
@@ -233,7 +234,7 @@ function Multiplayer({ settings }: { settings: GameSettings }) {
             onActorPress={actor => {
               if (actor.kind === "enemy") {
                 pendingAttack.current = actor.id;
-                microgame.start(getGameClass(player.classId).microgame, settings.handedness);
+                microgame.start(getGameClass(player.classId).microgame, settings.handedness, { istest: isTestSeed(state.seed) });
                 return;
               }
 
@@ -267,6 +268,7 @@ function Multiplayer({ settings }: { settings: GameSettings }) {
             targetSpot={microgame.targetSpot}
             clicks={microgame.clicks}
             leftHanded={settings.handedness === "left"}
+            istest={microgame.istest}
             onTap={microgame.tap}
           />
           {state.phase === "briefing" ? (
@@ -277,7 +279,7 @@ function Multiplayer({ settings }: { settings: GameSettings }) {
               multiplayer
               onNext={() => setIntroPage(1)}
               onBack={() => setIntroPage(0)}
-              onPractice={() => microgame.start(getGameClass(player.classId).microgame, settings.handedness)}
+              onPractice={() => microgame.start(getGameClass(player.classId).microgame, settings.handedness, { istest: isTestSeed(state.seed) })}
               onStart={() => {
                 setIntroPage(-1);
                 submit({ type: "CLASS_READY" });
@@ -309,9 +311,9 @@ function LobbyTextBox({
     borderColor: colors.sepia,
     borderWidth: 1,
     borderRadius: 8,
-    padding: 12,
-    minHeight: 100,
-    maxHeight: 160,
+    padding: 8,
+    minHeight: 48,
+    maxHeight: 100,
   } as const;
 
   if (!editable) {
@@ -373,7 +375,7 @@ function getPlayerStatus(
   if (ended) return `Run complete · ${level - 1} levels cleared`;
   if (health <= 0) return "You fell. Spectating until your team reaches the next level.";
   if (submitted) return "Action submitted. Waiting for other players…";
-  return "Tap a monster to attack, an item to pick it up, a doorway to move, your character to defend, or stairs to descend.";
+  return "Tap a monster to attack, an item to pick it up, a doorway to move, self or ally to support, or ladder to descend.";
 }
 
 function getDirection(position: "top" | "bottom" | "left" | "right") {

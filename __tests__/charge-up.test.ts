@@ -1,17 +1,17 @@
-import { GAME_PARAMETERS } from "@/gameparameters";
-import { PLAYER_MAX_ENERGY, useRunGame } from "@/hooks/run-game-singleplayer";
-import { createSeededDungeonMap } from "@/utils/dungeon-generation";
-import type { DungeonMap } from "@/utils/dungeon-map";
-import { getRoom } from "@/utils/dungeon-map-runtime";
+import { GAME_PARAMETERS } from "@/game/config/gameparameters";
+import { PLAYER_MAX_ENERGY, useRunGame } from "@/game/engine/run-game-singleplayer";
+import { createSeededDungeonMap } from "@/game/dungeon/generateDungeon";
+import type { DungeonMap } from "@/game/dungeon/types";
+import { getRoom } from "@/game/dungeon/rooms";
 import { act, renderHook } from "@testing-library/react-native";
 
-jest.mock("@/utils/dungeon-map-storage", () => ({
+jest.mock("@/game/dungeon/mapStorage", () => ({
   createAndSaveSeededDungeonMap: jest.fn(async () => null),
   saveDungeonMap: jest.fn(async () => undefined),
   updateStoredDungeonMap: jest.fn(async () => null),
 }));
-jest.mock("@/hooks/run-game-helpers", () => ({
-  ...jest.requireActual("@/hooks/run-game-helpers"),
+jest.mock("@/game/engine/run-game-helpers", () => ({
+  ...jest.requireActual("@/game/engine/run-game-helpers"),
   createLevelMap: jest.fn(),
 }));
 
@@ -39,9 +39,9 @@ async function setup(enemy = false, meal = false, enemyHealth = 20, enemyDamage 
     map.entities.items.meal = { id: "meal", itemId: "energy-meal", label: "Energy Meal", sprite: "🍔", type: "item" };
     getRoom(map, "A1")!.contents.push({ id: "meal", type: "item" });
   }
-  require("@/hooks/run-game-helpers").createLevelMap.mockReturnValue(map);
-  require("@/utils/dungeon-map-storage").createAndSaveSeededDungeonMap.mockResolvedValue(map);
-  const hook = renderHook(() => useRunGame({ difficulty: "normal", seed: "charge-test", vibrationEnabled: false, onGameOver: jest.fn() }));
+  require("@/game/engine/run-game-helpers").createLevelMap.mockReturnValue(map);
+  require("@/game/dungeon/mapStorage").createAndSaveSeededDungeonMap.mockResolvedValue(map);
+  const hook = renderHook(() => useRunGame({ difficulty: "normal", istest: false, seed: "charge-test", vibrationEnabled: false, onGameOver: jest.fn() }));
   await act(async () => {});
   return hook;
 }

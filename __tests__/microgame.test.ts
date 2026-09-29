@@ -1,5 +1,5 @@
-import { getConcentrationScore, getMultitapScore, getTimedAttackScore, MICROGAME_MAX_DURATION_MS } from "@/hooks/use-microgame";
-import { getGameClass } from "@/game-classes";
+import { getConcentrationScore, getMultitapScore, getTimedAttackScore, MICROGAME_MAX_DURATION_MS } from "@/game/actions/use-microgame";
+import { getGameClass } from "@/game/config/game-classes";
 
 test("microgames fit within a 1.5 second window", () => {
   expect(MICROGAME_MAX_DURATION_MS).toBe(1500);

@@ -1,15 +1,13 @@
-//#region imports
 import { router, useLocalSearchParams } from "expo-router";
 
-import { Container, Title } from "@/components/displays";
-import { PrimaryButton } from "@/components/inputs";
-import { ScreenShell } from "@/components/screen-shell";
+import { Container, Title } from "@/components/Common/Displays";
+import { PrimaryButton } from "@/components/Controls/ActionButton";
+import { ScreenShell } from "@/components/Common/ScreenShell";
 import {
   ThemeProvider
-} from "@/components/theme";
+} from "@/components/Common/theme";
 
 import { useGameSettings } from "@/hooks/use-game-settings";
-//#endregion
 
 export default function GameOverRoute() {
   const { score } = useLocalSearchParams<{ score?: string }>();
@@ -21,10 +19,10 @@ export default function GameOverRoute() {
     <ThemeProvider appearance={useGameSettings().settings.appearance}>
       <ScreenShell>
         <Container>
-          <Title>{"\n\n\n"}Game Over</Title>
+          <Title>Game Over</Title>
 
           <Title>
-            {"\n"}Score: {score ?? "0"}{"\n"}
+            Score: {score ?? "0"}
           </Title>
 
           <PrimaryButton 
