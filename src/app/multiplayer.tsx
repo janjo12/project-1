@@ -268,7 +268,7 @@ function Multiplayer({ settings }: { settings: GameSettings }) {
             targetSpot={microgame.targetSpot}
             clicks={microgame.clicks}
             leftHanded={settings.handedness === "left"}
-            istest={microgame.istest}
+            isTest={microgame.istest}
             onTap={microgame.tap}
           />
           {state.phase === "briefing" ? (

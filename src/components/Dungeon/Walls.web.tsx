@@ -1,6 +1,6 @@
 import { PixelSprite } from "@/components/Common/PixelSprite";
 
-import { Pressable, Text, View } from "react-native";
+import { Pressable, Text, View, type TextStyle } from "react-native";
 
 import { createStyles } from "@/components/Dungeon/room-scene-styles";
 import { useThemeColors } from "@/components/Common/theme";
@@ -48,6 +48,16 @@ export function RoomWalls({
 }) {
   const styles = createStyles(useThemeColors());
   const positions: DoorPosition[] = ["top", "right", "bottom", "left"];
+  const arrowMotionStyle = (position: DoorPosition) =>
+    !reducedMotion
+      ? ({
+          animationName: DOOR_ARROW_MOTION[position],
+          animationDuration: "900ms",
+          animationDirection: "alternate",
+          animationIterationCount: "infinite",
+          animationTimingFunction: "ease-in-out",
+        } as unknown as TextStyle)
+      : null;
 
   return (
     <>
@@ -94,13 +104,7 @@ export function RoomWalls({
                 accessible={false}
                 style={[
                   styles.doorwayArrow,
-                  !reducedMotion && {
-                    animationName: DOOR_ARROW_MOTION[position],
-                    animationDuration: "900ms",
-                    animationDirection: "alternate",
-                    animationIterationCount: "infinite",
-                    animationTimingFunction: "ease-in-out",
-                  },
+                  arrowMotionStyle(position),
                 ]}
               >
                 {DOOR_ARROWS[position]}

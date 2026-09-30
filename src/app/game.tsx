@@ -259,7 +259,7 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
         targetSpot={microgame.targetSpot}
         clicks={microgame.clicks}
         leftHanded={settings.handedness === "left"}
-        istest={microgame.istest}
+        isTest={microgame.istest}
         onTap={microgame.tap}
       />
       {classIntroPage >= 0 ? (

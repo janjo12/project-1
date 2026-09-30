@@ -1,8 +1,8 @@
-import { Pressable, Text, View } from "react-native";
 import { useState } from "react";
+import { Pressable, Text, View } from "react-native";
 
-import { useThemeColors } from "@/components/Common/theme";
 import { MicrogameCircle, MicrogameCircleOutline } from "@/components/Common/MicrogameCircle";
+import { useThemeColors } from "@/components/Common/theme";
 import { MICROGAME_MAX_DURATION_MS, type MicrogameKind } from "@/game/actions/use-microgame";
 
 type MicrogameOverlayProps = {
@@ -13,7 +13,7 @@ type MicrogameOverlayProps = {
   targetSpot: number;
   clicks: number;
   leftHanded: boolean;
-  istest?: boolean;
+  isTest?: boolean;
   onTap: () => void;
 };
 
@@ -25,7 +25,7 @@ export function MicrogameOverlay({
   targetSpot,
   clicks,
   leftHanded,
-  istest = false,
+  isTest = false,
   onTap,
 }: MicrogameOverlayProps) {
   const colors = useThemeColors();
@@ -67,7 +67,7 @@ export function MicrogameOverlay({
         />
       ) : null}
 
-      {istest ? (
+      {isTest ? (
         <Text accessibilityLabel="Test mode" style={{ position: "absolute", top: 8, right: 8, color: colors.fadedInk, fontSize: 10 }}>
           TEST
         </Text>
@@ -75,9 +75,6 @@ export function MicrogameOverlay({
 
       <Text pointerEvents="none" style={{ color: colors.ink, fontSize: 24, fontWeight: "900", textAlign: "center" }}>
         {isConcentration ? "Tap when ● fills ○" : isTimedAttack ? "Tap…" : "Tap the ●"}
-      </Text>
-      <Text pointerEvents="none" style={{ color: colors.ink, fontSize: 15, marginVertical: 12 }}>
-        {isTimedAttack ? "Tap 250 ms after NOW!" : isConcentration ? "One tap only" : `Taps: ${clicks} / 10`}
       </Text>
       {showNow ? (
         <Text pointerEvents="none" style={{ color: colors.accent, fontSize: 56, fontWeight: "900" }}>
