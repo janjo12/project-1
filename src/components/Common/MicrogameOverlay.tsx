@@ -2,6 +2,7 @@ import { Pressable, Text, View } from "react-native";
 import { useState } from "react";
 
 import { useThemeColors } from "@/components/Common/theme";
+import { MicrogameCircle, MicrogameCircleOutline } from "@/components/Common/MicrogameCircle";
 import { MICROGAME_MAX_DURATION_MS, type MicrogameKind } from "@/game/actions/use-microgame";
 
 type MicrogameOverlayProps = {
@@ -92,30 +93,17 @@ export function MicrogameOverlay({
         style={{ width: "100%", height: 110, position: "relative", marginTop: 24, justifyContent: "center" }}
       >
         {isConcentration ? (
-          <View
+          <MicrogameCircleOutline
             pointerEvents="none"
-            style={{
-              position: "absolute",
-              left: targetSpot * trackWidth - 20,
-              width: 40,
-              height: 40,
-              borderRadius: 20,
-              borderColor: colors.accent,
-              borderWidth: 4,
-            }}
+            size={40}
+            style={{ position: "absolute", left: targetSpot * trackWidth - 20 }}
           />
         ) : null}
         {isConcentration ? (
-          <View
+          <MicrogameCircle
             pointerEvents="none"
-            style={{
-              position: "absolute",
-              left: movingSpot * trackWidth - 22,
-              width: 44,
-              height: 44,
-              borderRadius: 22,
-              backgroundColor: colors.accent,
-            }}
+            size={44}
+            style={{ position: "absolute", left: movingSpot * trackWidth - 22 }}
           />
         ) : null}
         {isMultitap ? (
@@ -123,15 +111,10 @@ export function MicrogameOverlay({
             onPress={onTap}
             accessibilityRole="button"
             accessibilityLabel="Tap circle"
-            style={{
-              position: "absolute",
-              left: targetSpot * trackWidth - 22,
-              width: 44,
-              height: 44,
-              borderRadius: 22,
-              backgroundColor: colors.accent,
-            }}
-          />
+            style={{ position: "absolute", left: targetSpot * trackWidth - 22 }}
+          >
+            <MicrogameCircle size={44} />
+          </Pressable>
         ) : null}
       </Pressable>
 

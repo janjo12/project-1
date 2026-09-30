@@ -17,6 +17,12 @@ const nextConfig: NextConfig = {
     "expo-modules-core",
   ],
   webpack(config) {
+    config.resolve.extensions = [
+      ".web.tsx",
+      ".web.ts",
+      ".web.js",
+      ...config.resolve.extensions,
+    ];
     config.resolve.alias = {
       ...config.resolve.alias,
       "react-native$": "react-native-web",

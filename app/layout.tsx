@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./styles.css";
 
 export const metadata: Metadata = {
-  title: "Dungeon Run",
-  description: "A seeded, turn-based dungeon adventure.",
+  title: "[Project 1]",
+  description: "Play a seeded dungeon adventure solo or with friends.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

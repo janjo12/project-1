@@ -1,4 +1,5 @@
 import { StyledText } from "@/components/Common/Displays";
+import { MicrogameCircle, MicrogameCircleOutline } from "@/components/Common/MicrogameCircle";
 import { useThemeColors } from "@/components/Common/theme";
 import { NormalButton, PrimaryButton } from "@/components/Controls/ActionButton";
 import { getGameClass, getSupportDescription, type GameClassId } from "@/game/config/game-classes";
@@ -65,9 +66,36 @@ export function ClassBriefing({
         </>
       ) : (
         <>
+          <View style={{ alignItems: "center", gap: 8 }}>
+            {gameClass.microgame === "concentration" ? (
+              <View style={{ height: 48, width: 104, justifyContent: "center" }}>
+                <MicrogameCircleOutline
+                  size={40}
+                  style={{ position: "absolute", left: 32 }}
+                  accessibilityElementsHidden
+                  importantForAccessibility="no-hide-descendants"
+                />
+                <MicrogameCircle
+                  size={44}
+                  style={{ position: "absolute", left: 30 }}
+                  accessibilityElementsHidden
+                  importantForAccessibility="no-hide-descendants"
+                />
+              </View>
+            ) : gameClass.microgame === "multitap" ? (
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                <MicrogameCircle size={32} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />
+                <MicrogameCircle size={32} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />
+                <MicrogameCircle size={32} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />
+              </View>
+            ) : null}
+            {gameClass.microgame === "timed-attack" ? (
+              <Text style={{ color: colors.accent, fontSize: 36, fontWeight: "900" }}>NOW!</Text>
+            ) : null}
           <Text style={{ color: colors.ink, fontSize: 17 }}>
             Attack game · {gameClass.microgameText}
           </Text>
+          </View>
           <Text style={{ color: colors.ink, fontSize: 20, textAlign: "center" }}>
             Damage: {damage}
           </Text>
