@@ -38,7 +38,7 @@ type GameViewPanelProps = {
 };
 
 const fallbackFrameStore = createSceneFrameStore();
-const PLAYER_SPRITE = "\uD83E\uDD3A";
+const PLAYER_SPRITE = "warrior_graphic";
 const defaultRoomDoorways: RoomDoorways = {
   bottom: "wall",
   left: "wall",

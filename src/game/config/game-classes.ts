@@ -19,7 +19,7 @@ export const GAME_CLASSES: Record<GameClassId, GameClass> = {
   warrior: {
     id: "warrior",
     name: "Warrior",
-    sprite: "🤺",
+    sprite: "warrior_graphic",
     support: {
       singleplayer: [
         "Vanguard: Tap yourself to damage enemies when they attack you for one turn.",
@@ -37,7 +37,7 @@ export const GAME_CLASSES: Record<GameClassId, GameClass> = {
   cleric: {
     id: "cleric",
     name: "Cleric",
-    sprite: "🧙",
+    sprite: "cleric_graphic",
     support: {
       singleplayer: "Aid: Tap yourself to gain +5 Defense for 2 turns. Charge Up first to also restore 10 Health.",
       multiplayer: [
@@ -55,7 +55,7 @@ export const GAME_CLASSES: Record<GameClassId, GameClass> = {
   thief: {
     id: "thief",
     name: "Thief",
-    sprite: "🥷",
+    sprite: "thief_graphic",
     support: {
       singleplayer: [
         "Enrich: Tap yourself for a 10% chance to find an item or equipment.",

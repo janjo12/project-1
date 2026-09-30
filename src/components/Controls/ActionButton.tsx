@@ -1,8 +1,8 @@
 import { FontAwesome } from "@expo/vector-icons";
 import { Pressable, Switch, Text, TextInput, View } from "react-native";
 
-import { createInputStyles } from "@/components/Controls/input-styles";
 import { useThemeColors } from "@/components/Common/theme";
+import { createInputStyles } from "@/components/Controls/input-styles";
 type CancelButtonProps = {
   accessibilityLabel: string;
   accessibilityRole: "button";
@@ -71,6 +71,7 @@ type ToggleButtonProps = {
   onValueChange: (value: boolean) => void;
   value: boolean;
 };
+
 export function CancelButton({ label, onPress }: CancelButtonProps) {
   const colors = useThemeColors();
   const styles = createInputStyles(colors);

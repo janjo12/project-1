@@ -9,8 +9,6 @@ export type DoorPosition = "top" | "right" | "bottom" | "left";
 export type DoorState = "guarded" | "locked" | "open" | "wall";
 export type RoomDoorways = Record<DoorPosition, DoorState>;
 
-const DOOR_GUARD_ICON = "\u274C";
-const DOOR_LOCK_ICON = "\uD83D\uDD12";
 const DOOR_ARROWS: Record<DoorPosition, string> = {
   top: "↑",
   right: "→",
@@ -90,14 +88,10 @@ export function RoomWalls({
             ]}
           >
             {state === "guarded" ? (
-              <Text style={[styles.doorwayIcon, styles.guardedDoorwayIcon]}>
-                {DOOR_GUARD_ICON}
-              </Text>
+              <PixelSprite sprite="guard_graphic" label="" size={16} />
             ) : null}
             {state === "locked" ? (
-              <Text style={[styles.doorwayIcon, styles.lockedDoorwayIcon]}>
-                {DOOR_LOCK_ICON}
-              </Text>
+              <PixelSprite sprite="lock_graphic" label="" size={16} />
             ) : null}
             {state === "open" ? (
               <Text

@@ -48,37 +48,6 @@ export function EquipmentControl({ label, description, sprite, onDrop, disabled 
   </Pressable>;
 }
 
-function createStyles(colors: ThemeColors) {
-  return StyleSheet.create({
-    container: {
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    itemPanel: {
-      alignItems: "center",
-      backgroundColor: colors.paperLight,
-      borderColor: colors.sepia,
-      borderRadius: 999,
-      borderWidth: 2,
-      gap: 2,
-      justifyContent: "center",
-      minHeight: 64,
-      maxWidth: 150,
-      minWidth: 120,
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-    },
-    description: { color: colors.sepia, fontSize: 11, lineHeight: 14, textAlign: "center" },
-    label: {
-      color: colors.ink,
-      fontSize: 13,
-      fontWeight: "900",
-      textAlign: "center",
-    },
-    sprite: { fontSize: 20 },
-  });
-}
-
 export function ChargeControl({ charged, disabled, onPress }: {
   charged: boolean;
   disabled: boolean;
@@ -109,4 +78,35 @@ export function ChargeControl({ charged, disabled, onPress }: {
       </Text>
     </Pressable>
   );
+}
+
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: {
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    itemPanel: {
+      alignItems: "center",
+      backgroundColor: colors.paperLight,
+      borderColor: colors.sepia,
+      borderRadius: 999,
+      borderWidth: 2,
+      gap: 2,
+      justifyContent: "center",
+      minHeight: 64,
+      maxWidth: 150,
+      minWidth: 120,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+    },
+    description: { color: colors.sepia, fontSize: 11, lineHeight: 14, textAlign: "center" },
+    label: {
+      color: colors.ink,
+      fontSize: 13,
+      fontWeight: "900",
+      textAlign: "center",
+    },
+    sprite: { fontSize: 20 },
+  });
 }

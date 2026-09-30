@@ -30,6 +30,7 @@ import {
   getCurrentRoom,
   getRoomEquipment,
   getRoomMonster,
+  getTargetableMonsters,
   removeEquipmentFromRoom
 } from "@/game/dungeon/rooms";
 import {
@@ -382,99 +383,87 @@ export function useRunGame({
 
   const startEnemyMove = useCallback(
     ({
+      enemyIds,
       isDefending,
       mapAtEnd,
-      monsterDamage,
-      monsterId,
       roomId,
     }: {
+      enemyIds: string[];
       isDefending: boolean;
       mapAtEnd?: DungeonMapType;
-      monsterDamage: number;
-      monsterId: string;
       roomId: string;
     }) => {
-      restartAnimations(setAnimationFrame, ["enemyAttackElapsed"]);
-      let resolvedMap = mapAtEnd;
+      const takeEnemyTurn = (index: number, currentMap?: DungeonMapType) => {
+        const liveMap = currentMap ?? mapAtEnd ?? dungeonMap;
+        const monsterId = enemyIds[index];
+        const monster = liveMap.entities.monsters[monsterId];
+        if (!monster || monster.currentHealth <= 0) {
+          if (index + 1 < enemyIds.length) takeEnemyTurn(index + 1, liveMap);
+          else finishNonMoveTurn({ mapAtEnd: liveMap, roomId });
+          return;
+        }
 
-      const outcome = getEnemyAttackOutcome({
-        isDefending,
-        monsterDamage,
-      });
+        restartAnimations(setAnimationFrame, ["enemyAttackElapsed"]);
+        let resolvedMap = currentMap;
+        // Vanguard's reflected damage is consumed by the first enemy that attacks this turn.
+        const reflects = vanguardRef.current > 0;
+        const outcome = getEnemyAttackOutcome({
+          isDefending: isDefending && index === 0,
+          monsterDamage: monster.damage,
+        });
+        const counterattackDamage = isDefending && index === 0
+          ? (chargedRef.current ? GAME_PARAMETERS.combat.chargedCounterattackDamage : outcome.counterattackDamage)
+          : 0;
+        const classBaseDefense = GAME_PARAMETERS.player.defense + (playerClass.id === "warrior" ? 5 : 0);
+        const activelyDefending = isDefending && index === 0;
+        const damageTaken = activelyDefending && chargedRef.current ? 0 : applyDefense(
+          outcome.damageTaken,
+          classBaseDefense + getEquipmentStats(equipment).defense + defenseBuffRef.current + (activelyDefending && chargedRef.current ? 5 : 0),
+        );
 
-      const counterattackDamage = isDefending && chargedRef.current
-        ? GAME_PARAMETERS.combat.chargedCounterattackDamage : outcome.counterattackDamage;
-      const classBaseDefense = GAME_PARAMETERS.player.defense + (playerClass.id === "warrior" ? 5 : 0);
-      const damageTaken = isDefending && chargedRef.current ? 0 : applyDefense(outcome.damageTaken, classBaseDefense + getEquipmentStats(equipment).defense + defenseBuffRef.current + (isDefending && chargedRef.current ? 5 : 0));
-      if (vanguardRef.current > 0) {
-        const enemyDefense = mapAtEnd?.entities.monsters[monsterId]?.defense ?? dungeonMap.entities.monsters[monsterId]?.defense ?? 0;
-        resolvedMap = commitMap(map => damageMonsterInRoom(map, roomId, monsterId, applyDefense(outcome.damageTaken, enemyDefense)), resolvedMap);
-        vanguardRef.current = 0;
-      }
+        if (reflects) {
+          resolvedMap = commitMap(
+            map => damageMonsterInRoom(map, roomId, monsterId, applyDefense(outcome.damageTaken, monster.defense ?? 0)),
+            resolvedMap,
+          );
+          vanguardRef.current = 0;
+        }
 
-      schedule(GAME_PARAMETERS.animation.attackImpactDelayMs, () => {
+        schedule(GAME_PARAMETERS.animation.attackImpactDelayMs, () => {
           setPlayerHealthLossAmount(damageTaken);
-          restartAnimations(setAnimationFrame, [
-            "playerDamageElapsed",
-            "playerHealthLossElapsed",
-          ]);
+          restartAnimations(setAnimationFrame, ["playerDamageElapsed", "playerHealthLossElapsed"]);
           triggerDamageHaptic();
-
-          if (isDefending) {
-            setEnemyHealthLossAmount(
-              counterattackDamage,
-            );
-            restartAnimations(setAnimationFrame, [
-              "playerAttackElapsed",
-              "enemyDamageElapsed",
-              "enemyHealthLossElapsed",
-            ]);
+          if (counterattackDamage > 0) {
+            setEnemyHealthLossAmount(counterattackDamage);
+            restartAnimations(setAnimationFrame, ["playerAttackElapsed", "enemyDamageElapsed", "enemyHealthLossElapsed"]);
           }
         });
 
-      schedule(GAME_PARAMETERS.animation.enemyTurnDurationMs, () => {
-        let finalMap = resolvedMap;
-
-        if (isDefending) {
-          finalMap = commitMap(
-            (map) =>
-              damageMonsterInRoom(
-                map,
-                roomId,
-                monsterId,
-                counterattackDamage,
-              ),
-            resolvedMap,
-          );
-        }
-
-          setPlayerHealth((health) => {
-            const { nextHealth, usesPotion } = resolveHealthLoss(
-              health,
-              damageTaken,
-              inventoryItem,
-            );
-
-            if (usesPotion) {
-              setInventoryItem(null);
-            }
-
+        schedule(GAME_PARAMETERS.animation.enemyTurnDurationMs, () => {
+          let finalMap = resolvedMap;
+          if (counterattackDamage > 0) {
+            finalMap = commitMap(map => damageMonsterInRoom(map, roomId, monsterId, counterattackDamage), resolvedMap);
+          }
+          setPlayerHealth(health => {
+            const { nextHealth, usesPotion } = resolveHealthLoss(health, damageTaken, inventoryItemRef.current);
+            if (usesPotion) setInventoryItem(null);
             if (nextHealth <= 0 && !usesPotion && playerClass.id === "cleric" && playerEnergy > 0) {
               const miracleHealth = playerEnergy;
               setPlayerEnergy(0);
               return miracleHealth;
             }
-            if (nextHealth <= 0 && !usesPotion) {
-              schedule(0, () => onGameOver(clearedLevelsRef.current));
-            }
-
+            if (nextHealth <= 0 && !usesPotion) schedule(0, () => onGameOver(clearedLevelsRef.current));
             return nextHealth;
           });
 
-        finishNonMoveTurn({ mapAtEnd: finalMap, roomId });
-      });
+          if (index + 1 < enemyIds.length) takeEnemyTurn(index + 1, finalMap);
+          else finishNonMoveTurn({ mapAtEnd: finalMap, roomId });
+        });
+      };
+
+      takeEnemyTurn(0, mapAtEnd);
     },
-    [commitMap, dungeonMap, finishNonMoveTurn, inventoryItem, equipment, playerClass, playerEnergy, onGameOver, schedule, setInventoryItem, triggerDamageHaptic, setAnimationFrame],
+    [commitMap, dungeonMap, finishNonMoveTurn, equipment, playerClass, playerEnergy, onGameOver, schedule, setInventoryItem, setPlayerEnergy, setPlayerHealth, triggerDamageHaptic, setAnimationFrame],
   );
 
   const finishPlayerAction = useCallback(
@@ -488,16 +477,15 @@ export function useRunGame({
       startedRoomId: string;
     }) => {
       const roomAtEnd = getCurrentRoom(mapAtEnd ?? dungeonMap);
-      const monsterAtEnd = getRoomMonster(mapAtEnd ?? dungeonMap, roomAtEnd);
+      const enemiesAtEnd = getTargetableMonsters(mapAtEnd ?? dungeonMap, roomAtEnd);
 
-      if (roomAtEnd?.id === startedRoomId && monsterAtEnd) {
-        setActiveMonsterId(monsterAtEnd.id);
+      if (roomAtEnd?.id === startedRoomId && enemiesAtEnd.length > 0) {
+        setActiveMonsterId(enemiesAtEnd[0].id);
         setIsResolving(true);
         startEnemyMove({
+          enemyIds: enemiesAtEnd.map(enemy => enemy.id),
           isDefending,
           mapAtEnd,
-          monsterDamage: monsterAtEnd.damage,
-          monsterId: monsterAtEnd.id,
           roomId: startedRoomId,
         });
         return;

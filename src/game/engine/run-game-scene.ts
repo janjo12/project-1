@@ -47,7 +47,7 @@ export function getRoomSceneActors({
       const item = dungeonMap.entities.equipment[content.id];
       if (item) sceneActors.push({ id: item.id, sprite: item.sprite, kind: "equipment", label: getEquipmentGroundLabel(item.equipmentId), position: "center" });
     } else if (content.type === "stairs") {
-      sceneActors.push({ id: "stairs", sprite: "🪜", kind: "stairs", label: "Stairs", position: "center" });
+      sceneActors.push({ id: "stairs", sprite: "stairs_graphic", kind: "stairs", label: "Stairs", position: "center" });
     }
   }
 

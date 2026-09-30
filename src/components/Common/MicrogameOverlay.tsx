@@ -29,18 +29,10 @@ export function MicrogameOverlay({
   onTap,
 }: MicrogameOverlayProps) {
   const colors = useThemeColors();
-  const [trackWidth, setTrackWidth] = useState(0);
 
   if (!visible) return null;
 
-  const isConcentration = kind === "concentration";
-  const isTimedAttack = kind === "timed-attack";
-  const isMultitap = kind === "multitap";
-  const progress = Math.max(0, Math.min(1, elapsed / MICROGAME_MAX_DURATION_MS));
-  // Match the score calculation's 10–90% track bounds when positioning the moving target.
-  const movingSpot = leftHanded ? 0.1 + 0.8 * progress : 0.9 - 0.8 * progress;
   const remainingSeconds = Math.max(0, (MICROGAME_MAX_DURATION_MS - elapsed) / 1000);
-  const showNow = isTimedAttack && elapsed >= targetDelay;
 
   return (
     <View
@@ -58,11 +50,11 @@ export function MicrogameOverlay({
         padding: 24,
       }}
     >
-      {!isMultitap ? (
+      {kind !== "multitap" ? (
         <Pressable
           onPress={onTap}
           accessibilityRole="button"
-          accessibilityLabel={isConcentration ? "Tap when the filled circle fills the outline" : "Tap the game screen"}
+          accessibilityLabel="Tap the game screen"
           style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0 }}
         />
       ) : null}
@@ -73,51 +65,85 @@ export function MicrogameOverlay({
         </Text>
       ) : null}
 
-      <Text pointerEvents="none" style={{ color: colors.ink, fontSize: 24, fontWeight: "900", textAlign: "center" }}>
-        {isConcentration ? "Tap when ● fills ○" : isTimedAttack ? "Tap…" : "Tap the ●"}
-      </Text>
-      {showNow ? (
-        <Text pointerEvents="none" style={{ color: colors.accent, fontSize: 56, fontWeight: "900" }}>
-          NOW!
-        </Text>
-      ) : null}
-
-      <Pressable
-        onPress={isMultitap ? undefined : onTap}
-        accessibilityRole={isMultitap ? undefined : "button"}
-        accessibilityLabel={isConcentration ? "Tap game screen" : undefined}
-        onLayout={event => setTrackWidth(event.nativeEvent.layout.width)}
-        style={{ width: "100%", height: 110, position: "relative", marginTop: 24, justifyContent: "center" }}
-      >
-        {isConcentration ? (
-          <MicrogameCircleOutline
-            pointerEvents="none"
-            size={40}
-            style={{ position: "absolute", left: targetSpot * trackWidth - 20 }}
-          />
-        ) : null}
-        {isConcentration ? (
-          <MicrogameCircle
-            pointerEvents="none"
-            size={44}
-            style={{ position: "absolute", left: movingSpot * trackWidth - 22 }}
-          />
-        ) : null}
-        {isMultitap ? (
-          <Pressable
-            onPress={onTap}
-            accessibilityRole="button"
-            accessibilityLabel="Tap circle"
-            style={{ position: "absolute", left: targetSpot * trackWidth - 22 }}
-          >
-            <MicrogameCircle size={44} />
-          </Pressable>
-        ) : null}
-      </Pressable>
-
-      <Text pointerEvents="none" style={{ color: colors.sepia, fontSize: 13, marginTop: 12 }}>
-        Time remaining: {remainingSeconds.toFixed(2)}s
-      </Text>
+      <MicrogameContent
+        kind={kind}
+        elapsed={elapsed}
+        targetDelay={targetDelay}
+        targetSpot={targetSpot}
+        leftHanded={leftHanded}
+        onTap={onTap}
+      />
     </View>
+  );
+}
+
+type MicrogameContentProps = Pick<MicrogameOverlayProps, "kind" | "elapsed" | "targetDelay" | "targetSpot" | "leftHanded" | "onTap">;
+
+function MicrogameContent(props: MicrogameContentProps) {
+  switch (props.kind) {
+    case "concentration":
+      return <ConcentrationMicrogame {...props} />;
+    case "timed-attack":
+      return <TimedAttackMicrogame {...props} />;
+    case "multitap":
+      return <MultitapMicrogame {...props} />;
+  }
+}
+
+function MicrogameTrack({ children }: { children?: React.ReactNode }) {
+  return (
+    <View style={{ width: "100%", height: 110, position: "relative", marginTop: 24, justifyContent: "center" }}>
+      {children}
+    </View>
+  );
+}
+
+function ConcentrationMicrogame({ elapsed, targetSpot, leftHanded, onTap }: MicrogameContentProps) {
+  const colors = useThemeColors();
+  const [trackWidth, setTrackWidth] = useState(0);
+  const progress = Math.max(0, Math.min(1, elapsed / MICROGAME_MAX_DURATION_MS));
+  // Match the scoring range as the filled circle moves toward the outline.
+  const movingSpot = leftHanded ? 0.1 + 0.8 * progress : 0.9 - 0.8 * progress;
+
+  return (
+    <>
+      <Text pointerEvents="none" style={{ color: colors.ink, fontSize: 24, fontWeight: "900", textAlign: "center" }}>
+        Tap when ● fills ○
+      </Text>
+      <MicrogameTrack>
+        <View onLayout={event => setTrackWidth(event.nativeEvent.layout.width)} style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0 }} />
+        <MicrogameCircleOutline pointerEvents="none" size={40} style={{ position: "absolute", left: targetSpot * trackWidth - 20 }} />
+        <MicrogameCircle pointerEvents="none" size={44} style={{ position: "absolute", left: movingSpot * trackWidth - 22 }} />
+      </MicrogameTrack>
+      <Pressable onPress={onTap} accessibilityRole="button" accessibilityLabel="Tap when the filled circle fills the outline" style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0 }} />
+    </>
+  );
+}
+
+function TimedAttackMicrogame({ elapsed, targetDelay }: MicrogameContentProps) {
+  const colors = useThemeColors();
+  return (
+    <>
+      <Text pointerEvents="none" style={{ color: colors.ink, fontSize: 24, fontWeight: "900", textAlign: "center" }}>Tap…</Text>
+      {elapsed >= targetDelay ? (
+        <Text pointerEvents="none" style={{ color: colors.accent, fontSize: 56, fontWeight: "900" }}>NOW!</Text>
+      ) : null}
+      <MicrogameTrack />
+    </>
+  );
+}
+
+function MultitapMicrogame({ targetSpot, onTap }: MicrogameContentProps) {
+  const [trackWidth, setTrackWidth] = useState(0);
+  const colors = useThemeColors();
+  return (
+    <>
+      <Text pointerEvents="none" style={{ color: colors.ink, fontSize: 24, fontWeight: "900", textAlign: "center" }}>Tap the ●</Text>
+      <View onLayout={event => setTrackWidth(event.nativeEvent.layout.width)} style={{ width: "100%", height: 110, position: "relative", marginTop: 24, justifyContent: "center" }}>
+        <Pressable onPress={onTap} accessibilityRole="button" accessibilityLabel="Tap circle" style={{ position: "absolute", left: targetSpot * trackWidth - 22 }}>
+          <MicrogameCircle size={44} />
+        </Pressable>
+      </View>
+    </>
   );
 }

@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from "react-native";
 
+import { PixelSprite } from "@/components/Common/PixelSprite";
 import { useThemeColors, type ThemeColors } from "@/components/Common/theme";
 import type { DungeonMap as DungeonMapType } from "@/game/dungeon/types";
 import { getRoomMonster, getRoomPosition, getRooms } from "@/game/dungeon/rooms";
@@ -110,43 +111,43 @@ export function DungeonMap({
                           <View style={[styles.door, styles.northDoor]} />
                         ) : null}
                         {hasNorthLock ? (
-                          <Text style={[styles.lockIcon, styles.northLock]}>🔒</Text>
+                          <PixelSprite sprite="lock_graphic" label="Locked doorway" size={10} style={[styles.iconOverlay, styles.northLock]} />
                         ) : null}
                         {hasNorthGuard ? (
-                          <Text style={[styles.guardIcon, styles.northGuard]}>❌</Text>
+                          <PixelSprite sprite="guard_graphic" label="Guarded doorway" size={10} style={[styles.iconOverlay, styles.northGuard]} />
                         ) : null}
                         {room.east === "open" ? (
                           <View style={[styles.door, styles.eastDoor]} />
                         ) : null}
                         {hasEastLock ? (
-                          <Text style={[styles.lockIcon, styles.eastLock]}>🔒</Text>
+                          <PixelSprite sprite="lock_graphic" label="Locked doorway" size={10} style={[styles.iconOverlay, styles.eastLock]} />
                         ) : null}
                         {hasEastGuard ? (
-                          <Text style={[styles.guardIcon, styles.eastGuard]}>❌</Text>
+                          <PixelSprite sprite="guard_graphic" label="Guarded doorway" size={10} style={[styles.iconOverlay, styles.eastGuard]} />
                         ) : null}
                         {room.south === "open" ? (
                           <View style={[styles.door, styles.southDoor]} />
                         ) : null}
                         {hasSouthLock ? (
-                          <Text style={[styles.lockIcon, styles.southLock]}>🔒</Text>
+                          <PixelSprite sprite="lock_graphic" label="Locked doorway" size={10} style={[styles.iconOverlay, styles.southLock]} />
                         ) : null}
                         {hasSouthGuard ? (
-                          <Text style={[styles.guardIcon, styles.southGuard]}>❌</Text>
+                          <PixelSprite sprite="guard_graphic" label="Guarded doorway" size={10} style={[styles.iconOverlay, styles.southGuard]} />
                         ) : null}
                         {room.west === "open" ? (
                           <View style={[styles.door, styles.westDoor]} />
                         ) : null}
                         {hasWestLock ? (
-                          <Text style={[styles.lockIcon, styles.westLock]}>🔒</Text>
+                          <PixelSprite sprite="lock_graphic" label="Locked doorway" size={10} style={[styles.iconOverlay, styles.westLock]} />
                         ) : null}
                         {hasWestGuard ? (
-                          <Text style={[styles.guardIcon, styles.westGuard]}>❌</Text>
+                          <PixelSprite sprite="guard_graphic" label="Guarded doorway" size={10} style={[styles.iconOverlay, styles.westGuard]} />
                         ) : null}
                         {hasStairs ? (
-                          <Text style={styles.stairsIcon}>🪜</Text>
+                          <PixelSprite sprite="stairs_graphic" label="Stairs" size={12} />
                         ) : null}
                         {hasWerewolf ? (
-                          <Text style={styles.werewolfIcon}>🐺</Text>
+                          <PixelSprite sprite="werewolf_graphic" label="Werewolf" size={12} />
                         ) : null}
                       </View>
                     ) : null}
@@ -261,32 +262,7 @@ function createStyles(colors: ThemeColors) {
     legendItem: { alignItems: "center", flexDirection: "row", gap: 4 },
     legendSwatch: { borderColor: colors.fadedInk, borderRadius: 3, borderWidth: 1, height: 12, width: 12 },
     legendLabel: { color: colors.ink, fontSize: 10, fontWeight: "700" },
-    stairsIcon: {
-      color: colors.ink,
-      fontSize: 11,
-      fontWeight: "900",
-      lineHeight: 13,
-    },
-    lockIcon: {
-      color: colors.ink,
-      fontSize: 9,
-      fontWeight: "900",
-      lineHeight: 11,
-      position: "absolute",
-    },
-    guardIcon: {
-      color: "#dc2626",
-      fontSize: 10,
-      fontWeight: "900",
-      lineHeight: 12,
-      position: "absolute",
-    },
-    werewolfIcon: {
-      color: colors.ink,
-      fontSize: 11,
-      fontWeight: "900",
-      lineHeight: 13,
-    },
+    iconOverlay: { position: "absolute" },
     door: {
       backgroundColor: colors.ink,
       position: "absolute",
@@ -300,12 +276,10 @@ function createStyles(colors: ThemeColors) {
     northLock: {
       top: -11,
       width: 12,
-      textAlign: "center",
     },
     northGuard: {
       top: -11,
       width: 12,
-      textAlign: "center",
     },
     eastDoor: {
       height: "40%",
@@ -314,12 +288,10 @@ function createStyles(colors: ThemeColors) {
     },
     eastLock: {
       right: -13,
-      textAlign: "center",
       width: 12,
     },
     eastGuard: {
       right: -13,
-      textAlign: "center",
       width: 12,
     },
     southDoor: {
@@ -330,12 +302,10 @@ function createStyles(colors: ThemeColors) {
     },
     southLock: {
       bottom: -11,
-      textAlign: "center",
       width: 12,
     },
     southGuard: {
       bottom: -11,
-      textAlign: "center",
       width: 12,
     },
     westDoor: {
@@ -345,12 +315,10 @@ function createStyles(colors: ThemeColors) {
     },
     westLock: {
       left: -11,
-      textAlign: "center",
       width: 12,
     },
     westGuard: {
       left: -13,
-      textAlign: "center",
       width: 12,
     },
   });
