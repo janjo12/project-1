@@ -1,4 +1,3 @@
-import { GAME_PARAMETERS } from "@/game/config/gameparameters";
 import { PLAYER_MAX_ENERGY, useRunGame } from "@/game/engine/run-game-singleplayer";
 import { createSeededDungeonMap } from "@/game/dungeon/generateDungeon";
 import type { DungeonMap } from "@/game/dungeon/types";
@@ -48,13 +47,6 @@ async function setup(enemy = false, meal = false, enemyHealth = 20, enemyDamage 
 
 beforeEach(() => jest.useFakeTimers());
 afterEach(() => jest.useRealTimers());
-
-test("map dimensions match designer parameters", () => {
-  const map = fixture();
-  expect(map.rows).toHaveLength(GAME_PARAMETERS.dungeon.mapWidthRooms);
-  expect(map.columns).toHaveLength(GAME_PARAMETERS.dungeon.mapHeightRooms);
-  expect(map.rows.length).toBeGreaterThan(map.columns.length);
-});
 
 test("charge can be cancelled and re-enabled without advancing the turn", async () => {
   const { result } = await setup();

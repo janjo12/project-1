@@ -41,6 +41,9 @@
     "isolatedModules": true
   },
   "include": [
+    "global.d.ts",
+    "app/**/*.ts",
+    "app/**/*.tsx",
     "src/multiplayer/**/*.ts",
     "src/**/*.ts",
     "src/**/*.tsx",

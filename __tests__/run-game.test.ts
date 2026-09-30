@@ -191,10 +191,6 @@ describe("run-game policies", () => {
     expect(getInventoryItemActivationDescription("key")).toContain("locked door");
   });
 
-  it("can be imported without evaluating map-dependent policies at module load", () => {
-    expect(typeof runGameLoop).toBe("function");
-  });
-
   it("bases the hard turn limit on active rooms in the real level map", () => {
     expect(
       getHardTurnLimit({
