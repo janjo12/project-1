@@ -34,7 +34,7 @@ export function validateAction({
   }
 
   const room = getRoom(map, currentRoomId);
-  if (action.type === "PICKUP") return Boolean(room?.contents.some((content) => content.type === "item" || content.type === "equipment"));
-  if (action.type === "DESCEND") return Boolean(room?.contents.some((content) => content.type === "stairs"));
+  if (action.type === "PICKUP") return room.contents.some((content) => content.type === "item" || content.type === "equipment");
+  if (action.type === "DESCEND") return room.contents.some((content) => content.type === "stairs");
   return true;
 }

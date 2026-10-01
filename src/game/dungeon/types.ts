@@ -118,11 +118,11 @@ export function getRoomId(position: GridPosition) {
   return `${position.column}${position.row}`;
 }
 
-export function getGridPosition(roomId: string): GridPosition | null {
+export function getGridPosition(roomId: string): GridPosition {
   const match = /^([A-Z])(\d+)$/.exec(roomId);
 
   if (!match) {
-    return null;
+    throw new Error(`Invalid room ID: ${roomId}`);
   }
   const position = {
     column: match[1],
@@ -130,7 +130,7 @@ export function getGridPosition(roomId: string): GridPosition | null {
   };
 
   if (!mapColumns.includes(position.column) || !mapRows.includes(position.row)) {
-    return null;
+    throw new Error(`Room ID is outside the dungeon grid: ${roomId}`);
   }
 
   return position;
@@ -213,16 +213,12 @@ export function findRoomInGrid(rooms: DungeonMapJson, roomId: string) {
 export function openConnection(rooms: DungeonMapJson, roomId: string, direction: Direction) {
   const room = findRoomInGrid(rooms, roomId);
 
-  if (!room) {
-    return;
-  }
+  if (!room) throw new Error(`Cannot open connection from missing room ${roomId}`);
 
   const neighbor = getNeighbor(room, direction);
   const neighborRoom = neighbor ? findRoomInGrid(rooms, getRoomId(neighbor)) : null;
 
-  if (!neighborRoom) {
-    return;
-  }
+  if (!neighborRoom) throw new Error(`Cannot open ${direction} connection from edge room ${roomId}`);
 
   room[direction] = "open";
   neighborRoom[oppositeDirections[direction]] = "open";
@@ -236,12 +232,11 @@ export function setConnectionBoundary(
 ) {
   // Store a doorway boundary on both adjacent rooms to keep the map symmetric.
   const room = findRoomInGrid(rooms, roomId);
-  const neighbor = room ? getNeighbor(room, direction) : null;
+  if (!room) throw new Error(`Cannot set connection boundary from missing room ${roomId}`);
+  const neighbor = getNeighbor(room, direction);
   const neighborRoom = neighbor ? findRoomInGrid(rooms, getRoomId(neighbor)) : null;
 
-  if (!room || !neighborRoom) {
-    return;
-  }
+  if (!neighborRoom) throw new Error(`Cannot set ${direction} boundary from edge room ${roomId}`);
 
   room[direction] = boundary;
   neighborRoom[oppositeDirections[direction]] = boundary;
@@ -262,9 +257,7 @@ export function getReachableRoomIds(
     const roomId = queue.shift()!;
     const room = findRoomInGrid(rooms, roomId);
 
-    if (!room) {
-      continue;
-    }
+    if (!room) throw new Error(`Reachability traversal references missing room ${roomId}`);
 
     (Object.keys(directionDeltas) as Direction[]).forEach((direction) => {
       if (room[direction] !== "open") {
@@ -306,24 +299,31 @@ export function getConnectedRoomIdFromRooms(
 ) {
   const room = findRoomInGrid(rooms, roomId);
 
-  if (room?.[direction] !== "open") {
+  if (!room) throw new Error(`Room ${roomId} is missing from dungeon grid`);
+  if (room[direction] !== "open") {
     return null;
   }
 
   const neighbor = getNeighbor(room, direction);
 
   if (!neighbor) {
-    return null;
+    throw new Error(`Open ${direction} doorway from edge room ${roomId} has no neighbor`);
   }
 
-  return findRoomInGrid(rooms, getRoomId(neighbor))?.id ?? null;
+  const neighborRoom = findRoomInGrid(rooms, getRoomId(neighbor));
+  if (!neighborRoom) throw new Error(`Open ${direction} doorway from ${roomId} leads to missing room ${getRoomId(neighbor)}`);
+  return neighborRoom.id;
 }
 
 export function getNeighborRoom(rooms: DungeonMapJson, roomId: string, direction: Direction) {
   const room = findRoomInGrid(rooms, roomId);
-  const neighbor = room ? getNeighbor(room, direction) : null;
+  if (!room) throw new Error(`Room ${roomId} is missing from dungeon grid`);
+  const neighbor = getNeighbor(room, direction);
 
-  return neighbor ? findRoomInGrid(rooms, getRoomId(neighbor)) : null;
+  if (!neighbor) return null;
+  const neighborRoom = findRoomInGrid(rooms, getRoomId(neighbor));
+  if (!neighborRoom) throw new Error(`Neighbor room ${getRoomId(neighbor)} is missing from dungeon grid`);
+  return neighborRoom;
 }
 
 export function getDoorwayGuardPlacements(

@@ -2,8 +2,8 @@ import { StyleSheet, Text, View, useWindowDimensions } from "react-native";
 
 import { PixelSprite } from "@/components/Common/PixelSprite";
 import { useThemeColors, type ThemeColors } from "@/components/Common/theme";
-import type { DungeonMap as DungeonMapType } from "@/game/dungeon/types";
 import { getRoomMonster, getRoomPosition, getRooms } from "@/game/dungeon/rooms";
+import type { DungeonMap as DungeonMapType } from "@/game/dungeon/types";
 
 type DungeonMapProps = {
   currentRoomId: string;
@@ -21,6 +21,9 @@ export function DungeonMap({
   const styles = createStyles(colors, compact, veryCompact);
   const roomMap = new Map(getRooms(map).map((room) => [room.id, room]));
   const currentRoomPosition = getRoomPosition(currentRoomId);
+  if (!roomMap.has(currentRoomId)) {
+    throw new Error(`Current room ${currentRoomId} is missing from the dungeon map`);
+  }
 
   return (
     <View
@@ -32,7 +35,7 @@ export function DungeonMap({
       {!veryCompact ? <View style={styles.columnHeaderRow}>
         <View style={styles.cornerLabel} />
         {map.rows.map((columnNumber) => {
-          const isCurrentColumn = columnNumber === currentRoomPosition?.row;
+          const isCurrentColumn = columnNumber === currentRoomPosition.row;
 
           return (
             <Text
@@ -52,7 +55,7 @@ export function DungeonMap({
       <View style={[styles.body, { aspectRatio: map.rows.length / map.columns.length }]}>
         <View style={styles.rowLabels}>
           {map.columns.map((rowLetter) => {
-            const isCurrentRow = rowLetter === currentRoomPosition?.column;
+            const isCurrentRow = rowLetter === currentRoomPosition.column;
 
             return (
               <Text
@@ -72,24 +75,26 @@ export function DungeonMap({
           {map.columns.map((rowLetter) => (
             <View key={rowLetter} style={styles.gridRow}>
               {map.rows.map((columnNumber) => {
-                const room = roomMap.get(`${rowLetter}${columnNumber}`);
-                const isCurrentRoom = room?.id === currentRoomId;
-                const isRevealed = Boolean(room?.isRevealed);
-                const hasNorthLock = room?.north === "locked";
-                const hasEastLock = room?.east === "locked";
-                const hasSouthLock = room?.south === "locked";
-                const hasWestLock = room?.west === "locked";
-                const hasNorthGuard = room?.north === "guarded";
-                const hasEastGuard = room?.east === "guarded";
-                const hasSouthGuard = room?.south === "guarded";
-                const hasWestGuard = room?.west === "guarded";
-                const hasStairs = room?.contents.some(
+                const roomId = `${rowLetter}${columnNumber}`;
+                const room = roomMap.get(roomId);
+                if (!room) throw new Error(`Dungeon grid cell ${roomId} is missing from the map`);
+                const isCurrentRoom = room.id === currentRoomId;
+                const isRevealed = room.isRevealed;
+                const hasNorthLock = room.north === "locked";
+                const hasEastLock = room.east === "locked";
+                const hasSouthLock = room.south === "locked";
+                const hasWestLock = room.west === "locked";
+                const hasNorthGuard = room.north === "guarded";
+                const hasEastGuard = room.east === "guarded";
+                const hasSouthGuard = room.south === "guarded";
+                const hasWestGuard = room.west === "guarded";
+                const hasStairs = room.contents.some(
                   (content) => content.type === "stairs",
                 );
                 const hasWerewolf = Boolean(getRoomMonster(map, room)?.chases);
                 const hasMonster = Boolean(getRoomMonster(map, room));
-                const hasItem = Boolean(room?.contents.some(content => content.type === "item"));
-                const hasEquipment = Boolean(room?.contents.some(content => content.type === "equipment"));
+                const hasItem = room.contents.some(content => content.type === "item");
+                const hasEquipment = room.contents.some(content => content.type === "equipment");
                 const roomColor = isCurrentRoom
                   ? colors.mapCurrentRoom
                   : hasStairs

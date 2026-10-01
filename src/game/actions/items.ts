@@ -9,23 +9,32 @@ import { applyDefense } from "@/game/engine/combat";
 const EQUIPMENT: EquipmentCatalogEntry[] = (GAME_PARAMETERS as unknown as { equipment: EquipmentCatalogEntry[] }).equipment;
 
 export function getItemLabel(itemId: ItemId | null) {
-  return itemId ? (POSSIBLE_ITEMS.find((item) => item.id === itemId)?.description ?? POSSIBLE_ITEMS.find((item) => item.id === itemId)?.label ?? itemId) : null;
+  if (!itemId) return null;
+  const item = POSSIBLE_ITEMS.find((candidate) => candidate.id === itemId);
+  if (!item) throw new Error(`Unknown inventory item: ${itemId}`);
+  return item.description ?? item.label;
 }
 
 export function getEquipmentStats(id: string | null) {
-  // Missing gear uses neutral modifiers and the default charge price.
-  const equipment = EQUIPMENT.find(item => item.id === id);
+  const equipment = id ? EQUIPMENT.find(item => item.id === id) : undefined;
+  if (id && !equipment) throw new Error(`Unknown equipment: ${id}`);
   return { attack: equipment?.attack ?? 0, defense: equipment?.defense ?? 0, chargeCost: equipment?.chargeCost ?? GAME_PARAMETERS.combat.chargeEnergyCost, turnDamage: equipment?.turnDamage ?? 0 };
 }
-export function getEquipmentLabel(id: string | null) { return id ? EQUIPMENT.find(item => item.id === id)?.label ?? id : null; }
+export function getEquipmentLabel(id: string | null) {
+  if (!id) return null;
+  const equipment = EQUIPMENT.find(item => item.id === id);
+  if (!equipment) throw new Error(`Unknown equipment: ${id}`);
+  return equipment.label;
+}
 export function getEquipmentGroundLabel(id: string) {
   const equipment = EQUIPMENT.find(item => item.id === id);
-  return equipment?.hiddenDescription ? "Amulet" : equipment?.label ?? id;
+  if (!equipment) throw new Error(`Unknown equipment: ${id}`);
+  return equipment.hiddenDescription ? "Amulet" : equipment.label;
 }
 export function getEquipmentDescription(id: string | null, revealStats = true) {
   if (!id) return null;
   const item = EQUIPMENT.find(equipment => equipment.id === id);
-  if (!item) return id;
+  if (!item) throw new Error(`Unknown equipment: ${id}`);
   if (!revealStats && item.hiddenDescription) return "Amulet";
   const modifiers = [item.attack ? `Attack ${item.attack > 0 ? "+" : ""}${item.attack}` : "", item.defense ? `Defense ${item.defense > 0 ? "+" : ""}${item.defense}` : "", item.chargeCost ? `Charge Up costs ${item.chargeCost} Energy` : "", item.turnDamage ? `Take ${item.turnDamage} damage each turn` : ""].filter(Boolean);
   return `${item.description}${modifiers.length ? ` · ${modifiers.join(" · ")}` : ""}`;

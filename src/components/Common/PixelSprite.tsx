@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Image, Text, View, type StyleProp, type ViewStyle } from "react-native";
 
 type Tile = { source: number; width: number; height: number; row: number; column: number };
@@ -30,10 +30,21 @@ const sprites: Record<string, Tile> = {
 };
 
 export function PixelSprite({ sprite, label, size = 32, style }: { sprite: string; label: string; size?: number; style?: StyleProp<ViewStyle> }) {
-  const [failed, setFailed] = useState(false);
-  useEffect(() => setFailed(false), [sprite]);
   const tile = sprites[sprite];
-  if (!tile || failed) return (
+  if (!tile) return (
+    <View style={[{ minWidth: size }, style]}>
+      <Text accessibilityLabel={label} accessibilityRole="image" allowFontScaling={false} style={{ fontSize: Math.max(7, size * 0.24), lineHeight: Math.max(9, size * 0.3), textAlign: "center" }}>
+        [{sprite}]
+      </Text>
+    </View>
+  );
+
+  return <SpriteImage key={sprite} label={label} size={size} sprite={sprite} style={style} tile={tile} />;
+}
+
+function SpriteImage({ sprite, label, size, style, tile }: { sprite: string; label: string; size: number; style?: StyleProp<ViewStyle>; tile: Tile }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return (
     <View style={[{ minWidth: size }, style]}>
       <Text accessibilityLabel={label} accessibilityRole="image" allowFontScaling={false} style={{ fontSize: Math.max(7, size * 0.24), lineHeight: Math.max(9, size * 0.3), textAlign: "center" }}>
         [{sprite}]
@@ -46,7 +57,7 @@ export function PixelSprite({ sprite, label, size = 32, style }: { sprite: strin
       <Image source={tile.source} resizeMode="stretch" style={{
         position: "absolute", width: tile.width * scale, height: tile.height * scale,
         left: -tile.column * size, top: -tile.row * size,
-      }} onError={() => setFailed(true)} />
+        }} testID="pixel-sprite-image" onError={() => setFailed(true)} />
     </View>
   );
 }

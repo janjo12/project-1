@@ -1,7 +1,6 @@
 import type { RoomDoorways, ScenePosition } from "@/components/Dungeon/GameViewPanel";
 import { PLAYER } from "@/game/entities";
-import type { Direction } from "@/game/dungeon/types";
-import type { DungeonMap, ItemId } from "@/game/dungeon/types";
+import type { Direction, DungeonMap, ItemId } from "@/game/dungeon/types";
 import type { Difficulty } from "@/utils/settings-storage";
 
 export const PLAYER_MAX_HEALTH = PLAYER.maxHealth;

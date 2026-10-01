@@ -189,6 +189,7 @@ function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onExit }: 
     seed: settings.seed.trim(),
     vibrationEnabled: settings.vibrationEnabled,
   });
+  const { expireTurn, isGameLoopRunning, isTurnClockActive, turnDuration, turnNumber, updateGameFrame } = game;
   const pendingAttack = useRef<string | null>(null);
   const microgame = useMicrogame(score => {
     setMicrogameScore(score);
@@ -201,16 +202,16 @@ function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onExit }: 
     let elapsed = 0;
     let expired = false;
     const timer = setInterval(() => {
-      if (!game.isGameLoopRunning() || isMenuOpen || microgame.active || classIntroPage >= 0) return;
+      if (!isGameLoopRunning() || isMenuOpen || microgame.active || classIntroPage >= 0) return;
       const delta = GAME_PARAMETERS.turn.gameLoopTickMs;
       time += delta;
-      const gameLoop = { elapsed, expired, isTurnClockActive: game.isTurnClockActive, onExpire: game.expireTurn, onFrame: game.updateGameFrame, resetKey: game.turnNumber, turnDuration: game.turnDuration };
+      const gameLoop = { elapsed, expired, isTurnClockActive, onExpire: expireTurn, onFrame: updateGameFrame, resetKey: turnNumber, turnDuration };
       runGameLoop({ gameLoop }, { time: { delta, currentTime: time, previousTime: time - delta, previousDelta: delta } } as never);
       elapsed = gameLoop.elapsed;
       expired = gameLoop.expired;
     }, GAME_PARAMETERS.turn.gameLoopTickMs);
     return () => { clearInterval(timer); };
-  }, [classIntroPage, game.expireTurn, game.isGameLoopRunning, game.isTurnClockActive, game.turnDuration, game.turnNumber, game.updateGameFrame, isMenuOpen, microgame.active]);
+  }, [classIntroPage, expireTurn, isGameLoopRunning, isMenuOpen, isTurnClockActive, microgame.active, turnDuration, turnNumber, updateGameFrame]);
 
   const controls = <View style={{ flex: 1, gap: 4 }}>
     <EquipmentControl label={game.equipmentLabel} description={game.equipmentDescription} sprite={game.equipmentSprite} onDrop={game.dropEquipment} />

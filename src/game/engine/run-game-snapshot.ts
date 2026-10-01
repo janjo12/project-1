@@ -1,5 +1,5 @@
 import { POSSIBLE_EQUIPMENT, type DungeonMap, type ItemId, type WorldMonster } from "@/game/dungeon/types";
-import { getConnectedRoomId, getCurrentRoom, getCurrentRoomId, getRoom, getRoomItem, getRoomItemId, getRoomMonster, getRoomEquipment, hasRoomStairs, revealRooms } from "@/game/dungeon/rooms";
+import { getConnectedRoomId, getCurrentRoom, getRoom, getRoomItem, getRoomItemId, getRoomMonster, getRoomEquipment, hasRoomStairs, revealRooms } from "@/game/dungeon/rooms";
 import { getTurnDuration, hasTurnLimit, hasTurnTimer } from "@/game/engine/resolveTurn";
 import { canUseInventoryItem, getInventoryItemActivationDescription, getInventoryItemSprite, getItemLabel, getEquipmentDescription, getEquipmentLabel } from "@/game/actions/items";
 import { getRoomDoorways, getRoomSceneActors } from "@/game/engine/run-game-scene";
@@ -19,8 +19,8 @@ export function getRunSnapshot({
   playerHealth: number; turnCounter: number;
 }) {
   // Derive UI-facing labels, controls, and visibility together so screens share the same view of game state.
-  const currentRoom = getCurrentRoom(dungeonMap) ?? getRoom(dungeonMap, dungeonMap.startingRoomId);
-  const currentRoomId = currentRoom?.id ?? getCurrentRoomId(dungeonMap);
+  const currentRoom = getCurrentRoom(dungeonMap);
+  const currentRoomId = currentRoom.id;
   const currentRoomItem = getRoomItemId(dungeonMap, currentRoom);
   const currentRoomItemObject = getRoomItem(dungeonMap, currentRoom);
   const currentRoomEquipment = getRoomEquipment(dungeonMap, currentRoom);
@@ -47,7 +47,7 @@ export function getRunSnapshot({
     }),
     visibleDungeonMap: equipment === "spyglass" ? revealRooms(dungeonMap, currentRoomId, true) : dungeonMap,
     roomDoorways: getRoomDoorways(currentRoom),
-    roomHasStairs: currentRoom ? hasRoomStairs(currentRoom) : false,
+    roomHasStairs: hasRoomStairs(currentRoom),
     roomSceneActors: getRoomSceneActors({ currentMonsterId: activeMonsterId ?? currentMonster?.id ?? null, dungeonMap, room: currentRoom }),
     turnDuration: getTurnDuration({ difficulty, level }),
     turnStatus: getTurnStatus({ hasRoomEnemy, hasLost, isResolving, level, roomId: currentRoomId, clearedLevels }),
@@ -58,5 +58,5 @@ function getDisabledDirections(dungeonMap: DungeonMap, inventoryItem: ItemId | n
   const directions = ["north", "east", "south", "west"] as const;
   if (isResolving) return [...directions];
   return directions.filter(direction => !getConnectedRoomId(dungeonMap, roomId, direction) &&
-    !(inventoryItem === "key" && getRoom(dungeonMap, roomId)?.[direction] === "locked"));
+    !(inventoryItem === "key" && getRoom(dungeonMap, roomId)[direction] === "locked"));
 }

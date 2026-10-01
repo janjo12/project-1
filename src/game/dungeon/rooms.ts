@@ -27,7 +27,7 @@ function findRoomLocation(map: DungeonMap, roomId: string) {
     }
   }
 
-  return null;
+  throw new Error(`Room ${roomId} is missing from the dungeon map`);
 }
 
 export function getRooms(map: DungeonMap) {
@@ -35,7 +35,7 @@ export function getRooms(map: DungeonMap) {
 }
 
 export function getRoom(map: DungeonMap, roomId: string) {
-  return findRoomLocation(map, roomId)?.room;
+  return findRoomLocation(map, roomId).room;
 }
 
 export function getCurrentRoom(map: DungeonMap) {
@@ -47,11 +47,11 @@ export function getCurrentRoom(map: DungeonMap) {
     }
   }
 
-  return undefined;
+  throw new Error("Dungeon map has no current room");
 }
 
 export function getCurrentRoomId(map: DungeonMap) {
-  return getCurrentRoom(map)?.id ?? map.startingRoomId;
+  return getCurrentRoom(map).id;
 }
 
 export function getConnectedRoomId(
@@ -62,7 +62,7 @@ export function getConnectedRoomId(
   // Only open doorways connect rooms; locked and guarded edges remain impassable here.
   const room = getRoom(map, roomId);
 
-  if (room?.[direction] !== "open") {
+  if (room[direction] !== "open") {
     return null;
   }
 
@@ -72,7 +72,7 @@ export function getConnectedRoomId(
     return null;
   }
 
-  return getRoom(map, getRoomId(neighbor))?.id ?? null;
+  return getRoom(map, getRoomId(neighbor)).id;
 }
 
 export function getOpenDirections(map: DungeonMap, roomId: string) {
@@ -84,29 +84,21 @@ export function getOpenDirections(map: DungeonMap, roomId: string) {
 export function getLockedDirections(map: DungeonMap, roomId: string) {
   const room = getRoom(map, roomId);
 
-  if (!room) {
-    return [];
-  }
-
   return DIRECTIONS.filter((direction) => room[direction] === "locked");
 }
 
 export function getGuardedDirections(map: DungeonMap, roomId: string) {
   const room = getRoom(map, roomId);
 
-  if (!room) {
-    return [];
-  }
-
   return DIRECTIONS.filter((direction) => room[direction] === "guarded");
 }
 
 function prioritizeRoomContentsForTargeting(map: DungeonMap, contents: RoomContents) {
   return [...contents].sort((left, right) => {
-    const leftMonster =
-      left.type === "monster" ? map.entities.monsters[left.id] : null;
-    const rightMonster =
-      right.type === "monster" ? map.entities.monsters[right.id] : null;
+    const leftMonster = left.type === "monster" ? map.entities.monsters[left.id] : undefined;
+    const rightMonster = right.type === "monster" ? map.entities.monsters[right.id] : undefined;
+    if (left.type === "monster" && !leftMonster) throw new Error(`Room content references missing monster ${left.id}`);
+    if (right.type === "monster" && !rightMonster) throw new Error(`Room content references missing monster ${right.id}`);
 
     return (
       Number(Boolean(leftMonster?.chases)) -
@@ -117,39 +109,35 @@ function prioritizeRoomContentsForTargeting(map: DungeonMap, contents: RoomConte
 
 export function getTargetableRoomMonsterRefs(
   map: DungeonMap,
-  room: DungeonRoom | undefined,
+  room: DungeonRoom,
 ) {
-  return prioritizeRoomContentsForTargeting(map, room?.contents ?? []).filter(
+  return prioritizeRoomContentsForTargeting(map, room.contents).filter(
     (content): content is RoomMonsterRef => {
-      const monster =
-        content.type === "monster" ? map.entities.monsters[content.id] : null;
-
-      return Boolean(monster && monster.currentHealth > 0);
+      if (content.type !== "monster") return false;
+      const monster = map.entities.monsters[content.id];
+      if (!monster) throw new Error(`Room ${room.id} references missing monster ${content.id}`);
+      return monster.currentHealth > 0;
     },
   );
 }
 
 function getLivingMonster(map: DungeonMap, monsterId: string) {
-  const monster = map.entities.monsters[monsterId] ?? null;
-
-  return monster && monster.currentHealth > 0 ? monster : null;
+  const monster = map.entities.monsters[monsterId];
+  if (!monster) throw new Error(`Dungeon map is missing monster ${monsterId}`);
+  return monster.currentHealth > 0 ? monster : null;
 }
 
 export function getTargetableMonsters(
   map: DungeonMap,
-  room: DungeonRoom | undefined,
+  room: DungeonRoom,
 ) {
-  if (!room) {
-    return [];
-  }
-
   const monsters = [
     ...getTargetableRoomMonsterRefs(map, room)
       .map((monsterRef) => getLivingMonster(map, monsterRef.id))
       .filter((monster): monster is WorldMonster => Boolean(monster)),
     ...DIRECTIONS
       .flatMap((direction) => getDoorwayGuardPlacements(map, room.id, direction))
-      .map((guard) => (guard ? getLivingMonster(map, guard.monsterId) : null))
+      .map((guard) => getLivingMonster(map, guard.monsterId))
       .filter((monster): monster is WorldMonster => Boolean(monster)),
   ];
   const uniqueMonsters = [
@@ -162,7 +150,7 @@ export function getTargetableMonsters(
   );
 }
 
-export function getRoomMonster(map: DungeonMap, room: DungeonRoom | undefined) {
+export function getRoomMonster(map: DungeonMap, room: DungeonRoom) {
   return getTargetableMonsters(map, room)[0] ?? null;
 }
 
@@ -174,30 +162,35 @@ export function getWerewolf(map: DungeonMap) {
   );
 }
 
-function getItemFromRoom(map: DungeonMap, room: DungeonRoom | undefined) {
-  const itemId = room?.contents.find((content) => content.type === "item")?.id;
-
-  return itemId ? map.entities.items[itemId] ?? null : null;
+function getItemFromRoom(map: DungeonMap, room: DungeonRoom) {
+  const itemRef = room.contents.find((content) => content.type === "item");
+  if (!itemRef) return null;
+  const item = map.entities.items[itemRef.id];
+  if (!item) throw new Error(`Room ${room.id} references missing item ${itemRef.id}`);
+  return item;
 }
 
-export function getRoomItem(map: DungeonMap, room: DungeonRoom | undefined) {
+export function getRoomItem(map: DungeonMap, room: DungeonRoom) {
   return getItemFromRoom(map, room);
 }
 
-export function getRoomItemId(map: DungeonMap, room: DungeonRoom | undefined) {
+export function getRoomItemId(map: DungeonMap, room: DungeonRoom) {
   return getRoomItem(map, room)?.itemId ?? null;
 }
 
-export function getRoomEquipment(map: DungeonMap, room: DungeonRoom | undefined) {
-  const ref = room?.contents.find((content) => content.type === "equipment");
-  return ref?.type === "equipment" ? map.entities.equipment?.[ref.id] ?? null : null;
+export function getRoomEquipment(map: DungeonMap, room: DungeonRoom) {
+  const ref = room.contents.find((content) => content.type === "equipment");
+  if (!ref) return null;
+  const equipment = map.entities.equipment[ref.id];
+  if (!equipment) throw new Error(`Room ${room.id} references missing equipment ${ref.id}`);
+  return equipment;
 }
 
 export function revealRooms(map: DungeonMap, currentRoomId: string, revealAdjacent = false): DungeonMap {
   // Reveal the entered room and optionally its neighbors, as used by the spyglass.
   const current = getRoom(map, currentRoomId);
   const adjacentIds = new Set<string>();
-  if (revealAdjacent && current) DIRECTIONS.forEach(direction => {
+  if (revealAdjacent) DIRECTIONS.forEach(direction => {
     const neighbor = getNeighbor(current, direction);
     if (neighbor) adjacentIds.add(getRoomId(neighbor));
   });
@@ -207,8 +200,8 @@ export function revealRooms(map: DungeonMap, currentRoomId: string, revealAdjace
   }))) };
 }
 
-export function hasRoomStairs(room: DungeonRoom | undefined) {
-  return Boolean(room?.contents.some((content) => content.type === "stairs"));
+export function hasRoomStairs(room: DungeonRoom) {
+  return room.contents.some((content) => content.type === "stairs");
 }
 
 export function getStairsRoom(map: DungeonMap) {
@@ -229,9 +222,7 @@ export function unlockDoor(
   direction: Direction,
 ): DungeonMap {
   const sourceLocation = findRoomLocation(map, roomId);
-  const neighbor = sourceLocation
-    ? getNeighbor(sourceLocation.room, direction)
-    : null;
+  const neighbor = getNeighbor(sourceLocation.room, direction);
   const neighborId = neighbor ? getRoomId(neighbor) : null;
 
   return {
@@ -249,16 +240,15 @@ export function unlockDoor(
 }
 
 export function moveCurrentPosition(map: DungeonMap, nextRoomId: string) {
-  const previousRoomId = map.rooms.flat().find(room => room.isCurrentPosition)?.id;
+  const previousRoomId = getCurrentRoom(map).id;
   const next = revealRooms(map, nextRoomId, false);
-  if (!previousRoomId) return next;
   return { ...next, rooms: next.rooms.map(row => row.map(room => room.id === previousRoomId ? { ...room, isRevealed: true } : room)) };
 }
 
 export function removeEquipmentFromRoom(map: DungeonMap, roomId: string, id: string) {
-  const equipment = map.entities.equipment?.[id];
-  if (!equipment) return map;
-  const { [id]: _removed, ...remaining } = map.entities.equipment ?? {};
+  const equipment = map.entities.equipment[id];
+  if (!equipment) throw new Error(`Dungeon map is missing equipment ${id}`);
+  const { [id]: _removed, ...remaining } = map.entities.equipment;
   return { ...map, entities: { ...map.entities, equipment: remaining }, rooms: map.rooms.map(row => row.map(room => room.id === roomId
     ? { ...room, contents: room.contents.filter(content => !(content.type === "equipment" && content.id === id)) } : room)) };
 }
@@ -278,9 +268,7 @@ export function damageMonsterInRoom(
   // Guarded passages reopen only after every monster guarding that shared boundary is defeated.
   const nextMonster = map.entities.monsters[monsterId];
 
-  if (!nextMonster) {
-    return map;
-  }
+  if (!nextMonster) throw new Error(`Dungeon map is missing monster ${monsterId}`);
 
   const nextHealth = Math.max(0, nextMonster.currentHealth - damage);
   const nextMap: DungeonMap = {
@@ -304,14 +292,18 @@ export function damageMonsterInRoom(
   }
 
   const otherLivingGuards = getDoorwayGuardPlacements(nextMap, doorwayGuard.roomId, doorwayGuard.direction)
-    .some((guard) => guard.monsterId !== monsterId && (nextMap.entities.monsters[guard.monsterId]?.currentHealth ?? 0) > 0);
+    .some((guard) => {
+      const guardMonster = nextMap.entities.monsters[guard.monsterId];
+      if (!guardMonster) throw new Error(`Doorway guard references missing monster ${guard.monsterId}`);
+      return guard.monsterId !== monsterId && guardMonster.currentHealth > 0;
+    });
   if (otherLivingGuards) {
     const { [monsterId]: removed, ...remaining } = nextMap.entities.doorwayGuards;
     return { ...nextMap, entities: { ...nextMap.entities, doorwayGuards: remaining } };
   }
 
   const sourceRoom = getRoom(nextMap, doorwayGuard.roomId);
-  const neighbor = sourceRoom ? getNeighbor(sourceRoom, doorwayGuard.direction) : null;
+  const neighbor = getNeighbor(sourceRoom, doorwayGuard.direction);
 
   const nextRooms = nextMap.rooms.map((row) =>
     row.map((room) => {
@@ -400,6 +392,7 @@ export function moveWerewolfToRoom(map: DungeonMap, roomId: string) {
   if (!werewolf) {
     return map;
   }
+  getRoom(map, roomId);
 
   return {
     ...map,
@@ -408,7 +401,12 @@ export function moveWerewolfToRoom(map: DungeonMap, roomId: string) {
         const contentsWithoutWerewolf = room.contents.filter(
           (content) =>
             content.type !== "monster" ||
-            !map.entities.monsters[content.id]?.chases,
+            (() => {
+              if (content.type !== "monster") return true;
+              const monster = map.entities.monsters[content.id];
+              if (!monster) throw new Error(`Room ${room.id} references missing monster ${content.id}`);
+              return !monster.chases;
+            })(),
         );
 
         if (room.id !== roomId) {

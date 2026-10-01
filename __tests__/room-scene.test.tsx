@@ -1,5 +1,6 @@
 import React from "react";
 import { act, fireEvent, render } from "@testing-library/react-native";
+import { PixelSprite } from "@/components/Common/PixelSprite";
 
 import { RoomScene, type RoomDoorways } from "@/components/Dungeon/Room";
 import { GameViewPanel } from "@/components/Dungeon/GameViewPanel";
@@ -69,4 +70,17 @@ test("pressing an enemy sends that actor to the game handler", () => {
   fireEvent.press(screen.getByRole("button", { name: "Zombie" }));
 
   expect(onActorPress).toHaveBeenCalledWith(zombie);
+});
+
+test("a failed sprite image falls back, and switching sprites retries the new image", () => {
+  const screen = render(<PixelSprite label="Warrior" size={24} sprite="warrior_graphic" />);
+
+  fireEvent(screen.getByTestId("pixel-sprite-image"), "error");
+  expect(screen.getByText("[warrior_graphic]")).toBeTruthy();
+
+  screen.rerender(<PixelSprite label="Zombie" size={24} sprite="zombie_graphic" />);
+  expect(screen.getByTestId("pixel-sprite-image")).toBeTruthy();
+
+  screen.rerender(<PixelSprite label="Warrior" size={24} sprite="warrior_graphic" />);
+  expect(screen.getByTestId("pixel-sprite-image")).toBeTruthy();
 });

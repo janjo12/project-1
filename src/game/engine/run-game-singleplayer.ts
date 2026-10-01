@@ -3,6 +3,7 @@ import * as Haptics from "expo-haptics";
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useReducer,
   useRef,
   useState,
@@ -57,8 +58,7 @@ import {
 } from "@/game/entities";
 import { gameReducer, type GameStateAction } from "@/game/state/gameReducer";
 import { createInitialGameState } from "@/game/state/initialGameState";
-import type { GameState } from "@/game/state/types";
-import { PLAYER_MAX_ENERGY, PLAYER_MAX_HEALTH, playerEntryPositions, type UseGameRunOptions } from "@/game/state/types";
+import { PLAYER_MAX_ENERGY, PLAYER_MAX_HEALTH, playerEntryPositions, type GameState, type UseGameRunOptions } from "@/game/state/types";
 export { getEnemyAttackOutcome } from "@/game/engine/combat";
 export {
   applyWerewolfChaseAfterAction,
@@ -83,7 +83,9 @@ export function useRunGame({
     createInitialGameState,
   );
   const gameStateRef = useRef(gameState);
-  gameStateRef.current = gameState;
+  useLayoutEffect(() => {
+    gameStateRef.current = gameState;
+  }, [gameState]);
   const setGameField = useCallback(<Field extends keyof GameState>(
     field: Field,
     value: SetStateAction<GameState[Field]>,
@@ -114,12 +116,12 @@ export function useRunGame({
   const setInventoryItemState = useCallback((value: SetStateAction<ItemId | null>) => setGameField("inventoryItem", value), [setGameField]);
   const setEquipment = useCallback((value: SetStateAction<string | null>) => setGameField("equipment", value), [setGameField]);
   const equipmentRef = useRef<string | null>(null);
-  const setHeldEquipment = useCallback((item: string | null) => { equipmentRef.current = item; setEquipment(item); }, []);
+  const setHeldEquipment = useCallback((item: string | null) => { equipmentRef.current = item; setEquipment(item); }, [setEquipment]);
   const inventoryItemRef = useRef<ItemId | null>(null);
   const setInventoryItem = useCallback((item: ItemId | null) => {
     inventoryItemRef.current = item;
     setInventoryItemState(item);
-  }, []);
+  }, [setInventoryItemState]);
   const timeoutIds = useRef<ReturnType<typeof setTimeout>[]>([]);
   const clearedLevelsRef = useRef(0);
   const hardTurnGameOverScheduledRef = useRef(false);
@@ -224,7 +226,7 @@ export function useRunGame({
     return () => {
       isMounted = false;
     };
-  }, [difficulty, level, seed]);
+  }, [difficulty, level, seed, setDungeonMap, setTurnCounter]);
 
   const schedule = useCallback((delay: number, callback: () => void) => {
     const timeoutId = setTimeout(callback, delay);
@@ -245,7 +247,7 @@ export function useRunGame({
 
       return nextMap;
     },
-    [dungeonMap],
+    [dungeonMap, setDungeonMap],
   );
 
   const triggerDamageHaptic = useCallback(() => {
@@ -302,7 +304,7 @@ export function useRunGame({
       setTurnTimeRemaining(nextTurnDuration);
       setTurnNumber((number) => number + 1);
     },
-    [difficulty, level, resetFeedback, seed],
+    [difficulty, level, resetFeedback, seed, setClearedLevels, setDungeonMap, setLevel, setPlayerEnergy, setPlayerHealth, setTurnCounter, setTurnNumber, setTurnTimeRemaining],
   );
 
   const finishTurn = useCallback(() => {
@@ -341,7 +343,7 @@ export function useRunGame({
         return nextCounter;
       });
     }
-  }, [difficulty, inventoryItem, level, onGameOver, playerEnergy, schedule, setInventoryItem, turnDuration]);
+  }, [difficulty, inventoryItem, level, onGameOver, playerEnergy, schedule, setInventoryItem, setPlayerEnergy, setTurnCounter, setTurnNumber, setTurnTimeRemaining, turnDuration]);
 
   const finishNonMoveTurn = useCallback(
     ({
@@ -378,7 +380,7 @@ export function useRunGame({
       }
       finishTurn();
     },
-    [commitMap, finishTurn, onGameOver, playerClass, playerEnergy, schedule, setInventoryItem],
+    [commitMap, finishTurn, onGameOver, playerClass, playerEnergy, schedule, setInventoryItem, setPlayerEnergy, setPlayerHealth],
   );
 
   const startEnemyMove = useCallback(
@@ -511,7 +513,7 @@ export function useRunGame({
       setPlayerEnergyLossAmount(cost);
       restartAnimations(setAnimationFrame, ["playerEnergyLossElapsed"]);
     }
-  }, [equipment, hasLost, isResolving, playerEnergy, setAnimationFrame]);
+  }, [equipment, hasLost, isResolving, playerEnergy, setAnimationFrame, setPlayerEnergy]);
 
   const animatePlayerAttack = useCallback((healthLost: number) => {
     restartAnimations(setAnimationFrame, ["playerAttackElapsed"]);
@@ -531,7 +533,7 @@ export function useRunGame({
     setIsCharged(false);
     if (refund) setPlayerEnergy(energy => Math.min(PLAYER_MAX_ENERGY, energy + getEquipmentStats(equipment).chargeCost));
     setPlayerEnergyLossAmount(0);
-  }, [equipment]);
+  }, [equipment, setPlayerEnergy]);
 
   const commitPlayerAttack = useCallback((monster: WorldMonster, damage: number) => {
     lastActionRefundsChargeRef.current = false;
@@ -577,6 +579,7 @@ export function useRunGame({
       currentRoomId,
       schedule,
       cancelCharge,
+      setTurnTimeRemaining,
     ],
   );
 
@@ -664,6 +667,7 @@ export function useRunGame({
       playerClass,
       currentRoomId,
       setInventoryItem,
+      setTurnTimeRemaining,
     ],
   );
 
@@ -682,13 +686,13 @@ export function useRunGame({
         setTurnTimeRemaining(Math.ceil(Math.max(0, nextTurnTimeRemaining) / 100) * 100);
       }
     },
-    [setAnimationFrame],
+    [setAnimationFrame, setTurnTimeRemaining],
   );
 
   const expireTurn = useCallback(() => {
     setTurnTimeRemaining(0);
     defend();
-  }, [defend]);
+  }, [defend, setTurnTimeRemaining]);
   async function pickupItem() {
     if (isResolving || hasLost || !currentRoomItem || !currentRoomItemObject) {
     return;

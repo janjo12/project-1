@@ -1,6 +1,6 @@
 import { PixelSprite } from "@/components/Common/PixelSprite";
 import Animated from "react-native-reanimated";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
 
 import { createStyles } from "@/components/Dungeon/room-scene-styles";
 import { useThemeColors } from "@/components/Common/theme";

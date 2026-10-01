@@ -83,7 +83,7 @@ export function RoomScene({
   const [systemReducedMotion, setSystemReducedMotion] = useState(false);
   const [transition, setTransition] = useState<{ key: number } | null>(null);
   const previousRoomId = useRef(roomId);
-  const transitionProgress = useRef(new Animated.Value(1)).current;
+  const [transitionProgress] = useState(() => new Animated.Value(1));
   useEffect(() => {
     let mounted = true;
     AccessibilityInfo.isReduceMotionEnabled().then(value => { if (mounted) setSystemReducedMotion(value); }).catch(() => undefined);

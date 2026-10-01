@@ -33,8 +33,6 @@ export function MicrogameOverlay({
 
   if (!visible) return null;
 
-  const remainingSeconds = Math.max(0, (MICROGAME_MAX_DURATION_MS - elapsed) / 1000);
-
   return (
     <View
       testID="microgame-overlay"
