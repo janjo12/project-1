@@ -1,13 +1,19 @@
 import { PixelSprite } from "@/components/Common/PixelSprite";
 import { StyleSheet, View } from "react-native";
+import Animated from "react-native-reanimated";
 import { GAME_PARAMETERS } from "@/game/config/gameparameters";
+
+const IDLE_BOB = {
+  from: { transform: [{ translateY: -GAME_PARAMETERS.animation.bounceDistance }] },
+  to: { transform: [{ translateY: GAME_PARAMETERS.animation.bounceDistance }] },
+};
 
 type CombatantSpriteProps = {
   accessibilityLabel: string;
   attackDirection?: "left" | "right";
   attackProgress?: number | null;
-  bounceOffset?: number;
   damageProgress?: number | null;
+  reducedMotion?: boolean;
   sprite: string;
   scale?: number;
   size?: number;
@@ -17,8 +23,8 @@ export function CombatantSprite({
   accessibilityLabel,
   attackDirection = "right",
   attackProgress = null,
-  bounceOffset = 0,
   damageProgress = null,
+  reducedMotion = false,
   sprite,
   scale = 1,
   size = 48,
@@ -27,21 +33,30 @@ export function CombatantSprite({
   const opacity = getDamageOpacity(damageProgress);
 
   return (
-    <View
-      style={[
-        styles.sprite,
-        {
-          opacity,
-          transform: [
-            { translateX: attackOffset },
-            { translateY: bounceOffset },
-            { scale },
-          ],
-        },
-      ]}
+    <Animated.View
+      style={reducedMotion ? undefined : {
+        animationName: IDLE_BOB,
+        animationDuration: `${GAME_PARAMETERS.animation.bounceDurationMs / 2}ms`,
+        animationDirection: "alternate",
+        animationIterationCount: "infinite",
+        animationTimingFunction: "ease-in-out",
+      }}
     >
-      <PixelSprite sprite={sprite} label={accessibilityLabel} size={size} />
-    </View>
+      <View
+        style={[
+          styles.sprite,
+          {
+            opacity,
+            transform: [
+              { translateX: attackOffset },
+              { scale },
+            ],
+          },
+        ]}
+      >
+        <PixelSprite sprite={sprite} label={accessibilityLabel} size={size} />
+      </View>
+    </Animated.View>
   );
 }
 

@@ -263,10 +263,9 @@ function Multiplayer({ settings }: { settings: GameSettings }) {
           <MicrogameOverlay
             visible={microgame.active}
             kind={microgame.kind}
-            elapsed={microgame.elapsed}
+            elapsedStore={microgame.elapsedStore}
             targetDelay={microgame.targetDelay}
             targetSpot={microgame.targetSpot}
-            clicks={microgame.clicks}
             leftHanded={settings.handedness === "left"}
             isTest={microgame.istest}
             onTap={microgame.tap}

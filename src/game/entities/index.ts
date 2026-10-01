@@ -2,6 +2,7 @@ export {
   advanceAnimationFrame,
   COMBAT_ANIMATION,
   createCombatAnimationFrame,
+  hasActiveCombatAnimation,
 } from "./combat/animations";
 export type { CombatAnimationFrame } from "./combat/animations";
 export { PLAYER } from "./players";

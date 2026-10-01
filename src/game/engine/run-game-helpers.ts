@@ -18,9 +18,9 @@ export type { UseGameRunOptions } from "@/game/state/types";
 
 export function restartAnimations(
   setFrame: Dispatch<SetStateAction<CombatAnimationFrame>>,
-  animationKeys: (keyof Omit<CombatAnimationFrame, "bounceElapsed">)[],
+  animationKeys: (keyof CombatAnimationFrame)[],
 ) {
-  // Restart only requested one-shot channels; the ambient bounce animation keeps its phase.
+  // Restart only the requested one-shot channels.
   setFrame(frame => {
     const nextFrame = { ...frame };
     animationKeys.forEach(key => { nextFrame[key] = 0; });

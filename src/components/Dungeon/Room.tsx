@@ -1,16 +1,21 @@
-import { useMemo, useState, useEffect, useRef, type ReactNode } from "react";
-import { ACTOR_ENVELOPE, SCENE_WIDTH, SCENE_HEIGHT, layoutRoomActors } from "@/utils/coordinates";
+import { ACTOR_ENVELOPE, SCENE_HEIGHT, SCENE_WIDTH, layoutRoomActors } from "@/utils/coordinates";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Pressable, Text, View, type ViewStyle } from "react-native";
 
-import { CombatantSprite } from "@/components/Enemy/Enemy";
-import { EnemyHealthBar, FloatingResourceLoss } from "@/components/Enemy/EnemyFeedback";
+import { useThemeColors } from "@/components/Common/theme";
+import { RoomFloor } from "@/components/Dungeon/Floor";
 import { RoomWalls, SceneSprite } from "@/components/Dungeon/Walls";
 import { createStyles } from "@/components/Dungeon/room-scene-styles";
-import { useThemeColors } from "@/components/Common/theme";
+import { CombatantSprite } from "@/components/Enemy/Enemy";
+import { EnemyHealthBar, FloatingResourceLoss } from "@/components/Enemy/EnemyFeedback";
 import { COMBAT_ANIMATION, type CombatAnimationFrame } from "@/game/entities";
-import { RoomFloor } from "@/components/Dungeon/Floor";
-import { Animated, Easing, AccessibilityInfo } from "react-native";
 import { getAdjacentRoomTransition } from "@/utils/room-transition";
+import { AccessibilityInfo } from "react-native";
+import Animated from "react-native-reanimated";
+
+const ROOM_FADE_IN = { from: { opacity: 0 }, to: { opacity: 1 } };
+const ROOM_FADE_OUT = { from: { opacity: 1 }, to: { opacity: 0 } };
+const ROOM_TRANSITION_DURATION_MS = 220;
 
 export type ScenePosition = "top" | "bottom" | "left" | "right" | "center";
 type DoorPosition = Exclude<ScenePosition, "center">;
@@ -31,7 +36,6 @@ export type RoomSceneActor = {
 type RoomSceneProps = {
   canUnlockDoors?: boolean;
   animationFrame: CombatAnimationFrame;
-  bounceOffset: number;
   doorways: RoomDoorways;
   enemyHealthLossAmount: number;
   actors: RoomSceneActor[];
@@ -57,7 +61,6 @@ export function RoomScene({
   actors,
   floorLayer,
   animationFrame,
-  bounceOffset,
   doorways,
   enemyHealthLossAmount,
   playerEnergyLossAmount,
@@ -81,9 +84,9 @@ export function RoomScene({
 
   const [width, setWidth] = useState(0);
   const [systemReducedMotion, setSystemReducedMotion] = useState(false);
-  const [transition, setTransition] = useState<{ key: number } | null>(null);
+  const [transitionKey, setTransitionKey] = useState<number | null>(null);
   const previousRoomId = useRef(roomId);
-  const [transitionProgress] = useState(() => new Animated.Value(1));
+  const nextTransitionKey = useRef(0);
   useEffect(() => {
     let mounted = true;
     AccessibilityInfo.isReduceMotionEnabled().then(value => { if (mounted) setSystemReducedMotion(value); }).catch(() => undefined);
@@ -95,20 +98,19 @@ export function RoomScene({
       // Animate only adjacent room changes; teleports and reduced-motion preferences skip the slide.
       const isAdjacent = getAdjacentRoomTransition(previousRoomId.current, roomId);
       previousRoomId.current = roomId;
-      if (!isAdjacent || reducedMotion || systemReducedMotion) { setTransition(null); return; }
-      transitionProgress.stopAnimation();
-      transitionProgress.setValue(0);
-      setTransition(current => ({ key: (current?.key ?? 0) + 1 }));
+      if (!isAdjacent || reducedMotion || systemReducedMotion) {
+        setTransitionKey(null);
+        return;
+      }
+      nextTransitionKey.current += 1;
+      setTransitionKey(nextTransitionKey.current);
     }
-  }, [roomId, reducedMotion, systemReducedMotion, transitionProgress]);
+  }, [roomId, reducedMotion, systemReducedMotion]);
   useEffect(() => {
-    if (!transition) return;
-    const animation = Animated.timing(transitionProgress, {
-      toValue: 1, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: true,
-    });
-    animation.start(({ finished }) => { if (finished) setTransition(null); });
-    return () => animation.stop();
-  }, [transition, transitionProgress]);
+    if (transitionKey === null) return;
+    const timeout = setTimeout(() => setTransitionKey(null), ROOM_TRANSITION_DURATION_MS);
+    return () => clearTimeout(timeout);
+  }, [transitionKey]);
   const slots = useMemo(() => layoutRoomActors([
     ...actors.map(actor => ({ id: `${actor.kind}:${actor.id}`, position: actor.position })),
     { id: "local-player", position: playerPosition },
@@ -125,12 +127,20 @@ export function RoomScene({
       <Animated.View pointerEvents="box-none" style={{ position: "absolute", left: 0, top: 0,
         width: SCENE_WIDTH, height: SCENE_HEIGHT, transformOrigin: "top left",
         transform: [{ scale: worldScale }], opacity: width > 0 ? 1 : 0 }}>
-      {transition ? <Animated.View pointerEvents="none" testID="room-transition-snapshot" style={{
+      {transitionKey !== null ? <Animated.View key={`outgoing-${transitionKey}`} pointerEvents="none" testID="room-transition-snapshot" style={{
         position: "absolute", zIndex: 5, width: SCENE_WIDTH, height: SCENE_HEIGHT,
-        opacity: transitionProgress.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
+        animationName: ROOM_FADE_OUT,
+        animationDuration: `${ROOM_TRANSITION_DURATION_MS}ms`,
+        animationTimingFunction: "ease-out",
+        animationFillMode: "forwards",
       }}><RoomSnapshot actors={actors} playerPosition={playerPosition} playerSprite={playerSprite} floorLayer={floorLayer} doorways={doorways} /></Animated.View> : null}
-      <Animated.View testID="room-incoming-snapshot" style={{ width: SCENE_WIDTH, height: SCENE_HEIGHT,
-        opacity: transition ? transitionProgress : 1 }}>
+      <Animated.View key={transitionKey ?? "current-room"} testID="room-incoming-snapshot" style={{ width: SCENE_WIDTH, height: SCENE_HEIGHT,
+        ...(transitionKey !== null ? {
+          animationName: ROOM_FADE_IN,
+          animationDuration: `${ROOM_TRANSITION_DURATION_MS}ms`,
+          animationTimingFunction: "ease-out",
+          animationFillMode: "forwards" as const,
+        } : {}) }}>
       <View pointerEvents="none" testID="room-floor-layer" style={{ position: "absolute", width: SCENE_WIDTH, height: SCENE_HEIGHT }}>{floorLayer ?? <RoomFloor />}</View>
       <RoomWalls
         canUnlockDoors={canUnlockDoors}
@@ -144,12 +154,12 @@ export function RoomScene({
         <SceneActor
           actor={actor}
           animationFrame={animationFrame}
-          bounceOffset={bounceOffset}
           enemyHealthLossAmount={enemyHealthLossAmount}
           key={`${actor.kind}:${actor.id}`}
           positionStyle={slotStyle(`${actor.kind}:${actor.id}`)}
           slotScale={slots[`${actor.kind}:${actor.id}`].size / ACTOR_ENVELOPE}
           disabled={disabled}
+          reducedMotion={reducedMotion || systemReducedMotion}
           onPress={onActorPress}
           sceneScale={sceneScale}
         />
@@ -157,7 +167,6 @@ export function RoomScene({
 
       <PlayerActor
         animationFrame={animationFrame}
-        bounceOffset={bounceOffset}
         energyLossAmount={playerEnergyLossAmount}
         healthLossAmount={playerHealthLossAmount}
         positionStyle={slotStyle("local-player")}
@@ -166,6 +175,7 @@ export function RoomScene({
         sprite={playerSprite}
         playerLabel={playerLabel}
         disabled={disabled}
+        reducedMotion={reducedMotion || systemReducedMotion}
         onPress={onPlayerPress}
       />
       </Animated.View>
@@ -187,24 +197,24 @@ function RoomSnapshot({ actors, playerPosition, playerSprite, floorLayer, doorwa
 type SceneActorProps = {
   actor: RoomSceneActor;
   animationFrame: CombatAnimationFrame;
-  bounceOffset: number;
   enemyHealthLossAmount: number;
   sceneScale: number;
   positionStyle: ViewStyle;
   slotScale: number;
   disabled: boolean;
+  reducedMotion: boolean;
   onPress?: (actor: RoomSceneActor) => void;
 };
 
 function SceneActor({
   actor,
   animationFrame,
-  bounceOffset,
   enemyHealthLossAmount,
   sceneScale,
   positionStyle,
   slotScale,
   disabled,
+  reducedMotion,
   onPress,
 }: SceneActorProps) {
   const colors = useThemeColors();
@@ -239,7 +249,7 @@ function SceneActor({
               testID="enemy-health-loss"
             />
           ) : null}
-          <View style={{ transform: [{ translateY: bounceOffset }] }}>
+          <View>
             <CombatantSprite
               accessibilityLabel={actor.label}
               attackDirection="right"
@@ -259,6 +269,7 @@ function SceneActor({
                     )
                   : null
               }
+              reducedMotion={reducedMotion}
               sprite={actor.sprite}
               scale={sceneScale}
               size={48}
@@ -286,7 +297,6 @@ function SceneActor({
 
 type PlayerActorProps = {
   animationFrame: CombatAnimationFrame;
-  bounceOffset: number;
   energyLossAmount: number;
   healthLossAmount: number;
   sceneScale: number;
@@ -295,12 +305,12 @@ type PlayerActorProps = {
   positionStyle: ViewStyle;
   slotScale: number;
   disabled: boolean;
+  reducedMotion: boolean;
   onPress?: () => void;
 };
 
 function PlayerActor({
   animationFrame,
-  bounceOffset,
   energyLossAmount,
   healthLossAmount,
   sceneScale,
@@ -309,6 +319,7 @@ function PlayerActor({
   positionStyle,
   slotScale,
   disabled,
+  reducedMotion,
   onPress,
 }: PlayerActorProps) {
   const colors = useThemeColors();
@@ -356,11 +367,11 @@ function PlayerActor({
           animationFrame.playerAttackElapsed,
           COMBAT_ANIMATION.attackDuration,
         )}
-        bounceOffset={bounceOffset}
         damageProgress={getProgress(
           animationFrame.playerDamageElapsed,
           COMBAT_ANIMATION.damageDuration,
         )}
+        reducedMotion={reducedMotion}
         sprite={sprite}
         scale={sceneScale}
         size={48}
@@ -377,14 +388,6 @@ export function getProgress(elapsed: number | null, duration: number) {
   }
 
   return Math.max(0, Math.min(1, elapsed / duration));
-}
-
-export function getBounceOffset(elapsed: number) {
-  const progress =
-    (elapsed % COMBAT_ANIMATION.bounceDuration) /
-    COMBAT_ANIMATION.bounceDuration;
-
-  return Math.sin(progress * Math.PI * 2) * COMBAT_ANIMATION.bounceDistance;
 }
 
 

@@ -101,10 +101,8 @@ export function DungeonMap({
                     ? colors.mapStairsRoom
                     : hasMonster
                       ? colors.mapEnemyRoom
-                      : hasItem
+                      : hasItem || hasEquipment
                         ? colors.mapItemRoom
-                        : hasEquipment
-                          ? colors.mapStairsRoom
                         : colors.mapExploredRoom;
 
                 return (

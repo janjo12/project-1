@@ -1,17 +1,17 @@
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { Pressable, Text, View, useWindowDimensions } from "react-native";
 
 import { MicrogameCircle, MicrogameCircleOutline } from "@/components/Common/MicrogameCircle";
 import { useThemeColors } from "@/components/Common/theme";
 import { MICROGAME_MAX_DURATION_MS, type MicrogameKind } from "@/game/actions/use-microgame";
+import type { NumberStore } from "@/game/state/numberStore";
 
 type MicrogameOverlayProps = {
   visible: boolean;
   kind: MicrogameKind;
-  elapsed: number;
+  elapsedStore: NumberStore;
   targetDelay: number;
   targetSpot: number;
-  clicks: number;
   leftHanded: boolean;
   isTest?: boolean;
   onTap: () => void;
@@ -20,16 +20,16 @@ type MicrogameOverlayProps = {
 export function MicrogameOverlay({
   visible,
   kind,
-  elapsed,
+  elapsedStore,
   targetDelay,
   targetSpot,
-  clicks,
   leftHanded,
   isTest = false,
   onTap,
 }: MicrogameOverlayProps) {
   const colors = useThemeColors();
   const { height } = useWindowDimensions();
+  const elapsed = useSyncExternalStore(elapsedStore.subscribe, elapsedStore.getSnapshot, elapsedStore.getSnapshot);
 
   if (!visible) return null;
 
@@ -76,7 +76,7 @@ export function MicrogameOverlay({
   );
 }
 
-type MicrogameContentProps = Pick<MicrogameOverlayProps, "kind" | "elapsed" | "targetDelay" | "targetSpot" | "leftHanded" | "onTap">;
+type MicrogameContentProps = Pick<MicrogameOverlayProps, "kind" | "targetDelay" | "targetSpot" | "leftHanded" | "onTap"> & { elapsed: number };
 
 function MicrogameContent(props: MicrogameContentProps) {
   switch (props.kind) {

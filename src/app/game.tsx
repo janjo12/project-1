@@ -10,6 +10,7 @@ import { GameViewPanel, type RoomSceneActor, type ScenePosition } from "@/compon
 import { ClassBriefing } from "@/components/Common/ClassBriefing";
 import { DestructiveButton, NormalButton, PrimaryButton, ToggleButton } from "@/components/Controls/ActionButton";
 import { DebugBar, ResourceBar, ResourceBarGroup } from "@/components/Player/PlayerHUD";
+import { TurnTimerBar } from "@/components/Player/TurnTimerBar";
 import { ScreenShell } from "@/components/Common/ScreenShell";
 import { ThemeProvider, useThemeColors } from "@/components/Common/theme";
 
@@ -90,7 +91,7 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
         isTurnClockActive: game.isTurnClockActive,
         onExpire: game.expireTurn,
         onFrame: game.updateGameFrame,
-        resetKey: game.turnNumber,
+        turnNumber: game.turnNumber,
         turnDuration: game.turnDuration,
       },
     }),
@@ -102,6 +103,7 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
       game.updateGameFrame,
     ],
   );
+  const gameLoopTimer = useMemo(() => new GameLoopTimer(), []);
   const map = (
     <DungeonMap currentRoomId={game.currentRoomId} map={game.visibleDungeonMap} />
   );
@@ -158,7 +160,7 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
         renderer={() => null}
         running={game.isGameLoopRunning() && !isMenuOpen && !microgame.active && classIntroPage < 0}
         systems={[runGameLoop]}
-        timer={new GameLoopTimer()}
+        timer={gameLoopTimer}
       />
 
       <Header>
@@ -221,13 +223,12 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
           compact={compactLayout}
         />
         {game.hasTurnTimer ? (
-          <ResourceBar
+          <TurnTimerBar
             accessibilityLabel="Turn timer"
             color={colors.timer}
-            current={game.turnTimeRemaining}
-            icon="hourglass-half"
             max={game.turnDuration}
             panelPosition="last"
+            store={game.turnClockStore}
             testID="turn-timer"
             compact={compactLayout}
           />
@@ -261,10 +262,9 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
       <MicrogameOverlay
         visible={microgame.active}
         kind={microgame.kind}
-        elapsed={microgame.elapsed}
+        elapsedStore={microgame.elapsedStore}
         targetDelay={microgame.targetDelay}
         targetSpot={microgame.targetSpot}
-        clicks={microgame.clicks}
         leftHanded={settings.handedness === "left"}
         isTest={microgame.istest}
         onTap={microgame.tap}

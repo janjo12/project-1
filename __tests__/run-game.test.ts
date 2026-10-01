@@ -223,7 +223,6 @@ describe("run-game policies", () => {
         isTurnClockActive: () => true,
         onExpire,
         onFrame,
-        resetKey: 0,
         turnDuration: 2500,
       },
     };

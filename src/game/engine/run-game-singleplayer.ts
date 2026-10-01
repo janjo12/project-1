@@ -53,11 +53,10 @@ import {
   getNextLevelState,
 } from "@/game/engine/run-game-level";
 import { getRunSnapshot } from "@/game/engine/run-game-snapshot";
-import {
-  advanceAnimationFrame,
-} from "@/game/entities";
+import { advanceAnimationFrame } from "@/game/entities";
 import { gameReducer, type GameStateAction } from "@/game/state/gameReducer";
 import { createInitialGameState } from "@/game/state/initialGameState";
+import { createNumberStore } from "@/game/state/numberStore";
 import { PLAYER_MAX_ENERGY, PLAYER_MAX_HEALTH, playerEntryPositions, type GameState, type UseGameRunOptions } from "@/game/state/types";
 export { getEnemyAttackOutcome } from "@/game/engine/combat";
 export {
@@ -83,6 +82,7 @@ export function useRunGame({
     createInitialGameState,
   );
   const gameStateRef = useRef(gameState);
+  const [turnClockStore] = useState(() => createNumberStore(gameState.turnTimeRemaining));
   useLayoutEffect(() => {
     gameStateRef.current = gameState;
   }, [gameState]);
@@ -107,7 +107,6 @@ export function useRunGame({
     playerHealth,
     turnCounter,
     turnNumber,
-    turnTimeRemaining,
   } = gameState;
   const setLevel = useCallback((value: SetStateAction<number>) => setGameField("level", value), [setGameField]);
   const [playerClass] = useState(() => gameClassForSeed(seed));
@@ -146,7 +145,12 @@ export function useRunGame({
     useState<ScenePosition>("center");
   const setTurnCounter = useCallback((value: SetStateAction<number>) => setGameField("turnCounter", value), [setGameField]);
   const setTurnNumber = useCallback((value: SetStateAction<number>) => setGameField("turnNumber", value), [setGameField]);
-  const setTurnTimeRemaining = useCallback((value: SetStateAction<number>) => setGameField("turnTimeRemaining", value), [setGameField]);
+  const setTurnTimeRemaining = useCallback((value: SetStateAction<number>) => {
+    const previous = gameStateRef.current.turnTimeRemaining;
+    const nextValue = typeof value === "function" ? value(previous) : value;
+    turnClockStore.setSnapshot(nextValue);
+    setGameField("turnTimeRemaining", nextValue);
+  }, [setGameField, turnClockStore]);
 
   const {
     currentEnemy,
@@ -680,13 +684,15 @@ export function useRunGame({
 
   const updateGameFrame = useCallback(
     (delta: number, nextTurnTimeRemaining?: number) => {
-      setAnimationFrame((frame) => advanceAnimationFrame(frame, delta));
+      const frame = sceneFrameStore.getSnapshot();
+      const nextFrame = advanceAnimationFrame(frame, delta);
+      if (nextFrame !== frame) setAnimationFrame(nextFrame);
 
       if (typeof nextTurnTimeRemaining === "number") {
-        setTurnTimeRemaining(Math.ceil(Math.max(0, nextTurnTimeRemaining) / 100) * 100);
+        turnClockStore.setSnapshot(Math.ceil(Math.max(0, nextTurnTimeRemaining) / 100) * 100);
       }
     },
-    [setAnimationFrame, setTurnTimeRemaining],
+    [sceneFrameStore, setAnimationFrame, turnClockStore],
   );
 
   const expireTurn = useCallback(() => {
@@ -826,7 +832,8 @@ export function useRunGame({
     turnStatus,
     turnDuration,
     turnNumber,
-    turnTimeRemaining,
+    get turnTimeRemaining() { return turnClockStore.getSnapshot(); },
+    turnClockStore,
     updateGameFrame,
     moveToRoom,
     pickupItem,

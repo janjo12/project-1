@@ -10,7 +10,7 @@ type GameLoopEntity = {
   isTurnClockActive: () => boolean;
   onExpire: () => void;
   onFrame: (delta: number, turnTimeRemaining?: number) => void;
-  resetKey: number;
+  turnNumber: number;
   turnDuration: number;
 };
 
@@ -21,11 +21,11 @@ type GameLoopEntities = {
 export class GameLoopTimer {
   private currentTime = 0;
   private intervalId: ReturnType<typeof setInterval> | null = null;
-  private subscribers: ((time: number) => void)[] = [];
+  private subscribers = new Set<(time: number) => void>();
 
   start() {
     // Starting twice is a no-op so a mounted screen cannot accidentally create duplicate clocks.
-    if (this.intervalId) {
+    if (this.intervalId !== null) {
       return;
     }
 
@@ -36,7 +36,7 @@ export class GameLoopTimer {
   }
 
   stop() {
-    if (!this.intervalId) {
+    if (this.intervalId === null) {
       return;
     }
 
@@ -45,15 +45,11 @@ export class GameLoopTimer {
   }
 
   subscribe(callback: (time: number) => void) {
-    if (!this.subscribers.includes(callback)) {
-      this.subscribers.push(callback);
-    }
+    this.subscribers.add(callback);
   }
 
   unsubscribe(callback: (time: number) => void) {
-    this.subscribers = this.subscribers.filter(
-      (subscriber) => subscriber !== callback,
-    );
+    this.subscribers.delete(callback);
   }
 }
 

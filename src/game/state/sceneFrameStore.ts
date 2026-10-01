@@ -12,7 +12,9 @@ export function createSceneFrameStore() {
       return () => { listeners.delete(listener); };
     },
     setFrame: (update: CombatAnimationFrame | ((previous: CombatAnimationFrame) => CombatAnimationFrame)) => {
-      frame = typeof update === "function" ? update(frame) : update;
+      const nextFrame = typeof update === "function" ? update(frame) : update;
+      if (nextFrame === frame) return;
+      frame = nextFrame;
       listeners.forEach(listener => listener());
     },
   };

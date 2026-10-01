@@ -14,6 +14,7 @@ import { ChargeControl, EquipmentControl, ItemControl } from "@/components/Contr
 import { DungeonMap } from "@/components/Dungeon/DungeonMap";
 import { GameViewPanel } from "@/components/Dungeon/GameViewPanel";
 import { DebugBar, ResourceBar, ResourceBarGroup } from "@/components/Player/PlayerHUD";
+import { TurnTimerBar } from "@/components/Player/TurnTimerBar";
 import { useMicrogame } from "@/game/actions/use-microgame";
 import { GAME_PARAMETERS } from "@/game/config/gameparameters";
 import { PLAYER_MAX_ENERGY, PLAYER_MAX_HEALTH, runGameLoop, useRunGame } from "@/game/engine/run-game-singleplayer";
@@ -205,7 +206,7 @@ function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onExit }: 
       if (!isGameLoopRunning() || isMenuOpen || microgame.active || classIntroPage >= 0) return;
       const delta = GAME_PARAMETERS.turn.gameLoopTickMs;
       time += delta;
-      const gameLoop = { elapsed, expired, isTurnClockActive, onExpire: expireTurn, onFrame: updateGameFrame, resetKey: turnNumber, turnDuration };
+      const gameLoop = { elapsed, expired, isTurnClockActive, onExpire: expireTurn, onFrame: updateGameFrame, turnDuration };
       runGameLoop({ gameLoop }, { time: { delta, currentTime: time, previousTime: time - delta, previousDelta: delta } } as never);
       elapsed = gameLoop.elapsed;
       expired = gameLoop.expired;
@@ -231,7 +232,7 @@ function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onExit }: 
       <ResourceBarGroup compact={compactLayout}>
         <ResourceBar compact={compactLayout} accessibilityLabel="Player health" color={colors.health} current={game.playerHealth} icon="heart" max={PLAYER_MAX_HEALTH} panelPosition="first" testID="player-health-bar" />
         <ResourceBar compact={compactLayout} accessibilityLabel="Player energy" color={colors.energy} current={game.playerEnergy} icon="bolt" max={PLAYER_MAX_ENERGY} panelPosition={game.hasTurnTimer ? "middle" : "last"} testID="player-energy-bar" />
-        {game.hasTurnTimer ? <ResourceBar compact={compactLayout} accessibilityLabel="Turn timer" color={colors.timer} current={game.turnTimeRemaining} icon="hourglass-half" max={game.turnDuration} panelPosition="last" testID="turn-timer" /> : null}
+        {game.hasTurnTimer ? <TurnTimerBar compact={compactLayout} accessibilityLabel="Turn timer" color={colors.timer} max={game.turnDuration} panelPosition="last" store={game.turnClockStore} testID="turn-timer" /> : null}
       </ResourceBarGroup>
       {!compactLayout ? <Text style={{ color: colors.ink, fontSize: 13, fontWeight: "700", textAlign: "center" }}>Tap a monster to attack, an item to pick it up, a doorway to move, your hero to defend, or stairs to descend.</Text> : null}
       <GameViewPanel
@@ -258,7 +259,7 @@ function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onExit }: 
         playerEnergyLossAmount={game.playerEnergyLossAmount}
         playerHealthLossAmount={game.playerHealthLossAmount}
       />
-      <MicrogameOverlay visible={microgame.active} kind={microgame.kind} elapsed={microgame.elapsed} targetDelay={microgame.targetDelay} targetSpot={microgame.targetSpot} clicks={microgame.clicks} leftHanded={settings.handedness === "left"} isTest={microgame.istest} onTap={microgame.tap} />
+      <MicrogameOverlay visible={microgame.active} kind={microgame.kind} elapsedStore={microgame.elapsedStore} targetDelay={microgame.targetDelay} targetSpot={microgame.targetSpot} leftHanded={settings.handedness === "left"} isTest={microgame.istest} onTap={microgame.tap} />
       {classIntroPage >= 0 ? <ClassBriefing page={classIntroPage} classId={game.playerClass.id} damage={game.playerAttack} multiplayer={false} onNext={() => setClassIntroPage(1)} onBack={() => setClassIntroPage(0)} onPractice={startMicrogame} onStart={() => setClassIntroPage(-1)} /> : null}
       <StyledModal accessibilityLabel="Game menu" accessibilityRole="dialog" animationType="fade" onRequestClose={() => setIsMenuOpen(false)} visible={isMenuOpen}>
         <Title>Menu</Title>

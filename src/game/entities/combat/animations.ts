@@ -2,14 +2,11 @@ import { GAME_PARAMETERS } from "@/game/config/gameparameters";
 
 export const COMBAT_ANIMATION = {
   attackDuration: GAME_PARAMETERS.animation.attackDurationMs,
-  bounceDistance: GAME_PARAMETERS.animation.bounceDistance,
-  bounceDuration: GAME_PARAMETERS.animation.bounceDurationMs,
   damageDuration: GAME_PARAMETERS.animation.damageDurationMs,
   resourceLossDuration: GAME_PARAMETERS.animation.resourceLossDurationMs,
 } as const;
 
 export type CombatAnimationFrame = {
-  bounceElapsed: number;
   enemyAttackElapsed: number | null;
   enemyDamageElapsed: number | null;
   enemyHealthLossElapsed: number | null;
@@ -19,10 +16,9 @@ export type CombatAnimationFrame = {
   playerHealthLossElapsed: number | null;
 };
 
-/** Start with idle bounce at zero and inactive one-shot animations marked null. */
+/** Start with every one-shot animation inactive. */
 export function createCombatAnimationFrame(): CombatAnimationFrame {
   return {
-    bounceElapsed: 0,
     enemyAttackElapsed: null,
     enemyDamageElapsed: null,
     enemyHealthLossElapsed: null,
@@ -51,14 +47,26 @@ function advanceElapsed(
   return nextElapsed;
 }
 
+export function hasActiveCombatAnimation(frame: CombatAnimationFrame) {
+  return frame.enemyAttackElapsed !== null ||
+    frame.enemyDamageElapsed !== null ||
+    frame.enemyHealthLossElapsed !== null ||
+    frame.playerAttackElapsed !== null ||
+    frame.playerDamageElapsed !== null ||
+    frame.playerEnergyLossElapsed !== null ||
+    frame.playerHealthLossElapsed !== null;
+}
+
 /** Advance every active animation by the same frame delta; completed one-shots return to null. */
 export function advanceAnimationFrame(
   frame: CombatAnimationFrame,
   delta: number,
 ): CombatAnimationFrame {
+  if (!hasActiveCombatAnimation(frame)) {
+    return frame;
+  }
+
   return {
-    bounceElapsed:
-      (frame.bounceElapsed + delta) % COMBAT_ANIMATION.bounceDuration,
     enemyAttackElapsed: advanceElapsed(
       frame.enemyAttackElapsed,
       delta,

@@ -18,7 +18,6 @@ function scene(roomId: string) {
     <RoomScene
       actors={[]}
       animationFrame={createCombatAnimationFrame()}
-      bounceOffset={0}
       doorways={doorways}
       enemyHealthLossAmount={0}
       playerEnergyLossAmount={0}
@@ -31,19 +30,25 @@ function scene(roomId: string) {
   );
 }
 
-test("renders an adjacent-room crossfade without animated transforms", async () => {
+test("crossfades adjacent rooms with UI-side opacity keyframes", async () => {
   jest.useFakeTimers();
   try {
     const screen = render(scene("A1"));
 
     await act(async () => {
       screen.rerender(scene("A2"));
-      jest.advanceTimersByTime(250);
       await Promise.resolve();
     });
 
     expect(screen.getByTestId("room-transition-snapshot")).toBeTruthy();
+    expect(screen.getByTestId("room-transition-snapshot").props.style.animationName).toBeDefined();
+    expect(screen.getByTestId("room-incoming-snapshot").props.style.animationName).toBeDefined();
     expect(screen.getByTestId("room-incoming-snapshot").props.style.transform).toBeUndefined();
+
+    await act(async () => {
+      jest.advanceTimersByTime(250);
+    });
+    expect(screen.queryByTestId("room-transition-snapshot")).toBeNull();
   } finally {
     jest.useRealTimers();
   }

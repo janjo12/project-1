@@ -1,8 +1,8 @@
 import { FontAwesome } from "@expo/vector-icons";
 import { Text, View } from "react-native";
 
-import { createStyles } from "@/components/Dungeon/room-scene-styles";
 import { useThemeColors } from "@/components/Common/theme";
+import { createStyles } from "@/components/Dungeon/room-scene-styles";
 
 type EnemyHealthBarProps = {
   accessibilityLabel: string;

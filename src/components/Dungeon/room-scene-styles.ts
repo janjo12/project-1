@@ -1,3 +1,4 @@
+
 import { StyleSheet } from "react-native";
 
 import type { ThemeColors } from "@/components/Common/theme";
@@ -128,5 +129,3 @@ export function createStyles(colors: ThemeColors) {
     },
   });
 }
-
-

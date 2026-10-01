@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+
+import { createNumberStore } from "@/game/state/numberStore";
 
 export type MicrogameKind = "concentration" | "timed-attack" | "multitap";
 export type MicrogameOptions = { istest?: boolean };
@@ -25,43 +27,47 @@ export function getMultitapScore(clicks: number) {
 export function useMicrogame(onComplete: (score: number) => void) {
   const [active, setActive] = useState(false);
   const [kind, setKind] = useState<MicrogameKind>("concentration");
-  const [elapsed, setElapsed] = useState(0);
+  const [elapsedStore] = useState(() => createNumberStore(0));
   const [targetDelay, setTargetDelay] = useState(500);
   const [targetSpot, setTargetSpot] = useState(0.76);
-  const [clicks, setClicks] = useState(0);
   const [istest, setIsTest] = useState(false);
   const startedAt = useRef(0);
   const leftHandedRef = useRef(false);
   const nowRef = useRef(now);
   const completed = useRef(false);
+  const clickCount = useRef(0);
+  const onCompleteRef = useRef(onComplete);
+  useLayoutEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
   const finish = useCallback((score: number) => {
     // A single completion guard prevents tap/timeout races from submitting twice.
     if (completed.current) return;
     completed.current = true;
     setActive(false);
-    onComplete(scoreWithinRange(score));
-  }, [onComplete]);
+    onCompleteRef.current(scoreWithinRange(score));
+  }, []);
   const start = useCallback(
     (gameKind: MicrogameKind = "concentration", handedness: "left" | "right" = "right", options?: MicrogameOptions) => {
       setIsTest(options?.istest ?? false);
       completed.current = false;
       setKind(gameKind);
-      setElapsed(0);
-      setClicks(0);
+      elapsedStore.setSnapshot(0);
+      clickCount.current = 0;
       setTargetDelay(200 + Math.floor(Math.random() * 401));
       leftHandedRef.current = handedness === "left";
       setTargetSpot(handedness === "right" ? 0.24 : 0.76);
       startedAt.current = nowRef.current();
       setActive(true);
     },
-    [],
+    [elapsedStore],
   );
   const tap = useCallback(() => {
     if (!active || completed.current) return;
     const elapsedMs = nowRef.current() - startedAt.current;
     if (kind === "multitap") {
-      const next = clicks + 1;
-      setClicks(next);
+      const next = clickCount.current + 1;
+      clickCount.current = next;
       setTargetSpot(leftHandedRef.current ? 0.58 + Math.random() * 0.32 : 0.1 + Math.random() * 0.32);
       if (next >= 10) finish(100);
       return;
@@ -71,17 +77,28 @@ export function useMicrogame(onComplete: (score: number) => void) {
       ? getConcentrationScore(elapsedMs, targetProgress * MICROGAME_MAX_DURATION_MS)
       : getTimedAttackScore(elapsedMs - targetDelay);
     finish(score);
-  }, [active, clicks, finish, kind, targetDelay, targetSpot]);
+  }, [active, finish, kind, targetDelay, targetSpot]);
   useEffect(() => {
     if (!active) return;
     const interval = setInterval(() => {
       const value = Math.min(MICROGAME_MAX_DURATION_MS, nowRef.current() - startedAt.current);
-      setElapsed(value);
+      elapsedStore.setSnapshot(value);
       if (value >= MICROGAME_MAX_DURATION_MS) {
-        finish(kind === "multitap" ? getMultitapScore(clicks) : 0);
+        finish(kind === "multitap" ? getMultitapScore(clickCount.current) : 0);
       }
     }, 16);
     return () => clearInterval(interval);
-  }, [active, clicks, finish, kind]);
-  return { active, kind, elapsed, targetDelay, targetSpot, clicks, istest, start, tap };
+  }, [active, elapsedStore, finish, kind]);
+  return {
+    active,
+    kind,
+    get elapsed() { return elapsedStore.getSnapshot(); },
+    elapsedStore,
+    targetDelay,
+    targetSpot,
+    get clicks() { return clickCount.current; },
+    istest,
+    start,
+    tap,
+  };
 }

@@ -1,15 +1,14 @@
-import { type ReactNode, useState, useSyncExternalStore } from "react";
 import { createSceneFrameStore, type SceneFrameStore } from "@/game/state/sceneFrameStore";
+import { useState, useSyncExternalStore, type ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
+import { useThemeColors, type ThemeColors } from "@/components/Common/theme";
 import {
-  getBounceOffset,
   RoomScene,
   type RoomDoorways,
   type RoomSceneActor,
   type ScenePosition,
 } from "@/components/Dungeon/Room";
-import { useThemeColors, type ThemeColors } from "@/components/Common/theme";
 import {
   type CombatAnimationFrame,
 } from "@/game/entities";
@@ -72,7 +71,6 @@ export function GameViewPanel({
   const colors = useThemeColors();
   const styles = createStyles(colors);
   const visibleActors = roomSceneActors ?? [];
-  const bounceOffset = getBounceOffset(animationFrame.bounceElapsed);
   const [sceneBoxHeight, setSceneBoxHeight] = useState(0);
   const sceneScale = 1;
 
@@ -85,7 +83,8 @@ export function GameViewPanel({
             style={styles.turnCounter}
             testID="hard-turn-counter"
           >
-            Reach the Stairs in {hardTurnCounter} Turns
+            Reach the Stairs in {hardTurnCounter}{" "}
+            {hardTurnCounter === 1 ? "Turn" : "Turns"}
           </Text>
         ) : null}
 
@@ -96,7 +95,6 @@ export function GameViewPanel({
           reducedMotion={reducedMotion}
           floorLayer={floorLayer}
           animationFrame={animationFrame}
-          bounceOffset={bounceOffset}
           doorways={roomDoorways}
           enemyHealthLossAmount={enemyHealthLossAmount}
           playerEnergyLossAmount={playerEnergyLossAmount}
