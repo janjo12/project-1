@@ -11,10 +11,12 @@ type ResourceBarProps = {
   max: number;
   panelPosition?: "first" | "last" | "middle" | "single";
   testID: string;
+  compact?: boolean;
 };
 
 type ResourceBarGroupProps = {
   children: React.ReactNode;
+  compact?: boolean;
 };
 
 type DebugBarProps = {
@@ -31,6 +33,7 @@ export function ResourceBar({
   max,
   panelPosition = "single",
   testID,
+  compact = false,
 }: ResourceBarProps) {
   const colors = useThemeColors();
   const styles = createStyles(colors);
@@ -50,6 +53,7 @@ export function ResourceBar({
           styles.firstRow,
         (panelPosition === "last" || panelPosition === "single") &&
           styles.lastRow,
+        compact && styles.compactRow,
       ]}
       testID={testID}
     >
@@ -75,12 +79,12 @@ export function ResourceBar({
   );
 }
 
-export function ResourceBarGroup({ children }: ResourceBarGroupProps) {
+export function ResourceBarGroup({ children, compact = false }: ResourceBarGroupProps) {
   const colors = useThemeColors();
   const styles = createStyles(colors);
 
   return (
-    <View style={styles.playerBars}>
+    <View style={[styles.playerBars, compact && styles.compactPlayerBars]}>
       {children}
     </View>
   );
@@ -103,6 +107,16 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     connectedRow: {
       borderRadius: 0,
+    },
+    compactPlayerBars: {
+      flexDirection: "row",
+    },
+    compactRow: {
+      borderRadius: 8,
+      flex: 1,
+      marginTop: 0,
+      minWidth: 0,
+      width: undefined,
     },
     fill: {
       borderRadius: 999,

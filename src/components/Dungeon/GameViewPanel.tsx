@@ -1,4 +1,4 @@
-import { type ReactNode, useSyncExternalStore } from "react";
+import { type ReactNode, useState, useSyncExternalStore } from "react";
 import { createSceneFrameStore, type SceneFrameStore } from "@/game/state/sceneFrameStore";
 import { StyleSheet, Text, View } from "react-native";
 
@@ -73,11 +73,12 @@ export function GameViewPanel({
   const styles = createStyles(colors);
   const visibleActors = roomSceneActors ?? [];
   const bounceOffset = getBounceOffset(animationFrame.bounceElapsed);
+  const [sceneBoxHeight, setSceneBoxHeight] = useState(0);
   const sceneScale = 1;
 
   return (
     <View style={styles.panel}>
-      <View style={styles.sceneBox}>
+      <View style={styles.sceneBox} onLayout={event => setSceneBoxHeight(event.nativeEvent.layout.height)}>
         {hardTurnCounter !== null ? (
           <Text
             accessibilityLabel="Turns remaining"
@@ -91,6 +92,7 @@ export function GameViewPanel({
         <RoomScene
           actors={visibleActors}
           roomId={roomId}
+          maxHeight={sceneBoxHeight || undefined}
           reducedMotion={reducedMotion}
           floorLayer={floorLayer}
           animationFrame={animationFrame}

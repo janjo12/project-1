@@ -3,7 +3,7 @@ import { MicrogameCircle, MicrogameCircleOutline } from "@/components/Common/Mic
 import { useThemeColors } from "@/components/Common/theme";
 import { NormalButton, PrimaryButton } from "@/components/Controls/ActionButton";
 import { getGameClass, getSupportDescription, type GameClassId } from "@/game/config/game-classes";
-import { Text, View } from "react-native";
+import { Text, View, useWindowDimensions } from "react-native";
 
 type ClassBriefingProps = {
   classId: GameClassId;
@@ -27,6 +27,8 @@ export function ClassBriefing({
   onStart,
 }: ClassBriefingProps) {
   const colors = useThemeColors();
+  const { height } = useWindowDimensions();
+  const compactLayout = height < 600;
   const gameClass = getGameClass(classId);
   const panelStyle = {
     position: "absolute" as const,
@@ -34,9 +36,9 @@ export function ClassBriefing({
     left: 8,
     right: 8,
     top: 12,
-    bottom: 12,
-    padding: 12,
-    gap: 8,
+    height: Math.max(0, height - 24),
+    padding: compactLayout ? 8 : 12,
+    gap: compactLayout ? 4 : 8,
     justifyContent: "center" as const,
     backgroundColor: colors.paper,
     borderColor: colors.accent,
@@ -45,18 +47,18 @@ export function ClassBriefing({
   };
 
   return (
-    <View style={panelStyle}>
-      <Text style={{ color: colors.ink, fontSize: 28, textAlign: "center" }}>
+    <View testID="class-briefing" style={panelStyle}>
+      <Text style={{ color: colors.ink, fontSize: compactLayout ? 22 : 28, textAlign: "center" }}>
         {gameClass.sprite} {gameClass.name}
       </Text>
       {page < 0 ? (
         <StyledText>Waiting for all players to finish their class instructions…</StyledText>
       ) : page === 0 ? (
         <>
-          <Text style={{ color: colors.ink, fontSize: 17 }}>
+          <Text style={{ color: colors.ink, fontSize: compactLayout ? 15 : 17 }}>
             Support · {getSupportDescription(classId, multiplayer)}
           </Text>
-          <Text style={{ color: colors.ink, fontSize: 17 }}>Special · {gameClass.special}</Text>
+          <Text style={{ color: colors.ink, fontSize: compactLayout ? 15 : 17 }}>Special · {gameClass.special}</Text>
           <PrimaryButton
             accessibilityLabel="Next class instructions"
             accessibilityRole="button"
@@ -92,11 +94,11 @@ export function ClassBriefing({
             {gameClass.microgame === "timed-attack" ? (
               <Text style={{ color: colors.accent, fontSize: 36, fontWeight: "900" }}>NOW!</Text>
             ) : null}
-          <Text style={{ color: colors.ink, fontSize: 17 }}>
+          <Text style={{ color: colors.ink, fontSize: compactLayout ? 15 : 17 }}>
             Attack game · {gameClass.microgameText}
           </Text>
           </View>
-          <Text style={{ color: colors.ink, fontSize: 20, textAlign: "center" }}>
+          <Text style={{ color: colors.ink, fontSize: compactLayout ? 18 : 20, textAlign: "center" }}>
             Damage: {damage}
           </Text>
           <PrimaryButton

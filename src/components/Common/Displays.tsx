@@ -3,6 +3,7 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
   type StyleProp,
   type TextStyle,
   type ViewStyle,
@@ -66,7 +67,8 @@ export function StyledModal({
   visible,
 }: StyledModalProps) {
   const colors = useThemeColors();
-  const styles = createStyles(colors);
+  const { height } = useWindowDimensions();
+  const styles = createStyles(colors, height < 500);
 
   return (
     <Modal 
@@ -92,12 +94,13 @@ export function StyledText({ children, style }: StyledTextProps) {
 
 export function Title({ children }: ChildrenProps) {
   const colors = useThemeColors();
-  const styles = createStyles(colors);
+  const { height } = useWindowDimensions();
+  const styles = createStyles(colors, height < 500);
 
   return <Text style={styles.title}>{children}</Text>;
 }
 
-function createStyles(colors: ThemeColors) {
+function createStyles(colors: ThemeColors, compactModal = false) {
   return StyleSheet.create({
     container: {
       gap: 10,
@@ -116,11 +119,11 @@ function createStyles(colors: ThemeColors) {
     modalContent: {
       backgroundColor: colors.paper,
       borderRadius: 12,
-      gap: 16,
+      gap: compactModal ? 3 : 16,
       marginHorizontal: 20,
       maxWidth: 380,
-      padding: 18,
-      width: "88%",
+      padding: compactModal ? 4 : 18,
+      width: compactModal ? "96%" : "88%",
     },
     modalOverlay: {
       alignItems: "center",
@@ -145,10 +148,12 @@ function createStyles(colors: ThemeColors) {
     },
     title: {
       color: colors.ink,
-      fontSize: 38,
+      fontSize: compactModal ? 24 : 38,
       fontWeight: "500",
-      minHeight: 28,
+      minHeight: compactModal ? 18 : 28,
       textAlign: "center",
     },
   });
 }
+
+

@@ -1,5 +1,5 @@
 import { FontAwesome } from "@expo/vector-icons";
-import { Pressable, Switch, Text, TextInput, View } from "react-native";
+import { Pressable, Switch, Text, TextInput, View, useWindowDimensions } from "react-native";
 
 import { useThemeColors } from "@/components/Common/theme";
 import { createInputStyles } from "@/components/Controls/input-styles";
@@ -93,6 +93,7 @@ export function CancelButton({ label, onPress }: CancelButtonProps) {
 export function DestructiveButton({ label, onPress }: DestructiveButtonProps) {
   const colors = useThemeColors();
   const styles = createInputStyles(colors);
+  const { height } = useWindowDimensions();
 
   return (
     <Pressable
@@ -100,6 +101,7 @@ export function DestructiveButton({ label, onPress }: DestructiveButtonProps) {
       onPress={onPress}
       style={({ pressed }) => [
         styles.destructiveButton,
+        height < 500 && { minHeight: 32, paddingVertical: 1, paddingHorizontal: 8 },
         pressed && styles.pressed,
       ]}
     >
@@ -309,3 +311,4 @@ export function ToggleButton({
     </View>
   );
 }
+

@@ -1,6 +1,6 @@
 import { router } from "expo-router";
 import { useMemo, useRef, useState } from "react";
-import { Alert, Text, View } from "react-native";
+import { Alert, Text, View, useWindowDimensions } from "react-native";
 import { GameEngine } from "react-native-game-engine";
 
 import { Container, Header, Row, StyledModal, Title } from "@/components/Common/Displays";
@@ -29,6 +29,8 @@ import { isTestSeed } from "@/utils/seed";
 type PauseMenuProps = {
   onBackToGame: () => void;
   onQuitToTitle: () => void;
+  onPractice: () => void;
+  onOpenMap?: () => void;
   onSettingsChange: (settings: Partial<GameSettings>) => void;
   settings: GameSettings;
   visible: boolean;
@@ -54,6 +56,9 @@ export default function GameScreen() {
 }
 
 function GameContent({ onSettingsChange, settings }: GameContentProps) {
+  const { height } = useWindowDimensions();
+  const compactLayout = height < 800;
+  const tinyLayout = height < 500;
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const colors = useThemeColors();
   const game = useRunGame({
@@ -69,6 +74,7 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
   });
   const [microgameScore, setMicrogameScore] = useState<number | null>(null);
   const [classIntroPage, setClassIntroPage] = useState(0);
+  const [isMapOpen, setIsMapOpen] = useState(false);
   const pendingAttack = useRef<string | null>(null);
   const microgame = useMicrogame(score => {
     setMicrogameScore(score);
@@ -164,12 +170,10 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
         />
       </Header>
 
-      <DebugBar accessibilityLabel="Turn status" accessibilityRole="text">
+      {!tinyLayout ? <DebugBar accessibilityLabel="Turn status" accessibilityRole="text">
         {`${game.istest ? "TEST · " : ""}${microgameScore === null ? game.turnStatus : `${game.turnStatus} · Last microgame ${microgameScore}/100`}`}
-      </DebugBar>
-      <NormalButton accessibilityLabel="Practice attack microgame" accessibilityRole="button" label="Practice Attack" onPress={() => microgame.start(game.playerClass.microgame, settings.handedness, { istest: isTestSeed(settings.seed) })} />
-
-      {map}
+      </DebugBar> : null}
+      {!tinyLayout ? map : null}
       <Row>
         {settings.handedness === "left" ? (
           <>
@@ -191,11 +195,11 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
           </>
         )}
       </Row>
-      <Text style={{ color: colors.sepia, fontSize: 12, textAlign: "center" }}>
+      {!compactLayout ? <Text style={{ color: colors.sepia, fontSize: 12, textAlign: "center" }}>
         Charge: stronger attack, full block + counter, or move / pick up without using a turn.
-      </Text>
+      </Text> : null}
 
-      <ResourceBarGroup>
+      <ResourceBarGroup compact={compactLayout}>
         <ResourceBar
           accessibilityLabel="Player health"
           color={colors.health}
@@ -204,6 +208,7 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
           max={PLAYER_MAX_HEALTH}
           panelPosition="first"
           testID="player-health-bar"
+          compact={compactLayout}
         />
         <ResourceBar
           accessibilityLabel="Player energy"
@@ -213,6 +218,7 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
           max={PLAYER_MAX_ENERGY}
           panelPosition={game.hasTurnTimer ? "middle" : "last"}
           testID="player-energy-bar"
+          compact={compactLayout}
         />
         {game.hasTurnTimer ? (
           <ResourceBar
@@ -223,13 +229,14 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
             max={game.turnDuration}
             panelPosition="last"
             testID="turn-timer"
+            compact={compactLayout}
           />
         ) : null}
       </ResourceBarGroup>
 
-      <Text style={{ color: colors.ink, fontSize: 13, fontWeight: "700", textAlign: "center" }}>
+      {!compactLayout ? <Text style={{ color: colors.ink, fontSize: 13, fontWeight: "700", textAlign: "center" }}>
         Tap a monster to attack, an item to pick it up, a doorway to move, your hero to defend, or stairs to descend.
-      </Text>
+      </Text> : null}
 
       <GameViewPanel
         sceneFrameStore={game.sceneFrameStore}
@@ -278,10 +285,17 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
       <PauseMenu
         onBackToGame={() => setIsMenuOpen(false)}
         onQuitToTitle={confirmQuitToTitle}
+        onPractice={() => { setIsMenuOpen(false); microgame.start(game.playerClass.microgame, settings.handedness, { istest: isTestSeed(settings.seed) }); }}
+        onOpenMap={tinyLayout ? () => { setIsMenuOpen(false); setIsMapOpen(true); } : undefined}
         onSettingsChange={onSettingsChange}
         settings={settings}
         visible={isMenuOpen}
       />
+      <StyledModal accessibilityLabel="Dungeon map" accessibilityRole="dialog" animationType="fade" onRequestClose={() => setIsMapOpen(false)} visible={isMapOpen}>
+        <Title>Dungeon Map</Title>
+        <DungeonMap currentRoomId={game.currentRoomId} map={game.visibleDungeonMap} />
+        <PrimaryButton accessibilityLabel="Close map" accessibilityRole="button" label="Close map" onPress={() => setIsMapOpen(false)} />
+      </StyledModal>
     </ScreenShell>
   );
 }
@@ -289,6 +303,8 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
 export function PauseMenu({
   onBackToGame,
   onQuitToTitle,
+  onPractice,
+  onOpenMap,
   onSettingsChange,
   settings,
   visible,
@@ -319,6 +335,14 @@ export function PauseMenu({
           }}
         />
       </Container>
+
+      {onOpenMap ? <NormalButton accessibilityLabel="Open dungeon map" accessibilityRole="button" label="Dungeon Map" onPress={onOpenMap} /> : null}
+      <NormalButton
+        accessibilityLabel="Practice attack microgame"
+        accessibilityRole="button"
+        label="Practice Attack"
+        onPress={onPractice}
+      />
 
       <PrimaryButton 
         accessibilityLabel="Back to Game"

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, Text, View, useWindowDimensions } from "react-native";
 
 import { MicrogameCircle, MicrogameCircleOutline } from "@/components/Common/MicrogameCircle";
 import { useThemeColors } from "@/components/Common/theme";
@@ -29,6 +29,7 @@ export function MicrogameOverlay({
   onTap,
 }: MicrogameOverlayProps) {
   const colors = useThemeColors();
+  const { height } = useWindowDimensions();
 
   if (!visible) return null;
 
@@ -43,7 +44,7 @@ export function MicrogameOverlay({
         left: 0,
         right: 0,
         top: 0,
-        bottom: 0,
+        height,
         alignItems: "center",
         justifyContent: "center",
         backgroundColor: colors.paper,

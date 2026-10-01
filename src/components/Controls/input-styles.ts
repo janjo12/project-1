@@ -32,3 +32,6 @@ export function createInputStyles(colors: ThemeColors) {
     toggleRow: { alignItems: "center", backgroundColor: colors.paperLight, borderColor: colors.ink, borderCurve: "continuous", borderRadius: 8, borderWidth: 2, flexDirection: "row", gap: 14, justifyContent: "space-between", minHeight: 48, paddingHorizontal: 12, paddingVertical: 6 },
   });
 }
+
+
+

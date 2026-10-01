@@ -48,6 +48,7 @@ type RoomSceneProps = {
   onPlayerPress?: () => void;
   roomId?: string;
   reducedMotion?: boolean;
+  maxHeight?: number;
 };
 
 
@@ -72,6 +73,7 @@ export function RoomScene({
   onPlayerPress,
   roomId,
   reducedMotion = false,
+  maxHeight,
 }: RoomSceneProps) {
   // Render in fixed logical coordinates, then scale once to the measured device width.
   const colors = useThemeColors();
@@ -111,14 +113,14 @@ export function RoomScene({
     ...actors.map(actor => ({ id: `${actor.kind}:${actor.id}`, position: actor.position })),
     { id: "local-player", position: playerPosition },
   ]), [actors, playerPosition]);
-  const worldScale = width / SCENE_WIDTH;
+  const worldScale = Math.min(width / SCENE_WIDTH, maxHeight === undefined ? Infinity : Math.max(0, maxHeight - 28) / SCENE_HEIGHT);
   function slotStyle(id: string): ViewStyle {
     const slot = slots[id];
     return { left: slot.x, top: slot.y, width: slot.size, height: slot.size };
   }
 
   return (
-    <View style={[styles.sceneArea, { height: width > 0 ? width * SCENE_HEIGHT / SCENE_WIDTH + 10 : 240 }]}
+    <View style={[styles.sceneArea, { height: Math.min(width > 0 ? width * SCENE_HEIGHT / SCENE_WIDTH + 10 : 240, maxHeight ?? Infinity) }]}
       onLayout={event => setWidth(Math.max(0, event.nativeEvent.layout.width - 10))}>
       <Animated.View pointerEvents="box-none" style={{ position: "absolute", left: 0, top: 0,
         width: SCENE_WIDTH, height: SCENE_HEIGHT, transformOrigin: "top left",
@@ -384,4 +386,6 @@ export function getBounceOffset(elapsed: number) {
 
   return Math.sin(progress * Math.PI * 2) * COMBAT_ANIMATION.bounceDistance;
 }
+
+
 

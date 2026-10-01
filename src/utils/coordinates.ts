@@ -39,3 +39,5 @@ export function layoutRoomActors(actors: { id: string; position?: ScenePosition 
   }
   return slots;
 }
+
+

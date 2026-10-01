@@ -2,5 +2,5 @@
 html, body { width: 100%; min-height: 100%; margin: 0; }
 body { overflow-x: hidden; overflow-y: auto; background: #e8edf3; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
 button, input, select { font: inherit; }
-.phone-preview { width: min(100%, 430px); height: max(100dvh, 850px); margin-inline: auto; overflow: hidden; background: #111827; box-shadow: 0 0 40px #17203322; }
+.phone-preview { position: relative; width: min(100%, 430px); max-width: 430px; height: 100vh; max-height: 100vh; min-height: 0; margin-inline: auto; overflow: hidden; background: #111827; box-shadow: 0 0 40px #17203322; }
 @media (max-width: 430px) { .phone-preview { width: 100%; box-shadow: none; } }

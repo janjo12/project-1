@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type PropsWithChildren } from "react";
-import { Text, View } from "react-native";
+import { Text, View, useWindowDimensions } from "react-native";
 
 import { ClassBriefing } from "@/components/Common/ClassBriefing";
 import { Container, Footer, Header, Row, StyledModal, StyledText, Title } from "@/components/Common/Displays";
@@ -173,8 +173,12 @@ function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onExit }: 
   onGameOver: (score: number) => void;
   onExit: () => void;
 }) {
+  const { height } = useWindowDimensions();
+  const compactLayout = height < 800;
+  const tinyLayout = height < 500;
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isQuitConfirmOpen, setIsQuitConfirmOpen] = useState(false);
+  const [isMapOpen, setIsMapOpen] = useState(false);
   const [microgameScore, setMicrogameScore] = useState<number | null>(null);
   const [classIntroPage, setClassIntroPage] = useState(0);
   const colors = useThemeColors();
@@ -217,19 +221,18 @@ function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onExit }: 
   return (
     <ScreenShell compact>
       <GameHeader onMenu={() => setIsMenuOpen(true)} />
-      <DebugBar accessibilityLabel="Turn status" accessibilityRole="text">{`${game.istest ? "TEST · " : ""}${microgameScore === null ? game.turnStatus : `${game.turnStatus} · Last microgame ${microgameScore}/100`}`}</DebugBar>
-      <NormalButton accessibilityLabel="Practice attack microgame" accessibilityRole="button" label="Practice Attack" onPress={startMicrogame} />
-      <DungeonMap currentRoomId={game.currentRoomId} map={game.visibleDungeonMap} />
+      {!tinyLayout ? <DebugBar accessibilityLabel="Turn status" accessibilityRole="text">{`${game.istest ? "TEST · " : ""}${microgameScore === null ? game.turnStatus : `${game.turnStatus} · Last microgame ${microgameScore}/100`}`}</DebugBar> : null}
+      {!tinyLayout ? <DungeonMap currentRoomId={game.currentRoomId} map={game.visibleDungeonMap} /> : null}
       <Row>
         {settings.handedness === "left" ? <><ChargeControl charged={game.isCharged} disabled={game.isResolving || game.hasLost || (!game.isCharged && game.playerEnergy < GAME_PARAMETERS.combat.chargeEnergyCost)} onPress={game.toggleCharge} />{controls}</> : <>{controls}<ChargeControl charged={game.isCharged} disabled={game.isResolving || game.hasLost || (!game.isCharged && game.playerEnergy < GAME_PARAMETERS.combat.chargeEnergyCost)} onPress={game.toggleCharge} /></>}
       </Row>
-      <Text style={{ color: colors.sepia, fontSize: 12, textAlign: "center" }}>Charge: stronger attack, full block + counter, or move / pick up without using a turn.</Text>
-      <ResourceBarGroup>
-        <ResourceBar accessibilityLabel="Player health" color={colors.health} current={game.playerHealth} icon="heart" max={PLAYER_MAX_HEALTH} panelPosition="first" testID="player-health-bar" />
-        <ResourceBar accessibilityLabel="Player energy" color={colors.energy} current={game.playerEnergy} icon="bolt" max={PLAYER_MAX_ENERGY} panelPosition={game.hasTurnTimer ? "middle" : "last"} testID="player-energy-bar" />
-        {game.hasTurnTimer ? <ResourceBar accessibilityLabel="Turn timer" color={colors.timer} current={game.turnTimeRemaining} icon="hourglass-half" max={game.turnDuration} panelPosition="last" testID="turn-timer" /> : null}
+      {!compactLayout ? <Text style={{ color: colors.sepia, fontSize: 12, textAlign: "center" }}>Charge: stronger attack, full block + counter, or move / pick up without using a turn.</Text> : null}
+      <ResourceBarGroup compact={compactLayout}>
+        <ResourceBar compact={compactLayout} accessibilityLabel="Player health" color={colors.health} current={game.playerHealth} icon="heart" max={PLAYER_MAX_HEALTH} panelPosition="first" testID="player-health-bar" />
+        <ResourceBar compact={compactLayout} accessibilityLabel="Player energy" color={colors.energy} current={game.playerEnergy} icon="bolt" max={PLAYER_MAX_ENERGY} panelPosition={game.hasTurnTimer ? "middle" : "last"} testID="player-energy-bar" />
+        {game.hasTurnTimer ? <ResourceBar compact={compactLayout} accessibilityLabel="Turn timer" color={colors.timer} current={game.turnTimeRemaining} icon="hourglass-half" max={game.turnDuration} panelPosition="last" testID="turn-timer" /> : null}
       </ResourceBarGroup>
-      <Text style={{ color: colors.ink, fontSize: 13, fontWeight: "700", textAlign: "center" }}>Tap a monster to attack, an item to pick it up, a doorway to move, your hero to defend, or stairs to descend.</Text>
+      {!compactLayout ? <Text style={{ color: colors.ink, fontSize: 13, fontWeight: "700", textAlign: "center" }}>Tap a monster to attack, an item to pick it up, a doorway to move, your hero to defend, or stairs to descend.</Text> : null}
       <GameViewPanel
         sceneFrameStore={game.sceneFrameStore}
         canUnlockDoors={game.inventoryItem === "key" || game.playerClass.id === "thief"}
@@ -262,6 +265,8 @@ function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onExit }: 
           <ToggleButton label="Dark Mode" value={settings.appearance === "dark"} onValueChange={value => onSettingsChange({ appearance: value ? "dark" : "light" })} />
           <ToggleButton label="Vibration" value={settings.vibrationEnabled} onValueChange={value => onSettingsChange({ vibrationEnabled: value })} />
         </Container>
+        {tinyLayout ? <NormalButton accessibilityLabel="Open dungeon map" accessibilityRole="button" label="Dungeon Map" onPress={() => { setIsMenuOpen(false); setIsMapOpen(true); }} /> : null}
+        <NormalButton accessibilityLabel="Practice attack microgame" accessibilityRole="button" label="Practice Attack" onPress={() => { setIsMenuOpen(false); startMicrogame(); }} />
         <PrimaryButton accessibilityLabel="Back to Game" accessibilityRole="button" label="Back to Game" onPress={() => setIsMenuOpen(false)} />
         <DestructiveButton accessibilityLabel="Quit to Title" accessibilityRole="button" label="Quit to Title" onPress={() => setIsQuitConfirmOpen(true)} />
       </StyledModal>
@@ -272,6 +277,11 @@ function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onExit }: 
           <CancelButton accessibilityLabel="Cancel" accessibilityRole="button" label="Cancel" onPress={() => setIsQuitConfirmOpen(false)} />
           <DestructiveButton accessibilityLabel="Quit" accessibilityRole="button" label="Quit" onPress={() => { setIsQuitConfirmOpen(false); setIsMenuOpen(false); onExit(); }} />
         </Row>
+      </StyledModal>
+      <StyledModal accessibilityLabel="Dungeon map" accessibilityRole="dialog" animationType="fade" onRequestClose={() => setIsMapOpen(false)} visible={isMapOpen}>
+        <Title>Dungeon Map</Title>
+        <DungeonMap currentRoomId={game.currentRoomId} map={game.visibleDungeonMap} />
+        <PrimaryButton accessibilityLabel="Close map" accessibilityRole="button" label="Close map" onPress={() => setIsMapOpen(false)} />
       </StyledModal>
     </ScreenShell>
   );

@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View, useWindowDimensions } from "react-native";
 
 import { PixelSprite } from "@/components/Common/PixelSprite";
 import { useThemeColors, type ThemeColors } from "@/components/Common/theme";
@@ -15,18 +15,21 @@ export function DungeonMap({
   map,
 }: DungeonMapProps) {
   const colors = useThemeColors();
-  const styles = createStyles(colors);
+  const { height } = useWindowDimensions();
+  const compact = height < 800;
+  const veryCompact = height < 500;
+  const styles = createStyles(colors, compact, veryCompact);
   const roomMap = new Map(getRooms(map).map((room) => [room.id, room]));
   const currentRoomPosition = getRoomPosition(currentRoomId);
 
   return (
     <View
       accessibilityLabel={`Level ${map.level} Map`}
-      style={styles.wrapper}
+      style={[styles.wrapper, compact && styles.compactWrapper]}
       testID="dungeon-map"
     >
       <Text style={styles.title}>Level {map.level} Map</Text>
-      <View style={styles.columnHeaderRow}>
+      {!veryCompact ? <View style={styles.columnHeaderRow}>
         <View style={styles.cornerLabel} />
         {map.rows.map((columnNumber) => {
           const isCurrentColumn = columnNumber === currentRoomPosition?.row;
@@ -44,7 +47,7 @@ export function DungeonMap({
             </Text>
           );
         })}
-      </View>
+      </View> : null}
 
       <View style={[styles.body, { aspectRatio: map.rows.length / map.columns.length }]}>
         <View style={styles.rowLabels}>
@@ -158,13 +161,13 @@ export function DungeonMap({
           ))}
         </View>
       </View>
-      <View style={styles.legend} accessibilityLabel="Map color key">
+      {!veryCompact ? <View style={styles.legend} accessibilityLabel="Map color key">
         <LegendChip color={colors.mapCurrentRoom} label="You" styles={styles} />
         <LegendChip color={colors.mapEnemyRoom} label="Monster" styles={styles} />
         <LegendChip color={colors.mapItemRoom} label="Item" styles={styles} />
         <LegendChip color={colors.mapStairsRoom} label="Stairs" styles={styles} />
         <LegendChip color={colors.mapExploredRoom} label="Explored" styles={styles} />
-      </View>
+      </View> : null}
     </View>
   );
 }
@@ -173,12 +176,16 @@ function LegendChip({ color, label, styles }: { color: string; label: string; st
   return <View style={styles.legendItem}><View style={[styles.legendSwatch, { backgroundColor: color }]} /><Text style={styles.legendLabel}>{label}</Text></View>;
 }
 
-function createStyles(colors: ThemeColors) {
+function createStyles(colors: ThemeColors, compact: boolean, veryCompact: boolean) {
   return StyleSheet.create({
     wrapper: {
       alignSelf: "stretch",
       gap: 4,
       width: "100%",
+    },
+    compactWrapper: {
+      alignSelf: "center",
+      maxWidth: veryCompact ? 140 : 180,
     },
     body: {
       flexDirection: "row",
@@ -186,7 +193,7 @@ function createStyles(colors: ThemeColors) {
     },
     title: {
       color: colors.ink,
-      fontSize: 14,
+      fontSize: veryCompact ? 10 : 14,
       fontWeight: "900",
       lineHeight: 18,
       textAlign: "center",
@@ -202,10 +209,10 @@ function createStyles(colors: ThemeColors) {
     columnLabel: {
       color: colors.fadedInk,
       flex: 1,
-      fontSize: 17,
+      fontSize: compact ? 11 : 17,
       fontVariant: ["tabular-nums"],
       fontWeight: "900",
-      lineHeight: 20,
+      lineHeight: compact ? 12 : 20,
       textAlign: "center",
     },
     currentAxisLabel: {
@@ -218,10 +225,10 @@ function createStyles(colors: ThemeColors) {
     rowLabel: {
       color: colors.fadedInk,
       flex: 1,
-      fontSize: 16,
+      fontSize: compact ? 11 : 16,
       fontVariant: ["tabular-nums"],
       fontWeight: "900",
-      lineHeight: 14,
+      lineHeight: compact ? 10 : 14,
       textAlign: "right",
       textAlignVertical: "center",
     },
@@ -242,7 +249,7 @@ function createStyles(colors: ThemeColors) {
       borderRightWidth: 1,
       flex: 1,
       justifyContent: "center",
-      minHeight: 22,
+      minHeight: veryCompact ? 8 : compact ? 12 : 22,
     },
     room: {
       alignItems: "center",
