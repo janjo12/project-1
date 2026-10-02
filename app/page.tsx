@@ -234,7 +234,7 @@ function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onExit }: 
         <ResourceBar compact={compactLayout} accessibilityLabel="Player energy" color={colors.energy} current={game.playerEnergy} icon="bolt" max={PLAYER_MAX_ENERGY} panelPosition={game.hasTurnTimer ? "middle" : "last"} testID="player-energy-bar" />
         {game.hasTurnTimer ? <TurnTimerBar compact={compactLayout} accessibilityLabel="Turn timer" color={colors.timer} max={game.turnDuration} panelPosition="last" store={game.turnClockStore} testID="turn-timer" /> : null}
       </ResourceBarGroup>
-      {!compactLayout ? <Text style={{ color: colors.ink, fontSize: 13, fontWeight: "700", textAlign: "center" }}>Tap a monster to attack, an item to pick it up, a doorway to move, your hero to defend, or stairs to descend.</Text> : null}
+      {!compactLayout ? <Text style={{ color: colors.ink, fontSize: 13, fontWeight: "700", textAlign: "center" }}>Tap a monster to attack, an item to pick it up, a doorway to move, your hero to use their class support skill, or stairs to descend.</Text> : null}
       <GameViewPanel
         sceneFrameStore={game.sceneFrameStore}
         canUnlockDoors={game.inventoryItem === "key" || game.playerClass.id === "thief"}

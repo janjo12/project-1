@@ -28,7 +28,7 @@ function fixture(): DungeonMap {
   return map;
 }
 
-async function setup(enemy = false, meal = false, enemyHealth = 20, enemyDamage = 2) {
+async function setup(enemy = false, meal = false, enemyHealth = 20, enemyDamage = 2, difficulty: "easy" | "normal" | "hard" = "normal", seed = "charge-test") {
   const map = fixture();
   if (enemy) {
     map.entities.monsters.zombie = { id: "zombie", name: "Zombie", sprite: "🧟", type: "monster", currentHealth: enemyHealth, maximumHealth: enemyHealth, damage: enemyDamage };
@@ -40,7 +40,7 @@ async function setup(enemy = false, meal = false, enemyHealth = 20, enemyDamage 
   }
   require("@/game/engine/run-game-helpers").createLevelMap.mockReturnValue(map);
   require("@/game/dungeon/mapStorage").createAndSaveSeededDungeonMap.mockResolvedValue(map);
-  const hook = renderHook(() => useRunGame({ difficulty: "normal", istest: false, seed: "charge-test", vibrationEnabled: false, onGameOver: jest.fn() }));
+  const hook = renderHook(() => useRunGame({ difficulty, istest: false, seed, vibrationEnabled: false, onGameOver: jest.fn() }));
   await act(async () => {});
   return hook;
 }
@@ -105,15 +105,24 @@ test("normal attacks are free; charged attacks hit harder without a second energ
   expect(result.current.isCharged).toBe(false);
 });
 
-test("charged defense blocks damage and doubles counterattack", async () => {
-  const { result } = await setup(true);
+test("a hard-mode timeout skips the action without generic defense or support", async () => {
+  const { result } = await setup(true, false, 100, 20, "hard", "testwarrior");
   const health = result.current.playerHealth;
   act(() => result.current.toggleCharge());
-  act(() => result.current.defend());
+  act(() => result.current.expireTurn());
   await act(async () => { jest.runAllTimers(); });
-  expect(result.current.playerHealth).toBe(health);
-  expect(result.current.dungeonMap.entities.monsters.zombie.currentHealth).toBe(18);
+  expect(result.current.playerHealth).toBeLessThan(health);
+  expect(result.current.dungeonMap.entities.monsters.zombie.currentHealth).toBe(100);
+  expect(result.current.playerEnergy).toBe(PLAYER_MAX_ENERGY);
   expect(result.current.isCharged).toBe(false);
+});
+
+test("a hard-mode timeout still consumes warrior support when an enemy attacks", async () => {
+  const { result } = await setup(true, false, 100, 20, "hard", "testwarrior");
+  act(() => result.current.supportSelf());
+  act(() => result.current.expireTurn());
+  await act(async () => { jest.runAllTimers(); });
+  expect(result.current.dungeonMap.entities.monsters.zombie.currentHealth).toBeLessThan(100);
 });
 
 test("empty energy cannot charge but the final reserved energy can be refunded", async () => {

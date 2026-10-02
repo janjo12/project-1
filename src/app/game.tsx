@@ -236,7 +236,7 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
       </ResourceBarGroup>
 
       {!compactLayout ? <Text style={{ color: colors.ink, fontSize: 13, fontWeight: "700", textAlign: "center" }}>
-        Tap a monster to attack, an item to pick it up, a doorway to move, your hero to defend, or stairs to descend.
+        Tap a monster to attack, an item to pick it up, a doorway to move, your hero to use their class support skill, or stairs to descend.
       </Text> : null}
 
       <GameViewPanel

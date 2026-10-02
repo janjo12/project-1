@@ -6,7 +6,6 @@ import { GAME_PARAMETERS } from "@/game/config/gameparameters";
 import { createLevelMap } from "@/game/engine/run-game-level";
 import { getRunSnapshot } from "@/game/engine/run-game-snapshot";
 import { PLAYER_MAX_ENERGY, PLAYER_MAX_HEALTH } from "@/game/state/types";
-import { getEnemyAttackOutcome } from "@/game/engine/combat";
 import { getHardTurnLimit, getTurnDuration, hasTurnLimit, resolveTurnLoss } from "@/game/engine/resolveTurn";
 import { POSSIBLE_EQUIPMENT, POSSIBLE_ITEMS, type Direction, type DungeonMap } from "@/game/dungeon/types";
 import {
@@ -140,7 +139,7 @@ export function resolveMultiplayerTurn(
     }
     return state;
   }
-  // Resolve support before any player takes a hit so it works regardless of player ID order.
+  // Resolve class-specific support before player actions so it works regardless of player ID order.
   for (const [id, source] of Object.entries(state.players)) {
     const action = actions.get(id);
     if (action?.type !== "SUPPORT") continue;
@@ -167,9 +166,9 @@ export function resolveMultiplayerTurn(
   for (const player of Object.values(state.players)) {
     // Player iteration follows roster insertion order; that order decides contested pickups deterministically.
     if (player.health <= 0) continue;
-    const action = actions.get(player.id) ?? { type: "DEFEND" };
+    const action = actions.get(player.id);
     const room = getRoom(state.map, player.roomId);
-    if (action.type === "DROP_EQUIPMENT") {
+    if (action?.type === "DROP_EQUIPMENT") {
       if (player.equipment) {
         state.map = addEquipmentToRoom(state.map, player.roomId, player.equipment);
         player.equipment = null;
@@ -182,7 +181,7 @@ export function resolveMultiplayerTurn(
       }
       continue;
     }
-    const isChargeableAction = ["ATTACK", "DEFEND", "MOVE", "PICKUP", "PICKUP_EQUIPMENT"].includes(action.type);
+    const isChargeableAction = !!action && ["ATTACK", "MOVE", "PICKUP", "PICKUP_EQUIPMENT"].includes(action.type);
     const chargeCost = getEquipmentStats(player.equipment ?? null).chargeCost;
     const charged = isChargeableAction && !!action.charged && player.energy >= chargeCost;
     if (charged) {
@@ -190,14 +189,14 @@ export function resolveMultiplayerTurn(
       player.energy = result.nextEnergy;
       if (result.usesMeal) player.item = null;
     }
-    const isThiefLockPick = action.type === "MOVE" &&
+    const isThiefLockPick = action?.type === "MOVE" &&
       player.classId === "thief" && player.item !== "key" &&
       room?.[action.target as Direction] === "locked";
-    const isFreeAction = action.type === "MOVE" || action.type === "PICKUP" || action.type === "PICKUP_EQUIPMENT";
+    const isFreeAction = action?.type === "MOVE" || action?.type === "PICKUP" || action?.type === "PICKUP_EQUIPMENT";
     if (charged && isFreeAction && !isThiefLockPick) {
       player.energy = Math.min(PLAYER_MAX_ENERGY, player.energy + chargeCost);
     }
-    if (action.type === "MOVE" && ["north", "east", "south", "west"].includes(action.target ?? "")) {
+    if (action?.type === "MOVE" && ["north", "east", "south", "west"].includes(action.target ?? "")) {
       const direction = action.target as Direction;
       const wasLocked = room?.[direction] === "locked";
       const hadKey = player.item === "key";
@@ -215,7 +214,7 @@ export function resolveMultiplayerTurn(
         }
       }
     }
-    if (action.type === "ATTACK") {
+    if (action?.type === "ATTACK") {
       const monster = getTargetableMonsters(state.map, room).find(m => m.id === action.target);
       if (monster) {
         const silver = monster.chases && player.item === "silver-bullet";
@@ -233,8 +232,7 @@ export function resolveMultiplayerTurn(
         if (silver) player.item = null;
       }
     }
-    if (action.type === "SUPPORT") continue;
-    if (action.type === "PICKUP_EQUIPMENT" || (action.type === "PICKUP" && getRoomEquipment(state.map, room))) {
+    if (action?.type === "PICKUP_EQUIPMENT" || (action?.type === "PICKUP" && getRoomEquipment(state.map, room))) {
       const held = getRoomEquipment(state.map, getRoom(state.map, player.roomId));
       if (held) {
         state.map = removeEquipmentFromRoom(state.map, player.roomId, held.id);
@@ -242,7 +240,7 @@ export function resolveMultiplayerTurn(
         player.equipment = held.equipmentId;
       }
     }
-    if (action.type === "PICKUP") {
+    if (action?.type === "PICKUP") {
       const item = getRoomItem(state.map, room);
       if (item) {
         // Remove the instance ID, not the item's kind (there can be several of a kind).
@@ -254,19 +252,14 @@ export function resolveMultiplayerTurn(
     }
     const enemy = getRoomMonster(state.map, getRoom(state.map, player.roomId));
     if (enemy) {
-      const defending = action.type === "DEFEND";
-      const outcome = getEnemyAttackOutcome({ isDefending: defending, monsterDamage: enemy.damage });
       const protector = player.vanguardSource ? state.players[player.vanguardSource] : null;
       const recipient = protector && protector.health > 0 && protector.roomId === player.roomId ? protector : player;
       const recipientClassDefense = recipient.classId === "warrior" ? 15 : GAME_PARAMETERS.player.defense;
-      const chargedBlock = defending && charged && recipient.id === player.id;
-      const protectorDefenseBonus = chargedBlock && recipient.classId === "warrior" ? 5 : 0;
-      const incomingDamage = chargedBlock ? 0 : applyDefense(
-        outcome.damageTaken,
+      const incomingDamage = applyDefense(
+        enemy.damage,
         recipientClassDefense +
           getEquipmentStats(recipient.equipment).defense +
-          recipient.defenseBuff +
-          protectorDefenseBonus,
+          recipient.defenseBuff,
       );
       applyPlayerDamage(recipient, incomingDamage);
       if (player.vanguard > 0) {
@@ -274,13 +267,11 @@ export function resolveMultiplayerTurn(
           state.map,
           player.roomId,
           enemy.id,
-          applyDefense(outcome.damageTaken, enemy.defense ?? 0),
+          applyDefense(enemy.damage, enemy.defense ?? 0),
         );
         player.vanguard = 0;
       }
       player.vanguardSource = null;
-      if (defending) state.map = damageMonsterInRoom(state.map, player.roomId, enemy.id,
-        charged ? GAME_PARAMETERS.combat.chargedCounterattackDamage : outcome.counterattackDamage);
     }
   }
   for (const player of Object.values(state.players)) {

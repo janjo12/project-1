@@ -68,7 +68,7 @@ test("exports complete offer and answer text and applies the answer to its host 
   await acceptAnswer(host.pc, client.answerText);
   expect(host.pc.setRemoteDescription).toHaveBeenCalledWith(expect.objectContaining({ type: "answer" }));
   await expect(acceptAnswer(host.pc, client.answerText)).rejects.toThrow("not waiting");
-  expect(() => client.send({ type: "SUBMIT_ACTION", turn: 0, action: { type: "DEFEND" } })).toThrow("not arrived");
+  expect(() => client.send({ type: "SUBMIT_ACTION", turn: 0, action: { type: "SUPPORT" } })).toThrow("not arrived");
 });
 
 test("rejects malformed signaling and messages and sending before open", async () => {
@@ -77,9 +77,10 @@ test("rejects malformed signaling and messages and sending before open", async (
   expect(() => parseMessage('{"type":"SUBMIT_ACTION","turn":0,"action":{"type":"CHEAT"}}')).toThrow();
   expect(() => parseMessage("{" )).toThrow(SyntaxError);
   expect(() => parseMessage(JSON.stringify({ type: "TURN_RESULT", turn: 2, state: { turn: 1 } }))).toThrow("Invalid game message");
-  expect(() => parseMessage(JSON.stringify({ type: "SUBMIT_ACTION", turn: -1, action: { type: "DEFEND" } }))).toThrow("Invalid game message");
+  expect(() => parseMessage(JSON.stringify({ type: "SUBMIT_ACTION", turn: -1, action: { type: "SUPPORT" } }))).toThrow("Invalid game message");
+  expect(() => parseMessage(JSON.stringify({ type: "SUBMIT_ACTION", turn: 0, action: { type: "DEFEND" } }))).toThrow("Invalid game message");
   const host = await createHostConnection();
-  expect(() => sendMessage(host.channel, { type: "SUBMIT_ACTION", turn: 0, action: { type: "DEFEND" } })).toThrow("not open");
+  expect(() => sendMessage(host.channel, { type: "SUBMIT_ACTION", turn: 0, action: { type: "SUPPORT" } })).toThrow("not open");
 });
 
 test("failed native offer creation closes the partially created peer", async () => {
@@ -124,12 +125,12 @@ test("host collects one action per participant, rejects stale turns, and broadca
   peers().forEach(p => { p.channel.readyState = "open"; });
   session.start();
   const receive = (index: number, turn = 0) => mockChannels()[index].emit("message", {
-    data: JSON.stringify({ type: "SUBMIT_ACTION", turn, action: { type: "DEFEND" } }),
+    data: JSON.stringify({ type: "SUBMIT_ACTION", turn, action: { type: "SUPPORT" } }),
   });
   receive(0, 99);
   receive(0);
   receive(0);
-  expect(session.submitHostAction(0, { type: "DEFEND" })).toBe(true);
+  expect(session.submitHostAction(0, { type: "SUPPORT" })).toBe(true);
   expect(resolveTurn).not.toHaveBeenCalled();
   receive(1);
   expect(resolveTurn).toHaveBeenCalledTimes(1);
@@ -146,7 +147,7 @@ test("explicit timeout can resolve missing actions and disconnect drops a partic
   peers()[0].channel.readyState = "open";
   session.start();
   session.finishTurn();
-  session.submitHostAction(1, { type: "DEFEND" });
+  session.submitHostAction(1, { type: "SUPPORT" });
   session.removePlayer("p2");
   expect(resolver).toHaveBeenCalledTimes(2);
   session.close();
@@ -179,8 +180,8 @@ test("resolver failures allow the host to retry the turn", async () => {
   await session.addPlayer("guest");
   peers()[0].channel.readyState = "open";
   session.start();
-  expect(() => session.submitHostAction(0, { type: "DEFEND" })).not.toThrow();
-  mockChannels()[0].emit("message", { data: JSON.stringify({ type: "SUBMIT_ACTION", turn: 0, action: { type: "DEFEND" } }) });
+  expect(() => session.submitHostAction(0, { type: "SUPPORT" })).not.toThrow();
+  mockChannels()[0].emit("message", { data: JSON.stringify({ type: "SUBMIT_ACTION", turn: 0, action: { type: "SUPPORT" } }) });
   expect(resolveTurn).toHaveBeenCalledTimes(1);
   expect(onError).toHaveBeenCalledWith(new Error("temporary resolver failure"));
   expect(session.state.turn).toBe(0);

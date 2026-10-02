@@ -1,4 +1,4 @@
-export { getEnemyAttackOutcome, getPlayerAttackDamage, applyDefense } from "./combat";
+export { getPlayerAttackDamage, applyDefense } from "./combat";
 export { getAttackTarget } from "./targeting";
 export { resolveRoomMovement } from "./movement";
 export {

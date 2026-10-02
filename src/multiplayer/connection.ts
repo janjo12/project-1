@@ -17,7 +17,7 @@ const channelEvents = (channel: GameChannel) => channel as unknown as EventSourc
 }>;
 type Configuration = NonNullable<ConstructorParameters<typeof RTCPeerConnection>[0]>;
 export type GameState = { turn: number; [key: string]: unknown };
-export type PlayerAction = { type: "MOVE" | "ATTACK" | "DEFEND" | "SUPPORT" | "CLASS_READY" | "PICKUP" | "PICKUP_EQUIPMENT" | "DROP_EQUIPMENT" | "DESCEND"; target?: string; charged?: boolean; microgameScore?: number };
+export type PlayerAction = { type: "MOVE" | "ATTACK" | "SUPPORT" | "CLASS_READY" | "PICKUP" | "PICKUP_EQUIPMENT" | "DROP_EQUIPMENT" | "DESCEND"; target?: string; charged?: boolean; microgameScore?: number };
 export type NetworkMessage =
   | { type: "PLAYER_INFO"; playerId: string; name: string }
   | { type: "SUBMIT_ACTION"; turn: number; action: PlayerAction }
@@ -75,7 +75,7 @@ function validTurn(value: unknown): value is number {
 }
 function validAction(value: unknown): value is PlayerAction {
   // Treat data-channel payloads as untrusted input and reject unsupported action shapes at the boundary.
-  return record(value) && ["MOVE", "ATTACK", "DEFEND", "SUPPORT", "CLASS_READY", "PICKUP", "PICKUP_EQUIPMENT", "DROP_EQUIPMENT", "DESCEND"].includes(String(value.type)) &&
+  return record(value) && ["MOVE", "ATTACK", "SUPPORT", "CLASS_READY", "PICKUP", "PICKUP_EQUIPMENT", "DROP_EQUIPMENT", "DESCEND"].includes(String(value.type)) &&
     (value.charged === undefined || typeof value.charged === "boolean") &&
     (value.microgameScore === undefined || (typeof value.microgameScore === "number" && Number.isFinite(value.microgameScore) && value.microgameScore >= 0 && value.microgameScore <= 100)) &&
     (value.target === undefined || typeof value.target === "string");

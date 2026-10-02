@@ -42,7 +42,6 @@ import {
   type ItemId,
   type WorldMonster,
 } from "@/game/dungeon/types";
-import { getEnemyAttackOutcome } from "@/game/engine/combat";
 import { resolveRoomMovement } from "@/game/engine/movement";
 import {
   applyWerewolfChaseAfterAction,
@@ -58,7 +57,6 @@ import { gameReducer, type GameStateAction } from "@/game/state/gameReducer";
 import { createInitialGameState } from "@/game/state/initialGameState";
 import { createNumberStore } from "@/game/state/numberStore";
 import { PLAYER_MAX_ENERGY, PLAYER_MAX_HEALTH, playerEntryPositions, type GameState, type UseGameRunOptions } from "@/game/state/types";
-export { getEnemyAttackOutcome } from "@/game/engine/combat";
 export {
   applyWerewolfChaseAfterAction,
   getHardTurnLimit,
@@ -390,12 +388,10 @@ export function useRunGame({
   const startEnemyMove = useCallback(
     ({
       enemyIds,
-      isDefending,
       mapAtEnd,
       roomId,
     }: {
       enemyIds: string[];
-      isDefending: boolean;
       mapAtEnd?: DungeonMapType;
       roomId: string;
     }) => {
@@ -413,23 +409,17 @@ export function useRunGame({
         let resolvedMap = currentMap;
         // Vanguard's reflected damage is consumed by the first enemy that attacks this turn.
         const reflects = vanguardRef.current > 0;
-        const outcome = getEnemyAttackOutcome({
-          isDefending: isDefending && index === 0,
-          monsterDamage: monster.damage,
-        });
-        const counterattackDamage = isDefending && index === 0
-          ? (chargedRef.current ? GAME_PARAMETERS.combat.chargedCounterattackDamage : outcome.counterattackDamage)
-          : 0;
         const classBaseDefense = GAME_PARAMETERS.player.defense + (playerClass.id === "warrior" ? 5 : 0);
-        const activelyDefending = isDefending && index === 0;
-        const damageTaken = activelyDefending && chargedRef.current ? 0 : applyDefense(
-          outcome.damageTaken,
-          classBaseDefense + getEquipmentStats(equipment).defense + defenseBuffRef.current + (activelyDefending && chargedRef.current ? 5 : 0),
+        const damageTaken = applyDefense(
+          monster.damage,
+          classBaseDefense + getEquipmentStats(equipment).defense + defenseBuffRef.current,
         );
 
         if (reflects) {
+          setEnemyHealthLossAmount(applyDefense(monster.damage, monster.defense ?? 0));
+          restartAnimations(setAnimationFrame, ["playerAttackElapsed", "enemyDamageElapsed", "enemyHealthLossElapsed"]);
           resolvedMap = commitMap(
-            map => damageMonsterInRoom(map, roomId, monsterId, applyDefense(outcome.damageTaken, monster.defense ?? 0)),
+            map => damageMonsterInRoom(map, roomId, monsterId, applyDefense(monster.damage, monster.defense ?? 0)),
             resolvedMap,
           );
           vanguardRef.current = 0;
@@ -439,17 +429,10 @@ export function useRunGame({
           setPlayerHealthLossAmount(damageTaken);
           restartAnimations(setAnimationFrame, ["playerDamageElapsed", "playerHealthLossElapsed"]);
           triggerDamageHaptic();
-          if (counterattackDamage > 0) {
-            setEnemyHealthLossAmount(counterattackDamage);
-            restartAnimations(setAnimationFrame, ["playerAttackElapsed", "enemyDamageElapsed", "enemyHealthLossElapsed"]);
-          }
         });
 
         schedule(GAME_PARAMETERS.animation.enemyTurnDurationMs, () => {
-          let finalMap = resolvedMap;
-          if (counterattackDamage > 0) {
-            finalMap = commitMap(map => damageMonsterInRoom(map, roomId, monsterId, counterattackDamage), resolvedMap);
-          }
+          const finalMap = resolvedMap;
           setPlayerHealth(health => {
             const { nextHealth, usesPotion } = resolveHealthLoss(health, damageTaken, inventoryItemRef.current);
             if (usesPotion) setInventoryItem(null);
@@ -474,11 +457,9 @@ export function useRunGame({
 
   const finishPlayerAction = useCallback(
     ({
-      isDefending = false,
       mapAtEnd,
       startedRoomId,
     }: {
-      isDefending?: boolean;
       mapAtEnd?: DungeonMapType;
       startedRoomId: string;
     }) => {
@@ -490,7 +471,6 @@ export function useRunGame({
         setIsResolving(true);
         startEnemyMove({
           enemyIds: enemiesAtEnd.map(enemy => enemy.id),
-          isDefending,
           mapAtEnd,
           roomId: startedRoomId,
         });
@@ -553,40 +533,7 @@ export function useRunGame({
     });
   }, [commitMap, currentRoomId, finishPlayerAction, schedule]);
 
-  const defend = useCallback(
-    () => {
-      if (isResolving || hasLost) {
-        return;
-      }
-
-      if (!hasRoomEnemy) {
-        lastActionRefundsChargeRef.current = false;
-      cancelCharge(false);
-        finishNonMoveTurn({ roomId: currentRoomId });
-        return;
-      }
-
-      setTurnTimeRemaining(0);
-      setIsResolving(true);
-      lastActionRefundsChargeRef.current = false;
-
-        schedule(GAME_PARAMETERS.animation.defendWindupMs, () =>
-          finishPlayerAction({ isDefending: true, startedRoomId: currentRoomId }),
-        );
-    },
-    [
-      finishPlayerAction,
-      finishNonMoveTurn,
-      hasLost,
-      hasRoomEnemy,
-      isResolving,
-      currentRoomId,
-      schedule,
-      cancelCharge,
-      setTurnTimeRemaining,
-    ],
-  );
-
+  // This is the sole player-triggered support action; its effect comes from the selected class.
   const supportSelf = useCallback(() => {
     if (isResolving || hasLost) return;
     if (playerClass.id === "thief") {
@@ -696,9 +643,13 @@ export function useRunGame({
   );
 
   const expireTurn = useCallback(() => {
+    if (isResolving || hasLost) return;
     setTurnTimeRemaining(0);
-    defend();
-  }, [defend, setTurnTimeRemaining]);
+    lastActionRefundsChargeRef.current = false;
+    // A timeout forfeits the action. It grants neither class support nor a generic defense bonus.
+    cancelCharge();
+    finishPlayerAction({ startedRoomId: currentRoomId });
+  }, [cancelCharge, currentRoomId, finishPlayerAction, hasLost, isResolving, setTurnTimeRemaining]);
   async function pickupItem() {
     if (isResolving || hasLost || !currentRoomItem || !currentRoomItemObject) {
     return;
@@ -823,7 +774,6 @@ export function useRunGame({
     playerHealthLossAmount,
     playerScenePosition,
     attackMonster,
-    defend,
     descend: () =>
       advanceToNextLevel(nextLevelStartingPositionRef.current ?? undefined),
     expireTurn,

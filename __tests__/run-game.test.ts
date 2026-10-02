@@ -7,7 +7,6 @@ import {
 } from "@/game/engine/run-game-helpers";
 import {
     applyWerewolfChaseAfterAction,
-    getEnemyAttackOutcome,
     getHardTurnLimit,
     getTurnDuration,
     hasTurnLimit,
@@ -232,15 +231,6 @@ describe("run-game policies", () => {
     expect(entities.gameLoop.elapsed).toBe(2500);
     expect(onFrame).toHaveBeenCalledWith(200, 0);
     expect(onExpire).toHaveBeenCalledTimes(1);
-  });
-
-  it("halves defended damage and enables the weak counterattack", () => {
-    expect(
-      getEnemyAttackOutcome({ isDefending: true, monsterDamage: 3 }),
-    ).toEqual({ counterattackDamage: 1, damageTaken: 2 });
-    expect(
-      getEnemyAttackOutcome({ isDefending: false, monsterDamage: 3 }),
-    ).toEqual({ counterattackDamage: 0, damageTaken: 3 });
   });
 
   it("moves the existing werewolf into the target room", () => {

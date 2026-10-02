@@ -152,7 +152,7 @@ function Multiplayer({ settings, onLeave }: { settings: GameSettings; onLeave: (
           <StyledText>{getPlayerStatus(state.ended, state.level, player.health, submitted === state.turn)}</StyledText>
           {state.difficulty === "hard" ? (
             <StyledText>
-              {role === "host" ? `Time left: ${seconds}s` : "The host controls the turn timer. Missing actions defend automatically."}
+              {role === "host" ? `Time left: ${seconds}s` : "The host controls the turn timer. Missing actions are skipped; enemies still attack."}
             </StyledText>
           ) : null}
           <StyledText>

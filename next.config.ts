@@ -16,7 +16,7 @@ const nextConfig: NextConfig = {
     "expo-image",
     "expo-modules-core",
   ],
-  webpack(config) {
+  webpack(config, { isServer }) {
     config.resolve.extensions = [
       ".web.tsx",
       ".web.ts",
@@ -35,6 +35,8 @@ const nextConfig: NextConfig = {
     config.plugins.push(
       new webpack.DefinePlugin({
         __DEV__: JSON.stringify(process.env.NODE_ENV !== "production"),
+        // Reanimated's web bundle expects the Node-style `global`; browsers expose the same object as `globalThis`.
+        ...(!isServer ? { global: "globalThis" } : {}),
       }),
     );
     return config;

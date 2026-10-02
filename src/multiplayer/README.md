@@ -12,9 +12,9 @@ There is no signaling server or third game-host device. This first version uses 
 
 ## Gameplay
 
-Each device controls its own character, position, inventory, health and energy in a shared dungeon. Choose one action per team turn by tapping doors, enemies, items or your character (defend). Charge modifies the next action. The host resolves actions in stable roster order, so contested loot goes to the first player in that order. Shared enemy health and doors update on all devices.
+Each device controls its own character, position, inventory, health and energy in a shared dungeon. Choose one action per team turn by tapping doors, enemies, items or your character to use its class-specific support skill. Charge modifies the next action. The host resolves actions in stable roster order, so contested loot goes to the first player in that order. Shared enemy health and doors update on all devices.
 
-Hard mode uses a host-owned timer with missing actions defaulting to defend; easy/normal wait for each living player. All living players must gather at the stairs before one chooses to descend. Fallen players spectate and revive on the next level. The run ends when everyone falls or the shared turn budget runs out. Multiplayer uses simultaneous team turns rather than the single-player animation sequence or charged free-turn mechanic.
+Hard mode uses a host-owned timer; missing actions are skipped while enemies still attack. Easy/normal wait for each living player. All living players must gather at the stairs before one chooses to descend. Fallen players spectate and revive on the next level. The run ends when everyone falls or the shared turn budget runs out. Multiplayer uses simultaneous team turns rather than the single-player animation sequence or charged free-turn mechanic.
 
 Keep the host foregrounded. Host migration/rejoining an active run is not implemented. A closed peer is removed; leave and create a new lobby if the host disconnects. A Wi-Fi failure can take time for WebRTC to detect. Connecting or failed lobby peers can be removed and invited again.
 

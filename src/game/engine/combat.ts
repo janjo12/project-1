@@ -7,16 +7,6 @@ export function getPlayerAttackDamage(monster: WorldMonster, hasEnergy: boolean)
   return hasEnergy ? GAME_PARAMETERS.combat.strongAttackDamage : GAME_PARAMETERS.combat.normalAttackDamage;
 }
 
-export function getEnemyAttackOutcome({ isDefending, monsterDamage }: { isDefending: boolean; monsterDamage: number }) {
-  // Defend halves incoming damage and enables a small counterattack; tuning either changes both modes.
-  return {
-    counterattackDamage: isDefending ? GAME_PARAMETERS.combat.counterattackDamage : 0,
-    damageTaken: isDefending
-      ? Math.ceil(monsterDamage * GAME_PARAMETERS.combat.defendDamageMultiplier)
-      : monsterDamage,
-  };
-}
-
 export function applyDefense(damage: number, defense = 0) {
   // Clamp at zero so stacked armor or class bonuses never turn a hit into healing.
   return Math.max(0, damage - defense);

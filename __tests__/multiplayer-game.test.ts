@@ -92,7 +92,7 @@ test("warrior support redirects an ally's hit and resolves before player order",
   room.contents = [{ type: "monster", id: "guard" }];
   state.map.entities.monsters.guard = { id: "guard", type: "monster", name: "Guard", sprite: "g", damage: 40, currentHealth: 100, maximumHealth: 100 };
   const next = resolveMultiplayerTurn(state, new Map([
-    ["host", { type: "DEFEND" }],
+    ["host", { type: "SUPPORT" }],
     ["guest", { type: "SUPPORT", target: "host", charged: true }],
   ]));
   expect(next.players.host.health).toBe(PLAYER_MAX_HEALTH);
@@ -101,7 +101,18 @@ test("warrior support redirects an ally's hit and resolves before player order",
   expect(next.map.entities.monsters.guard.currentHealth).toBeLessThan(100);
   const reversedActions = new Map<string, PlayerAction>([
     ["guest", { type: "SUPPORT", target: "host", charged: true }],
-    ["host", { type: "DEFEND" }],
+    ["host", { type: "SUPPORT" }],
   ]);
   expect(resolveMultiplayerTurn(state, reversedActions)).toEqual(next);
+});
+
+test("missing multiplayer actions do not block enemy damage or counterattack", () => {
+  const state = initial();
+  const room = getRoom(state.map, state.players.host.roomId)!;
+  room.contents = [{ type: "monster", id: "guard" }];
+  state.map.entities.monsters.guard = { id: "guard", type: "monster", name: "Guard", sprite: "g", damage: 20, currentHealth: 100, maximumHealth: 100 };
+  const next = resolveMultiplayerTurn(state, new Map());
+  expect(next.players.host.health).toBeLessThan(PLAYER_MAX_HEALTH);
+  expect(next.players.guest.health).toBeLessThan(PLAYER_MAX_HEALTH);
+  expect(next.map.entities.monsters.guard.currentHealth).toBe(100);
 });
