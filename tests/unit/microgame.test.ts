@@ -1,4 +1,4 @@
-import { CONCENTRATION_TARGET_DURATION_MS, getConcentrationScore, getMicrogameWindow, getMultitapScore, getTimedAttackScore, HUMAN_REACTION_WINDOW_MS, MICROGAME_MAX_DURATION_MS, MULTITAP_WINDOW_MS, TIMED_ATTACK_CUE_DELAY_MS, TIMED_ATTACK_WINDOW_MS } from "@/game/actions/use-microgame";
+import { CONCENTRATION_TARGET_DURATION_MS, getConcentrationScore, getMicrogameWindow, getMultitapScore, getTimedAttackScore, HUMAN_REACTION_WINDOW_MS, MICROGAME_MAX_DURATION_MS, MULTITAP_TARGET_TAPS, MULTITAP_WINDOW_MS, TIMED_ATTACK_CUE_DELAY_MS, TIMED_ATTACK_WINDOW_MS } from "@/game/actions/use-microgame";
 import { getGameClass } from "@/game/config/game-classes";
 
 test("microgames fit within a 1.5 second window", () => {
@@ -6,8 +6,10 @@ test("microgames fit within a 1.5 second window", () => {
   expect(MICROGAME_MAX_DURATION_MS - CONCENTRATION_TARGET_DURATION_MS).toBe(250);
   expect(TIMED_ATTACK_WINDOW_MS - TIMED_ATTACK_CUE_DELAY_MS).toBeGreaterThanOrEqual(500);
   expect(getMicrogameWindow("multitap")).toBe(MULTITAP_WINDOW_MS);
-  // Ten human-paced taps need room for input dispatch and rendering as well as reaction time.
-  expect(MULTITAP_WINDOW_MS).toBeGreaterThanOrEqual(10 * (HUMAN_REACTION_WINDOW_MS + 150) + 500);
+  // Keep multitap short; adjust the target tap count so ordinary 250 ms taps can still score well.
+  expect(MULTITAP_WINDOW_MS).toBe(3000);
+  expect(MULTITAP_TARGET_TAPS).toBe(6);
+  expect(MULTITAP_WINDOW_MS).toBeGreaterThanOrEqual(MULTITAP_TARGET_TAPS * HUMAN_REACTION_WINDOW_MS);
 });
 
 test("microgame modes use their own score rules", () => {
@@ -16,8 +18,9 @@ test("microgame modes use their own score rules", () => {
   expect(getTimedAttackScore(250)).toBe(100);
   expect(getTimedAttackScore(0)).toBe(50);
   expect(getMultitapScore(0)).toBe(0);
-  expect(getMultitapScore(7)).toBe(70);
-  expect(getMultitapScore(10)).toBe(100);
+  expect(getMultitapScore(4)).toBeCloseTo(67, 0);
+  expect(getMultitapScore(5)).toBeCloseTo(83, 0);
+  expect(getMultitapScore(6)).toBe(100);
 });
 
 test("Thief attacks use the Timed Attack microgame", () => {

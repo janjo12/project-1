@@ -3,6 +3,7 @@ import { Pressable, Text, View, useWindowDimensions } from "react-native";
 
 import { MicrogameCircle, MicrogameCircleOutline } from "@/components/Common/MicrogameCircle";
 import { useThemeColors } from "@/components/Common/theme";
+import { MULTITAP_TARGET_TAPS } from "@/game/actions/use-microgame";
 import { CONCENTRATION_TARGET_DURATION_MS, HUMAN_REACTION_WINDOW_MS, type MicrogameKind } from "@/game/actions/use-microgame";
 import type { NumberStore } from "@/game/state/numberStore";
 
@@ -144,7 +145,7 @@ function MultitapMicrogame({ targetSpot, onTap, clicks = 0 }: MicrogameContentPr
   return (
     <>
       <Text pointerEvents="none" style={{ color: colors.ink, fontSize: 24, fontWeight: "900", textAlign: "center" }}>Tap the ●</Text>
-      <Text accessibilityRole="text" accessibilityLiveRegion="polite" testID="multitap-progress">{clicks}/10 hits</Text>
+      <Text accessibilityRole="text" accessibilityLiveRegion="polite" testID="multitap-progress">{clicks}/{MULTITAP_TARGET_TAPS} hits</Text>
       <View onLayout={event => setTrackWidth(event.nativeEvent.layout.width)} style={{ width: "100%", height: 110, position: "relative", marginTop: 24, justifyContent: "center" }}>
         <Pressable onPress={onTap} accessibilityRole="button" accessibilityLabel="Tap circle" style={{ position: "absolute", left: targetSpot * trackWidth - 22 }}>
           <MicrogameCircle size={44} />

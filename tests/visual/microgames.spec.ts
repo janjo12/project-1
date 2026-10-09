@@ -65,21 +65,21 @@ test("Concentration places the target in the moving circle's path and awards a r
   await expect(page.getByText(/Last microgame (9\d|100)\/100/)).toBeVisible();
 });
 
-test("Multitap moves its visible target and counts ten human-paced taps", async ({ page }) => {
+test("Multitap moves its visible target and counts six human-paced taps", async ({ page }) => {
   await startPractice(page, "testwarrior");
   const overlay = page.getByTestId("microgame-overlay");
   const target = page.getByRole("button", { name: "Tap circle" });
   await expect(overlay.getByText("Tap the ●", { exact: true })).toBeVisible();
   const positions = new Set<string>();
 
-  for (let tap = 0; tap < 10; tap += 1) {
+  for (let tap = 0; tap < 6; tap += 1) {
     const box = await target.boundingBox();
     expect(box).not.toBeNull();
     positions.add(`${Math.round(box!.x)},${Math.round(box!.y)}`);
     await page.clock.runFor(HUMAN_REACTION_WINDOW_MS);
     await target.click();
-    if (tap < 9) await expect(page.getByTestId("multitap-progress")).toHaveText(`${tap + 1}/10 hits`);
-    if (tap === 5) await expect(overlay).toBeVisible();
+    if (tap < 5) await expect(page.getByTestId("multitap-progress")).toHaveText(`${tap + 1}/6 hits`);
+    if (tap === 3) await expect(overlay).toBeVisible();
   }
 
   await expect(overlay).toHaveCount(0);

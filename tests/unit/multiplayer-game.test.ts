@@ -106,6 +106,39 @@ test("warrior support redirects an ally's hit and resolves before player order",
   expect(resolveMultiplayerTurn(state, reversedActions)).toEqual(next);
 });
 
+test("charged Warrior support adds five defense and counters the enemy in multiplayer", () => {
+  const state = initial();
+  state.players.host.classId = "warrior";
+  const room = getRoom(state.map, state.players.host.roomId)!;
+  room.contents = [{ type: "monster", id: "guard" }];
+  state.map.entities.monsters.guard = { id: "guard", type: "monster", name: "Guard", sprite: "g", damage: 20, currentHealth: 100, maximumHealth: 100 };
+
+  const next = resolveMultiplayerTurn(state, new Map([["host", { type: "SUPPORT", charged: true }]]));
+
+  expect(next.players.host.health).toBe(PLAYER_MAX_HEALTH);
+  expect(next.players.host.defenseBuff).toBe(0);
+  expect(next.map.entities.monsters.guard.currentHealth).toBe(80);
+  expect(next.players.host.energy).toBe(PLAYER_MAX_ENERGY - 10);
+});
+
+test("Cleric support adds five defense for two multiplayer turns", () => {
+  const state = initial();
+  state.players.host.classId = "cleric";
+  const room = getRoom(state.map, state.players.host.roomId)!;
+  room.contents = [{ type: "monster", id: "guard" }];
+  state.map.entities.monsters.guard = { id: "guard", type: "monster", name: "Guard", sprite: "g", damage: 20, currentHealth: 100, maximumHealth: 100 };
+
+  const first = resolveMultiplayerTurn(state, new Map([["host", { type: "SUPPORT" }]]));
+  expect(first.players.host.health).toBe(PLAYER_MAX_HEALTH - 5);
+  expect(first.players.host.defenseBuff).toBe(5);
+  expect(first.players.host.defenseBuffTurns).toBe(1);
+
+  const second = resolveMultiplayerTurn(first, new Map());
+  expect(second.players.host.health).toBe(PLAYER_MAX_HEALTH - 10);
+  expect(second.players.host.defenseBuff).toBe(0);
+  expect(second.players.host.defenseBuffTurns).toBe(0);
+});
+
 test("missing multiplayer actions do not block enemy damage or counterattack", () => {
   const state = initial();
   const room = getRoom(state.map, state.players.host.roomId)!;

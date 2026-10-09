@@ -1,212 +1,508 @@
-# Dungeon Run: Product and Technical Design
+# Dungeon Run — Game Design and Remake Specification
 
-## 1. Purpose
+**Document purpose:** this is the product and gameplay specification for rebuilding Dungeon Run without access to its source code. It describes observable player-facing behavior, the rules and content needed to reproduce a run, presentation requirements, and the current product boundaries. It is intentionally more detailed than a repository README.
 
-Dungeon Run is a compact, turn-based dungeon adventure for mobile devices and the web. A player explores a seeded room network, makes one deliberate action at a time, spends health and energy to survive encounters, and descends through floors for a higher score. Three character classes give the same dungeon different tactical options. Easy, Normal, and Hard tune the pressure on the player. A same-Wi-Fi multiplayer mode lets a small group explore one shared dungeon using one device per player.
+**Status:** specification of the current game as implemented in the repository reviewed on 2026-10-09. “Current rule” means behavior evidenced by the current implementation. “Open decision” means the game does not provide a sufficiently consistent or complete answer; a remake should not invent a rule and claim it is original. Tuning values are collected in §6 and §7. If prose and a table conflict, the discrepancy is explicitly identified in §18.
 
-This document describes the product behavior and the implementation’s design choices. Unless a section is marked as a future consideration, it describes the current app rather than a proposal.
+## 1. Product definition
 
-## 2. Product goals
+Dungeon Run is a compact, turn-based dungeon adventure for mobile devices and web browsers. One player controls a randomly assigned hero through a connected dungeon, room by room. Each action advances enemy behavior and spends one turn. Combat asks the player to complete a short timing or tapping challenge; the result determines damage. The player manages health, energy, one carried item, and one equipment slot, then finds stairs to continue to the next floor. Normal and Hard runs have per-floor turn budgets; Hard also imposes a per-action timer. Easy removes the run-wide turn deadline.
 
-- Let a new player start a run without completing a text tutorial.
-- Make the dungeon, available actions, player resources, and turn pressure understandable from the game screen.
-- Keep combat outcomes tied to the chosen action and a short, skill-based microgame.
-- Make a seed reproduce the same dungeon so runs can be replayed and tested.
-- Support both native mobile and browser play from shared game rules.
-- Make multiplayer usable without a central game server or third-device host.
-- Keep the design small enough that each class, item, enemy, and screen has a clear gameplay purpose.
+The game also has a same-local-network multiplayer mode. Multiple devices take simultaneous team turns in one shared dungeon, with a host-authoritative resolver. The game is intended to be playable without an account or persistent online service.
 
-## 3. Target platforms and app shape
+### 1.1 Player promise
 
-### Native
+- A run can start quickly, with a difficulty choice and optional dungeon seed.
+- The same seed reproduces the same map for a given level. Ordinary runs choose the class randomly; seed-based layout replay does not ordinarily force a class.
+- Exploration is spatial and visual: exits, walls, locks, guards, room contents, and stairs are shown in a room scene and a compact map.
+- Combat is interactive. A score of 0–100 from the class microgame scales attack effectiveness.
+- Items have automatic situational effects. The carried item is visible and can be dropped or replaced.
+- A floor transition restores the player’s health and energy, preserves the carried item and equipment, increases the level, and provides a newly generated map.
 
-The native app uses Expo and Expo Router. The main routes are the title screen, run setup, settings, single-player game, multiplayer, and game over. React Native components render the common interface; native-specific component variants handle platform differences where needed. Haptics are used for damage feedback when enabled.
+### 1.2 Product principles
 
-### Web
+1. **Rules are legible.** The current room, possible exits, threats, resources, turn budget, and available action should be easy to understand.
+2. **Skill affects outcome, without demanding inhuman timing.** Microgames account for a 250 ms human reaction allowance and provide a visible cue/target.
+3. **Navigation is deterministic and solvable.** Seeded floors are reproducible; doors agree on both sides; required progression items are reachable.
+4. **Choices carry opportunity cost.** One item slot and one equipment slot require tradeoffs; charging consumes energy except for specified free-action refunds.
+5. **Shared game semantics across platforms.** Native and browser implementations may use different presentation details, but not different game rules.
 
-The browser app is served by Next.js. `app/page.tsx` owns title/setup/settings/game/multiplayer/game-over navigation state, while `app/RunScreens.tsx` contains the extracted setup, settings, and single-player screens. It imports the same shared game rules and most of the same React Native UI through React Native Web, with `.web` component variants where browser interaction or styling differs.
+## 2. Scope and non-goals
 
-### Shared-code boundary
+### In scope
 
-`src/game/` owns game state types, dungeon generation and operations, entities, actions, rules, turn resolution, and reusable controllers. App shells own route/page navigation, platform lifecycle, settings entry points, and the scheduling required to run the shared game loop. Shared UI lives under `src/components/`. Multiplayer transport lives under `src/multiplayer/`.
+- Title, setup, class briefing, gameplay, pause/settings, map, game-over, and multiplayer lobby/run flows.
+- Three classes, three attack microgames, items, equipment, five enemy types, procedural floors, and difficulty settings.
+- Local persistence of settings; deterministic seed-based floor generation.
+- Same-Wi-Fi multiplayer using manual signaling exchange and WebRTC.
+- Reduced motion, appearance, vibration, handedness, responsive layout, and accessibility labels.
 
-The native and web single-player screens currently have parallel compositions. Changes to shared rules belong in `src/game/`; gameplay UI changes may need matching updates in `src/app/game.tsx` and `app/RunScreens.tsx`.
+### Not currently in scope
 
-## 4. Player journey and screens
+- Accounts, cross-device cloud saves, run resume, leaderboards, analytics, localization, purchases, campaigns, narrative quests, server-hosted matchmaking, active-run rejoin, host migration, or automatic peer discovery.
+- A declared maximum floor or ending. The intended long-run campaign length and post-Level-2 difficulty curve are not specified.
+- An alternative non-timed interaction for users unable to use the microgames. This is a known accessibility gap, not a solved requirement.
 
-1. **Title:** choose Singleplayer or Multiplayer.
-2. **Run setup:** choose difficulty and seed. The app supplies a generated seed when the player leaves the seed blank. A player can open Settings from setup.
-3. **Class briefing:** review the randomly assigned class and continue into the run. Ordinary runs randomly choose Warrior, Cleric, or Thief on each new run, even when replaying the same dungeon seed. Reserved test seeds pin their named class for repeatable browser tests.
-4. **Gameplay:** explore rooms, collect items or equipment, fight enemies, use class support, charge actions, and find the stairs.
-5. **Level transition:** descend to the next floor. A surviving run gains score through cleared levels; maps are generated per seed and level.
-6. **Game over:** show the final score and allow return to the title screen.
+## 3. Platforms, sessions, and persistence
 
-Settings include appearance (`system`, `light`, `dark`), handedness, vibration, and reduced motion. The appearance selector can return to System after a fixed theme is chosen. Reduced motion is available in Settings and the in-game menu and is combined with the platform's reduced-motion preference. It skips room slides, doorway pulsing, and idle enemy bobbing. Settings are normalized when loaded so missing or invalid values fall back to defaults. Browser settings use local storage; native settings use AsyncStorage. The current defaults are Easy, system appearance, right-handed controls, vibration on, reduced motion off, and a blank seed.
+### 3.1 Browser
 
-## 5. Core gameplay loop
+The browser client is a Next.js application. It presents a phone-like play surface centered in the page and uses React Native Web-compatible shared components. A page-level navigation state switches among title, setup, settings, single-player, multiplayer, and game over. A browser refresh starts from the title and does not restore an active run.
 
-The player starts in the revealed start room. They can inspect visible exits and room contents, then choose an action. The game validates that action against the current map and resolves movement, pickup, combat, support, or descent. The room changes and enemy responses are presented with brief transitions and feedback. The player repeats until they descend, run out of turns, or lose all survivability.
+### 3.2 Native
 
-### Room network and navigation
+The native client is an Expo / Expo Router application. It uses React Native components, native route navigation, persistent settings through AsyncStorage, and optional vibration feedback. Native WebRTC multiplayer requires a development or production build; Expo Go does not include the native WebRTC capability.
 
-- A floor is a 12 by 6 grid of possible room locations. Generated floors activate a connected subset of those locations.
-- Rooms connect through shared boundaries. A boundary is a wall, open doorway, locked doorway, or guarded doorway.
-- Movement follows compass directions. The visual interface places exits around the active room; native and web variants preserve the same game meaning.
-- The current room and discovered rooms are represented in the map state. The start room is revealed at generation; adjacent-room visibility is updated through movement and map operations.
-- Locked doors require a key for ordinary classes. The Thief can pick a lock; charging can combine picking with moving through the door in one action.
-- Guarded doors require resolving the guard encounter before passage is available.
-- Stairs are placed on the floor and allow the player to descend when reached.
+### 3.3 Persistent data
 
-### Actions and turns
+Only user settings are persisted. The settings object contains:
 
-Player actions include moving through a doorway, picking up a room item or equipment, attacking a targetable enemy, using class support on self (or an ally in multiplayer), charging an eligible action, dropping held gear, and descending at stairs. Action validity is checked against current state so stale targets cannot perform impossible moves or attacks.
-
-Easy has no run-wide turn limit and no per-turn countdown. Normal has a run-wide turn limit. Hard has the same kind of turn limit and also gives a short countdown for each action. In single-player, an expired Hard timer forfeits the action and the turn advances; enemy behavior still resolves. Floor turn budgets are based on active room count, at four turns per active room, with a minimum of one. The extra turn per room gives the player room to traverse, collect useful items, and resolve encounters before reaching the stairs. If the final turn would be lost while the player holds a Clock, the Clock is consumed and grants five plus the current floor number additional turns. The Hard action timer starts at five seconds and becomes faster on higher floors, down to a two-second minimum. Normal uses a six-second base duration for the shared turn timing path but does not show the Hard countdown.
-
-### Health, energy, equipment, and recovery
-
-- Player maximum health and energy are each 100.
-- Base player attack is 10 and base defense is 10. The Warrior has five additional starting defense.
-- A charged action normally spends 10 energy. Amulets can lower that cost. Charge effects depend on the action and class; eligible free actions refund their charge cost after resolution.
-- Health Potions restore half of maximum health when health would otherwise reach zero. Stamina Meals restore half of maximum energy when energy would otherwise reach zero.
-- Equipment modifies attack, defense, or charge cost. Some equipment trades one combat stat for another. Spyglass reveals adjacent room information. Cursed Amulet has a recurring health cost.
-- A player can drop held item or equipment into the current room to make inventory choices and item use explicit.
-
-## 6. Classes and microgames
-
-Each ordinary run randomly selects Warrior, Cleric, or Thief independently of the dungeon seed. The reserved seeds `test` and `testwarrior` select Warrior, `testcleric` selects Cleric, and `testthief` selects Thief; this keeps browser tests deterministic. These reserved test seeds use the same deterministic Level 1 corridor layout; their class differs by seed. Other floor maps remain generated from the seed and level.
-
-| Class | Core advantage | Support action | Class microgame |
+| Setting | Values | Default | Effect |
 |---|---|---|---|
-| Warrior | Starts with 15 defense. | Vanguard lets the Warrior retaliate when attacked for one turn; charging adds defense for that turn. | Multitap |
-| Cleric | Miracle spends remaining energy to survive lethal damage when no Health Potion saves the player. | Aid adds defense for two turns; charging also restores health. | Concentration |
-| Thief | Can pick locked doors; charging can pick and pass in one action. | Enrich has a chance to grant an item or equipment; a full slot drops the reward in the room. | Timed Attack |
+| Difficulty | Easy, Normal, Hard | Easy | Run-wide turn budget and Hard action timer. |
+| Seed | Text; blank means generated | Blank | Deterministic floor layouts. |
+| Appearance | System, Light, Dark | System | Theme selection. |
+| Vibration | On / Off | On | Native damage feedback; browser does not vibrate. |
+| Handedness | Right / Left | Right | Microgame motion/target placement and relevant control arrangement. |
+| Reduce motion | On / Off | Off | Suppresses selected scene movement and idle animation; also respects platform preference. |
 
-The microgame score affects the attack result. Scoring is clamped to 0–100. Each microgame is designed around an explicit 250 ms human reaction allowance:
+Invalid or missing stored fields fall back individually to defaults. Browser storage is local storage; native storage is AsyncStorage. Runs are not persisted. Leaving/refreshing the game loses the run.
 
-- **Concentration:** the player taps when the moving fill reaches the target. The target travel duration is 1,250 ms within a 1,500 ms game window; scoring compares the observed tap after subtracting the reaction allowance with the target crossing time.
-- **Timed Attack:** “NOW!” appears after a one-second delay. The intended tap is 250 ms after the cue. The interaction window includes reaction time and a small tolerance.
-- **Multitap:** the target moves between taps. Ten taps at a realistic 250 ms pace fit within the 3,000 ms window; each tap contributes ten score points, capped at 100.
+## 4. Screen-by-screen experience
 
-The overlay displays the active instruction, target/cue, and progress needed to make timing expectations visible. Microgames are used in actual gameplay and practice; game rules do not substitute an instant perfect score for real input.
+### 4.1 Title
 
-## 7. Enemies and combat
+Show the game title, the prompt “How would you like to play?”, a **Singleplayer** action, a **Multiplayer · Same Wi-Fi** action, and short multiplayer context. Choosing a mode moves to setup and populates the seed field with a generated non-reserved seed. The player can still replace it with typed text.
 
-The enemy catalog includes Pixel Golem, Zombie, Dragon, Vampire, and Werewolf. Each has health, damage, and visual identity. Enemy attacks apply player defense; incoming damage cannot reduce below zero. Player damage is adjusted by attack type, charge, equipment, and microgame score. Werewolf encounters are special: the Werewolf pursues the player after it has been encountered, and a Silver Bullet defeats it immediately. Without the bullet, the player can fight through ordinary attacks. The Werewolf is intentionally dangerous so that movement, defense, charge, and recovery items matter.
+### 4.2 Run setup
 
-Combat is a short sequence: choose a target, play the class microgame, apply score-adjusted damage, show impact feedback, resolve the enemy response, then return control. Animation durations and impact timing are centralized in the game tuning table so the sequence stays aligned across platforms.
+Show difficulty selection as three options, an editable Seed field, help for difficulty and seed, Settings, Back, and Start. Difficulty help explains: Easy is casual; Normal requires clearing each floor within a turn budget; Hard has the same turn budget plus a timer on every turn. Seed help explains that it determines floor layouts. A blank/whitespace seed is replaced with a generated seed when Start is pressed. The seed is trimmed before use.
 
-## 8. Dungeon generation and replayability
+### 4.3 Class briefing
 
-The dungeon is derived from the seed and floor number with a deterministic pseudo-random stream. Repeating a seed and floor produces the same generated map independent of unrelated prior random calls. Generation builds a connected room network, may add loops, places doorway guards, stairs, a reachable locked connection with a key when applicable, a Werewolf and counter-item when selected, and optional loot/equipment in eligible rooms.
+Every new run selects Warrior, Cleric, or Thief randomly, except reserved development/test seeds (see §10.4). The briefing identifies the class and has two pages:
 
-The `test`, `testwarrior`, `testcleric`, and `testthief` Level 1 maps are deliberately authored over a deterministic generated grid as a single route. They place all five catalog items (meal, potion, key, bullet, clock), three ordinary Pixel Golems, a Werewolf, and stairs in known route positions, with a locked doorway after the key. This layout supports reproducible UI and end-to-end gameplay. These are reserved development/test seeds and should not be treated as normal random seeds.
+1. Support action and class special ability.
+2. Attack microgame instructions, example visual, displayed attack damage, Practice, Back, and Start.
 
-## 9. Multiplayer design
+Practice runs the real microgame and does not attack an enemy or spend a game turn. Starting closes the briefing and begins play. The class briefing is also shown before a multiplayer team run; each client acknowledges before entering play.
 
-Multiplayer is a shared same-Wi-Fi dungeon with one independently controlled character per connected device. Each character has its own room position, health, energy, item, equipment, class, defense buff, and Warrior retaliation state. A random class is assigned to the run and shared by the roster. The dungeon, enemy health, and doors are shared.
+### 4.4 Gameplay surface
 
-The host creates a session and guests join through a manually copied invitation/reply exchange. There is no signaling server, central game host, STUN/TURN service, QR scanner, or automatic discovery in the current version. WebRTC uses an empty ICE server list; networks with client isolation can prevent connections. The host owns the authoritative game state and resolves actions in stable roster order, so contested pickups have deterministic precedence rather than depending on packet arrival order.
+The play screen is composed in this order, with compact layouts allowed to hide optional labels/map details while preserving essential actions and state:
 
-Multiplayer turns are simultaneous team turns, not the single-player animation sequence. Each living player submits an action; the host resolves the action set. Hard mode uses a host-owned timer and skips missing actions while enemies still attack. Easy and Normal wait for each living player. All living players must gather at the stairs before one may descend. Fallen players spectate and revive at the next level. The run ends when all players fall or the shared turn budget is exhausted. There is no active-run rejoin or host migration; the host must remain foregrounded.
+- Menu button.
+- Turn-status text, including test marker where applicable, room, level, and combat/clear status.
+- Dungeon map (can be opened from menu on very short layouts).
+- Equipment and item controls, plus Charge Up. Their left/right order follows handedness.
+- Health and Energy bars; Hard additionally shows a countdown bar.
+- Short action instructions on layouts with room.
+- Room scene: hero, visible room actors/loot/stairs, and directional exits.
+- Microgame overlay when a player attacks.
 
-Native WebRTC requires an Expo native development or production build; Expo Go does not support hosting or joining. Transport tests use mocked native WebRTC at the boundary, while game resolver tests exercise shared turn logic.
+The principal room actions are: tap a monster to attack, a room item/equipment to pick it up, a doorway to move/open it, the hero to use class support, or stairs to descend. During resolution, menu-independent actions are disabled so a repeated tap cannot submit duplicate actions.
 
-## 10. Visual and interaction principles
+### 4.5 Menu and map
 
-- A screen should have a clear next action. Start and Return to Title receive primary emphasis; gameplay actions share emphasis because no single action is always dominant.
-- Difficulty choices use short labels and a three-option segmented control.
-- A help control is available near setup choices to explain difficulty and seed behavior.
-- Health, energy, held item/equipment, turn budget, and Hard timer are shown close to the play surface.
-- Room transitions, enemy movement, damage, and resource loss use short animations. Reduced-motion settings should be respected by motion-sensitive presentation.
-- Handedness changes the microgame target/motion side and control placement where applicable.
-- The browser layout presents a phone-like play surface while using browser-native accessibility and testing hooks.
-- Interactive controls should have meaningful labels and roles. Resource and enemy bars expose values to accessibility tooling; room status and incoming-room snapshots support orientation and UI verification.
+The in-game menu offers appearance, vibration, reduce motion, Practice Attack, Back to Game, Quit to Title, and (on tiny layouts) Dungeon Map. Quit asks for confirmation and states that the current run will be lost. The map dialog has a Close map action.
 
-## 11. Non-functional requirements
+### 4.6 Game over
 
-### Determinism and correctness
+Show “Game Over”, the score, and Return to Title. The score is the count of floors successfully cleared. Clearing Level 1 and dying or timing out on Level 2 displays Score: 1. No continue/retry button is currently provided.
 
-- The same seed and floor must reproduce the same generated floor.
-- Door boundaries must remain symmetric on both adjoining rooms.
-- A generated floor must be connected and its placed progression items must be reachable under the rules that use them.
-- Invalid actions must not mutate game state.
-- Multiplayer resolution must not mutate the previous network snapshot and must produce stable results for a stable roster/action set.
+## 5. Game loop and state model
 
-### Responsiveness and pacing
+### 5.1 Run state
 
-- Common interactions should resolve without long blocking transitions.
-- Timed play must use a shared source of truth for durations and game-loop cadence.
-- Microgames must allow realistic human reaction time and make their target event visually apparent.
-- Animation and timer constants belong in the shared tuning table rather than duplicated screen literals.
+At minimum, a remake needs the following run state:
 
-### Portability and maintainability
-
-- Game rules should remain independent of browser and native presentation.
-- Platform variants should preserve the same user-facing semantics.
-- User-facing labels and descriptions should come from catalogs rather than duplicated ad hoc strings where practical.
-- Important balance and generation parameters should be centralized.
-
-### Privacy and connectivity
-
-- Multiplayer currently exchanges session signaling data by user-mediated copy and paste.
-- The app does not require a game server for local multiplayer and does not configure external STUN/TURN services.
-- Connection state and failure should be understandable; peers can be removed and invited again from the lobby.
-
-## 12. Architecture and important modules
-
-| Area | Responsibility |
+| State | Meaning |
 |---|---|
-| `src/game/config/gameparameters.js` | Shared combat, map generation, item catalog, resource, timer, and animation tuning. |
-| `src/game/config/game-classes.ts` | Class metadata, random run class selection, support descriptions, microgame association, and reserved test-seed classes. |
-| `src/game/dungeon/generateDungeon.ts` | Seeded floor construction and reserved test corridor generation. |
-| `src/game/dungeon/rooms.ts` | Room lookup, movement, visibility, item operations, door operations, and enemy placement. |
-| `src/game/actions/` | Action definitions/validation, item effects, and microgame timing/scoring. |
-| `src/game/engine/` | Combat, movement, turn timing, the shared single-player loop driver, multiplayer resolver, and state snapshots. |
-| `src/game/state/` | Game state types, reducers, initial values, and animation/number stores. |
-| `src/components/` | Shared visual components and selected web-specific variants. |
-| `src/app/` | Native routes and Expo application shell. |
-| `app/page.tsx`, `app/RunScreens.tsx` | Next.js browser navigation shell and extracted setup/settings/single-player screens. |
-| `src/multiplayer/` | WebRTC connection interfaces and platform adapters. |
-| `tests/unit/` | Jest rule, state, component, and transport-boundary tests. |
-| `tests/visual/` | Playwright browser-level layout, microgame, runtime, and full-run tests. |
+| Level | Current floor, starting at 1. |
+| Cleared levels | Number of floors completed; score on game over. |
+| Dungeon map | Grid cells, active rooms, boundaries, visibility, room contents, entity records, start location, and floor number. |
+| Player location | Exactly one current room in single-player. |
+| Health / Energy | Each starts at 100; values are clamped to valid bounds. |
+| Carried item | Zero or one item. |
+| Equipment | Zero or one equipment item. |
+| Turns remaining | Floor-local budget for Normal/Hard; Easy has no active limit. |
+| Turn number / timer | Identifies each action and drives the Hard countdown. The countdown resets when turn or level changes. |
+| Charge state | Whether Charge Up has reserved energy for the next action. |
+| Temporary class effects | Defense buff duration and Warrior retaliation state. |
+| Werewolf encounter state | Whether the Werewolf has been encountered and therefore chases after actions. |
 
-## 13. Quality strategy
+### 5.2 Single-player action transaction
 
-The test pyramid has three useful levels:
+1. The player selects/taps an action. The interface disables incompatible inputs while resolution is active.
+2. The game validates the target and conditions against current state. Invalid actions do not change the map or consume a turn.
+3. For attack, the class microgame runs first. When the player submits or times out, the score resolves the hit.
+4. Player effects and animation play. If the player remains in the same room with living targetable enemies, those enemies attack sequentially.
+5. After an action, applicable equipment damage, item recovery, Werewolf chase, buff/retaliation expiry, and turn-budget loss resolve according to §7–9.
+6. The next turn begins and its countdown is reset. Level changes also reset the countdown, even if turn duration may later be tuned independently.
 
-1. **Rule-level Jest tests:** cover deterministic generation, action validation, combat calculations, item recovery, random class assignment, turn timing, and multiplayer resolution. Prefer real rule modules and controlled RNG where repeatability requires it.
-2. **Component/controller tests:** cover interactions and state transitions where a focused test adds value. Keep mocks at true boundaries such as browser/native services, human input, and RNG; avoid replacing the game logic under test.
-3. **Playwright end-to-end tests:** run the real browser app, use accessible user-facing controls, control the clock for deterministic timers, and model human taps with realistic intervals. Reserved test seeds should support complete runs, including combat, item use, level transitions, and game-over behavior. CI installs Playwright-managed Chromium before running browser tests; local runs require that browser to be installed once.
+Movement away from a room with enemies avoids their attacks; a non-movement action in the same room allows all targetable living enemies to attack. An attack that defeats all local enemies ends hostile responses for that turn. If an attack fails to kill the enemy, it attacks back. Movement through a guarded boundary is unavailable until its guard is defeated.
 
-Code changes should follow test-driven development: decide the design change, add or adjust a failing behavior test, make the smallest implementation change that passes, and repeat until the behavior is covered. CI runs lint, TypeScript checking, Jest, and the browser suite. Browser tests require a working Next.js build/server, an installed Playwright Chromium, and an available local port; the local visual server can be selected with `PLAYWRIGHT_PORT`.
+### 5.3 Terminal conditions
 
-## 14. Current constraints and future considerations
+A run ends when player health reaches zero without a saving effect, or when a Normal/Hard turn budget reaches zero without a Clock rescue. A Clock is consumed at the budget boundary and adds `5 + current level` turns. Easy has no run-wide turn-out condition. A player can quit at any time through the confirmed menu flow.
 
-- The web page shell still owns navigation state for title, setup, settings, gameplay, multiplayer, and game over. Setup, settings, and single-player UI now live in `RunScreens.tsx`; moving screen state to route-level navigation remains a possible follow-up.
-- Native and web use the same timer driver and rules, but each shell still owns its screen composition and lifecycle. Changes to screen behavior still need platform parity review.
-- Playwright configuration defaults to bundled Chromium, reuses a working local visual server outside CI, and CI installs the browser before executing the full visual suite. Local browser runs need a free port and host permission for Chromium to reach the local Next.js server. The checked-in full-run suite currently has a route-efficiency gap: it can spend the Hard action budget while collecting items and fighting before reaching Level 2. Its driver now uses each class's actual microgame, including 250 ms response timing; improve its route planning while keeping its item, Werewolf, ordinary-enemy, and Level 2 assertions.
-- The multiplayer connection flow relies on manual signaling and local network reachability. A signaling service, QR exchange, STUN/TURN configuration, host migration, and active-run rejoining are future product decisions rather than current requirements.
-- Multiplayer assigns one randomly selected class to every player in the run. Per-player class variety would need lobby UI, a protocol field per peer, and tests that verify each peer receives and uses its own class. This should precede a broader multiplayer balance pass if class variety becomes a requirement.
-- Runs are not saved or resumed; quitting explicitly discards the current run. Adding resume requires a checkpoint format, migration rules, and a product decision about whether to resume automatically or from the title screen.
-- The settings expose reduced motion and system appearance, but a full accessibility audit is still needed across screen-reader flows, contrast, focus behavior, and microgame alternatives. In particular, skill microgames need an equivalent accessible input mode so timing or pointer precision does not block play.
-- Localization, analytics, and cross-device accounts remain out of scope. Analytics and accounts would add data handling and service dependencies that the current local-first design does not require.
+## 6. Numeric tuning reference
 
-### Recommended order for the remaining product constraints
+Values below are current implementation values and should be centralized in a remake so balance changes are auditable.
 
-1. Stabilize the full-run route driver and complete the three-class Level 2 runs with item use, Werewolf combat, ordinary enemies, and realistic class microgames. Keep this as the release regression for the current core loop.
-2. Add per-player multiplayer classes and a lobby before changing multiplayer balance. Add signaling/reconnection and host migration only after choosing the expected network topology and service budget; these choices change deployment, privacy, and support costs.
-3. Define run checkpoint data and a resume/abandon flow before implementing persistence. Version saved runs so game-rule changes can reject or migrate older checkpoints safely.
-4. Add accessible alternatives for microgames and verify screen-reader labels, focus, contrast, and reduced-motion behavior on both shells.
-5. Revisit localization, accounts, and analytics only when a concrete audience or product requirement needs them; each introduces content, privacy, and service maintenance work.
+### 6.1 Player baseline
 
-## 15. Acceptance criteria for future changes
+| Parameter | Value |
+|---|---:|
+| Maximum Health | 100 |
+| Maximum Energy | 100 |
+| Base attack | 10 |
+| Base defense | 10 |
+| Warrior starting defense | +5 (total 15 before equipment/buffs) |
+| Default Charge Up energy cost | 10 |
+| Health Potion / Stamina Meal recovery | 50% maximum (50 points) on lethal/zero threshold, not a freely activated heal |
 
-A change is ready when:
+### 6.2 Difficulty and action time
 
-- its intended player-visible behavior and design effect are stated;
-- a test fails for the missing behavior before implementation begins;
-- the implementation is the smallest change that makes the test pass;
-- relevant existing Jest tests pass, and browser tests are run when their UI behavior is affected and the browser environment is available;
-- native and web behavior are checked for parity when the change touches shared gameplay or UI;
-- user-facing copy, help text, and this design document agree with the implemented rules.
+| Difficulty | Run-wide turn limit | Visible action countdown | Initial duration | Per-level reduction | Minimum |
+|---|---|---|---:|---:|---:|
+| Easy | None | No | 6,000 ms timing value | 30 ms | 2,000 ms |
+| Normal | Yes | No | 6,000 ms timing value | 30 ms | 2,000 ms |
+| Hard | Yes | Yes | 5,000 ms | 30 ms | 2,000 ms |
+
+The turn budget on a limited floor is `max(1, activeRoomCount × 4)`. Active rooms include revealed/occupied rooms and rooms connected by open or guarded edges. An expired Hard countdown forfeits the player action, advances one turn, and still resolves the room’s enemy response. Normal does not expose the action countdown, though the shared turn-time state has the listed six-second duration. Animation/game-loop frame cadence is 100 ms. The display updates in 100 ms increments, rounded upward.
+
+Room transitions last 220 ms. Player attack animation is 500 ms with impact at 250 ms. Enemy turn animation/response is 500 ms with incoming damage feedback at 250 ms. Other current timing values: bounce 1,400 ms; damage feedback 248 ms; resource-loss feedback 680 ms. These are presentation timings, not additional turns.
+
+### 6.3 Score
+
+For every completed floor, add one to `clearedLevels`. The game-over score is this value. No points for enemies, items, or time are currently defined.
+
+## 7. Classes, abilities, and charging
+
+Each run has one class. Ordinary seed text does not select the class. A seeded class selection exists only for reserved test seeds to make tests reproducible. Classes share the same baseline health/energy and use distinct support, passive/special, and attack microgame rules.
+
+| Class | Passive/special | Support (uncharged) | Support (charged) | Attack microgame |
+|---|---|---|---|---|
+| Warrior | Starts with +5 defense. | Vanguard lasts for one turn; enemies that attack trigger reflected damage to an attacker. | Also gains +5 defense for that turn. | Multitap |
+| Cleric | Miracle: if lethal damage occurs, no Health Potion saves the player, and Energy is positive, consume all remaining Energy and survive with Health equal to the Energy amount. | Aid grants +5 defense for two turns. | Also restores up to 10 Health. | Concentration |
+| Thief | Can pick locked doors without a Key. | Enrich: 10% chance to generate a random item or equipment. If its corresponding slot is occupied, the reward is dropped in the current room. | Chance rises to 20%. | Timed Attack |
+
+### 7.1 Charge Up
+
+Charge Up is a toggle, not a separate turn. Turning it on immediately reserves the equipment-adjusted charge cost from Energy. Toggling it off refunds the reservation. It can only be turned on if enough Energy remains. Charge changes the next eligible action:
+
+- Attack: uses the charged attack profile; charge cost is normally consumed.
+- Support: applies the charged support variant. The charge is consumed; it is not refunded.
+- Move or pick up: the action can be resolved as charged but its charge is refunded afterward (a “free action” charge use). A charged Thief lockpick opens and moves through the lock as one action; its charge is refunded in the movement path.
+- Invalid or cancelled actions must not leave a charge reservation stranded.
+
+The charge control’s implementation-level description currently says “1 energy” even though the rule uses 10 by default and equipment can reduce it to 5 or 2. A remake should display the actual numeric cost; see §18.
+
+## 8. Microgames and combat scoring
+
+### 8.1 Shared contract
+
+Each enemy attack requires a class microgame. Its returned score is an integer in `[0,100]`. The microgame must use a monotonic clock, complete at most once, and return score 0 on timed-out single-tap challenges. The player’s tap is treated as a human input; do not silently auto-perfect the score. A 250 ms response is the design reference for a human reaction time.
+
+### 8.2 Concentration (Cleric)
+
+- A filled circle moves toward/through a stationary outlined target.
+- The target crossing is visually shown; a tap ends the game.
+- Overall window: 1,500 ms. Intended visual travel: 1,250 ms; the remaining 250 ms represents reaction allowance.
+- The player’s measured time is adjusted by subtracting 250 ms before scoring.
+- `score = clamp(round(100 − abs(adjustedTapMs − targetCrossingMs) × 100 / 500), 0, 100)`.
+- Each run randomizes target timing/position (the current implementation selects a target parameter in a 200–600 ms range and moves the spot based on handedness). A tap earlier or later reduces score linearly; an input 500 ms from the ideal corrected time scores 0.
+- Handedness changes which side the target/motion favors. The visual target and hit box must remain aligned.
+
+### 8.3 Timed Attack (Thief)
+
+- Show an instruction to wait for the cue; “NOW!” must not appear at the beginning of the wait.
+- Cue appears 1,000 ms after the microgame starts.
+- Intended input: tap 250 ms after the cue.
+- Total scoring window: 1,750 ms from start (cue + reaction time + 500 ms tolerance).
+- Measured cue-relative time is adjusted for 16 ms scheduling tolerance in browser tests, not by the game rule.
+- `score = clamp(round(100 − abs(tapMsAfterCue − 250) × 100 / 500), 0, 100)`.
+- Input at cue time (anticipating the human reaction) scores 50, rather than perfect. Inputs 500 ms or more away from ideal score 0.
+- “NOW!” text and accessible game screen button must appear together; the cue must be visible just before the expected tap.
+
+### 8.4 Multitap (Warrior)
+
+- A visible circular target changes position after each tap. Tap it as quickly as possible.
+- Each tap contributes approximately 16.67 points. Score is `clamp(round(taps × 100 / 6), 0, 100)`.
+- Six taps completes immediately with score 100. If the timer expires first, score is the accumulated tap score.
+- Window: 3,000 ms. The duration stays fixed; target tap count and score per hit are tuned to fit it.
+- Browser end-to-end input should space taps by about 250 ms to model a realistic player. Input outside the target is not a successful tap.
+- Handedness affects target placement/movement direction.
+
+### 8.5 Attack damage
+
+Base attack damage before microgame score and equipment:
+
+| Target | Uncharged raw profile | Charged raw profile |
+|---|---:|---:|
+| Ordinary monster | 10 | 20 |
+| Werewolf | 10 | 15 |
+
+Current calculation is `max(1, floor(profile × score / 100)) + equipmentAttack + (charged ? 5 : 0)`, then subtract target defense and clamp at zero. Thus the displayed raw profiles omit equipment and, for charged attacks, the extra +5 modifier. Werewolf attacks are unusual: charged is only +5 over its 10 profile, rather than using the ordinary 20 profile. Silver Bullet against a Werewolf deals its remaining health and bypasses the attack microgame; it is consumed. Ordinary enemies have defense 0 in the current catalog.
+
+The game applies actual damage no greater than the target’s remaining HP. Player damage is calculated after class defense, equipment defense, and temporary defense are summed. Incoming damage is `max(0, enemyDamage − totalPlayerDefense)`. Damage cannot heal either party.
+
+## 9. Items and equipment
+
+There is one carried item slot and one equipment slot. Picking up an item while carrying one swaps the carried item with the room item; the previous carried item is left in the room. Equipment behaves similarly. Items/equipment are activated through their trigger conditions, not a general “use now” button. The inventory controls expose labels/descriptions and let the player drop an item or equipment into the current room.
+
+### 9.1 Items
+
+| ID / display label | Effect | Consumption |
+|---|---|---|
+| `energy-meal` / Stamina Meal | When Energy reaches zero, restore 50 Energy. | Consumed when triggered. |
+| `health-potion` / Health Potion | On otherwise-lethal damage, restore 50 Health. | Consumed when triggered. |
+| `key` / Key | Opens the next locked boundary the player attempts to cross; ordinary classes move through in the same action. | Consumed on unlock. Thief does not consume it to pick a lock. |
+| `silver-bullet` / Silver Bullet | On attacking a Werewolf, instantly defeats it. | Consumed on use. |
+| `clock` / Clock | When a limited run would reach zero turns, grants `5 + current level` more turns. | Consumed at the boundary. |
+
+### 9.2 Equipment
+
+| ID / label | Attack | Defense | Other effect |
+|---|---:|---:|---|
+| Good Armor | 0 | +5 | None |
+| Good Weapon | +10 | 0 | None |
+| Heavy Armor | −5 | +10 | None |
+| Heavy Weapon | +30 | −5 | None |
+| Amulet | 0 | 0 | Charge cost becomes 5 Energy |
+| Cursed Amulet | 0 | 0 | Charge cost becomes 2 Energy; lose 1 Health after each turn |
+| Spyglass | 0 | 0 | Reveals rooms adjacent to the current room on the map |
+
+The Cursed Amulet’s description is hidden when found on the floor; after equipping, its actual modifiers should be communicated. Its recurring health loss occurs after each resolved turn and can trigger potion or Cleric Miracle survival. Equipment loss on replacement/drop is handled by placing it in the room, not deleting it.
+
+## 10. Dungeon, exploration, and progression
+
+### 10.1 Map and rooms
+
+- World grid: 12 columns by 6 rows (room IDs use a letter and number, such as `A1` through `F12`; rendered axes follow the game’s row/column mapping).
+- A floor activates a connected subset of grid cells. It starts with `7 + level + random integer [0,4]` rooms, subject to the 72-room and grid-size caps.
+- Room growth adds one orthogonally adjacent room at a time, keeping the active graph connected. Then some additional loops may be added (chance 25% for each sampled eligible edge).
+- Each room boundary is `wall`, `open`, `locked`, or `guarded`. Shared boundaries must be symmetric.
+- Start room is selected from the grid unless a transition supplies a starting position. Only the start is revealed initially. Entered rooms stay revealed. Spyglass reveals neighboring cells.
+- A non-start room receives stairs. Stairs are represented as a room actor and can be tapped to descend.
+- The map legend identifies current room, monster, item, stairs, and explored rooms. Door/lock/guard glyphs communicate boundaries. Unrevealed locations do not show contents.
+
+### 10.2 Generation order and solvability
+
+For reproducibility, generation uses a deterministic pseudo-random stream derived from normalized seed and level. Each level gets an independent derived stream so unrelated random calls do not affect it. The current conceptual order is: create empty grid/start, grow connected network, add extra connections, place doorway guards, place stairs, place a lock and reachable key if selected, place Werewolf and Silver Bullet if selected, then place optional loot/equipment. The map must remain connected and all required placed progression objects must be reachable. The locked connection is selected among open connections; if a lock is created, the Key is placed on the reachable side before the boundary is locked.
+
+Room count formula: `min(72, 12 × 6, 7 + level + floor(random × 5))`. A candidate edge has a 70% chance to be locked when there is an eligible connection. Doorway guards are capped at the number of open connections and target half the active room count (current placement count is bounded by actual connection count). Werewolf placement chance is 45% among eligible reachable, non-start, non-stairs, unguarded rooms. If placed, a Silver Bullet is placed in a different reachable room. Optional loot placement chance parameters are 10% for items and 6% for equipment; specific floor counts derive from floored candidate count, and not every floor is guaranteed to have optional loot. These chances/count formulas are separate from the required key/bullet progression placement.
+
+### 10.3 Movement and boundaries
+
+- Tap an open doorway to move one orthogonal room. Update current room and reveal it.
+- Wall: no action, no turn.
+- Locked doorway: ordinary class needs Key; key opens the symmetric boundary, is consumed, and movement proceeds. Thief picks without a key; an uncharged pick opens the lock but leaves the Thief in place, so it costs a turn. A charged Thief pick opens and moves in one action.
+- Guarded doorway: cannot cross until the guard is defeated. The guard is a targetable monster attached to the shared edge; defeat opens the edge from both rooms.
+- If entering a room with stairs on level transition, place the player at room center.
+- Once the Werewolf has been encountered, it relocates to the player’s room after subsequent actions (including actions that would otherwise leave it behind) until defeated. A move/action ordering must avoid cloning or losing the single Werewolf entity.
+
+### 10.4 Reserved deterministic test seeds
+
+The case-insensitive exact normalized seeds `test`, `testwarrior`, `testcleric`, and `testthief` are development fixtures, not ordinary player seeds. All four pin Level 1 to the same authored single-corridor route and content. The class mapping is Warrior for `test` and `testwarrior`, Cleric for `testcleric`, and Thief for `testthief`. The route contains, in order after the start: the five catalog items with Key first, three Pixel Golems, a Werewolf, and stairs; a locked passage is positioned after the key. Level 2 uses normal seeded generation. These exact test seeds are reserved by the UI seed generator and may be special-cased in class selection and map construction.
+
+### 10.5 Level transition
+
+Descending increments `clearedLevels` and `level`, generates the next floor from the same seed plus new level, restores Health and Energy to 100, clears temporary buffs/charge/encounter state and transient damage feedback, preserves carried item and equipment, resets the turn budget for the next map, and resets action duration based on the new level. The player enters at the supplied/selected starting position, normally centered on the new floor’s starting room. The next floor contains its own stairs. No level cap is specified.
+
+## 11. Enemies
+
+| Enemy | Maximum HP | Damage per attack | Special behavior |
+|---|---:|---:|---|
+| Pixel Golem | 20 | 16 | Ordinary enemy. |
+| Zombie | 50 | 17 | Ordinary enemy. |
+| Dragon | 100 | 20 | Ordinary enemy. |
+| Vampire | 70 | 18 | Ordinary enemy. |
+| Werewolf | 80 | 19 | Chases after encounter; Silver Bullet instantly defeats it. |
+
+All ordinary enemies currently have zero defense. Enemies in a room attack in target order, with Werewolf sorted after ordinary targets. Multiple enemies may attack in one response. Doorway guards use ordinary monster generation and block the passage they guard. Enemies are defeated at zero HP and are no longer targetable. A defeated guard opens its passage once no other living guard remains on that same edge.
+
+## 12. Visual design and interaction specification
+
+### 12.1 Visual language
+
+The game uses a pixel-art dungeon and character/enemy sprites, with a parchment/sepia UI palette and distinct semantic colors for health, energy, timer, accent, and map cell types. Sprites come from the bundled 32 rogues asset set and app-provided game sprites. The interface should retain crisp pixel presentation rather than smoothing sprites into photographic illustrations.
+
+### 12.2 Room scene
+
+Render a room panel containing the player near the center (or at a directional entry position), room actors, and four potential directional boundary controls at the edges. Boundary state determines the visible and interactive element. Room actors include enemies with health indication, item, equipment, and stairs. Each tappable actor exposes a meaningful accessibility label and button role. The scene snapshot and current room status should remain coherent while the outgoing/incoming room transition animates.
+
+The current visual dimensions are responsive. Gameplay shell uses compact layout; below 800 px height the map is compacted, below 500 px height the map is hidden until opened and explanatory text is reduced. Briefing compacts below 600 px. A remake may adapt thresholds to its layout system but must preserve essential actions and state visibility.
+
+### 12.3 Map
+
+Show a grid aligned to the dungeon’s 12×6 world. Only revealed rooms are drawn as occupied rooms; the current room is visually distinct. A room may be color-coded by priority: current location, stairs, monster, item/equipment, explored. Doorways show open connection, locked icon, or guard icon. Include a legend unless the screen is very short. Accessibility labels should disclose room ID and visible contents without exposing hidden rooms.
+
+### 12.4 Microgame presentation
+
+Overlay the play area without losing context. Instructions and target should be clear at a glance. Timed Attack’s `NOW!` cue appears exactly after its delay and before the intended response. Concentration target/mover must have enough contrast and precise geometric alignment. Multitap target must visibly move after successful taps. Hit areas must be at least as large as the visible target. Left-handed mode should reposition/mirror where practical without changing scoring.
+
+### 12.5 Feedback, motion, and accessibility
+
+- Show numerical/stat bars with accessible current/max values and labels (Health, Energy, enemy HP, turn timer, turns remaining).
+- Buttons need accessible names, roles, and disabled/selected state where applicable.
+- Show incoming damage and resource-loss feedback; optionally vibrate on native damage if enabled.
+- Reduced motion skips room slides, doorway pulsing, and idle enemy bobbing. It should not hide state changes or disable interaction. Platform reduced-motion preference is combined with the in-app setting.
+- Appearance follows System, Light, or Dark. Text and interactive state must remain distinguishable in each theme.
+- Left-handed controls relocate the Charge / inventory arrangement and microgame interaction side.
+- Known unmet accessibility goal: provide an equivalent mode for players who cannot use time/precision-based microgames; see §17.
+
+## 13. Multiplayer specification
+
+### 13.1 Lobby and connection
+
+The player selects Multiplayer from title and passes through the same setup screen. One device hosts and controls difficulty/seed; a guest pastes a host invitation, creates a reply, and returns it to the host. The host accepts or cancels each pending invitation, can remove connected/lobby players, and starts when ready. Signaling data is copied and pasted by the users. Every peer must be on the same local network and the host must remain foregrounded. No automatic discovery, signaling service, configured STUN/TURN servers, host migration, or active-run rejoin exists.
+
+### 13.2 Shared run model
+
+The host is authoritative for dungeon and shared enemy/door state. Each player has an ID, current room, Health, Energy, carried item, equipment, class ID, defense buff, and Warrior retaliation state. The roster currently receives one randomly selected class shared by all players. Each peer has its own position and resources; dungeon layout and enemies are shared.
+
+### 13.3 Team turns and resolution
+
+Living players submit one action each. The host resolves actions in stable roster order, making contested item pickup deterministic. Easy and Normal wait for all living players. Hard uses the host’s countdown; missing players’ actions are skipped and enemies still act. All surviving players must reach stairs before the party descends. Fallen players spectate and revive on the next level. Run ends when all players fall or the shared turn budget expires. A host disconnect/foreground loss may stop the run; the UX should clearly say the host controls timing and state.
+
+Actions include movement, attack with score, pickup, descent, support targeting self or a co-located ally, and equipment drop. Test seeds pin the class for repeatable testing. Transport tests may replace the native WebRTC boundary; gameplay resolution tests should exercise real shared rules.
+
+## 14. Game architecture for a faithful remake
+
+This section is implementation guidance, not a requirement to use the same libraries. Keep rules deterministic and platform-neutral so visual shells can be rebuilt independently.
+
+### 14.1 Suggested modules
+
+1. **Content catalogs:** classes, enemies, items, equipment, animation and timing constants.
+2. **Seeded dungeon generator:** PRNG, graph construction, boundaries, reachable progression placement, visibility, and test fixtures.
+3. **Pure rules:** action validation, movement, item triggers, charge, combat math, turn/clock resolution, class effects, level transition, multiplayer action resolution.
+4. **Run state/controller:** canonical state reducer and orchestration of rule transitions; no UI dependencies.
+5. **Presentation:** app shell/navigation, settings, HUD, map, room scene, microgame overlays, dialogs.
+6. **Adapters:** storage, timer/clock, haptics, platform capability, WebRTC, and human input.
+
+### 14.2 State integrity
+
+Treat an action as a state transition with explicit effects and outcome. Invalid actions leave state unchanged. A seeded generator must be independent per `(normalized seed, level)`. Map updates should be immutable or otherwise preserve prior snapshots where multiplayer/network state needs comparison. Boundary updates must always change both sides. Generated maps must pass structural and reachability invariants before play begins.
+
+### 14.3 Timing and randomness
+
+Use a monotonic clock for microgame elapsed time and a single run-loop owner for Hard timing. A timer starts/restarts on either turn-number change or level-number change. Pause/microgame/menu states must have an explicit timer policy; current single-player pauses the countdown while menu or microgame is active. Keep RNG injectable at game creation and partitioned by purpose/level to permit deterministic replay, but do not substitute mocked game rules in gameplay tests.
+
+## 15. Sound and haptics
+
+No sound system or sound catalog is specified in the current app. Do not invent sound as existing behavior. Vibration is a setting; on native clients, enabled damage response uses medium-impact haptic feedback. Browser clients do not vibrate. A future sound design requires a separate product decision.
+
+## 16. Quality and verification requirements
+
+### 16.1 Rule and generator tests
+
+Verify exact combat math, class effects, charge cost/refund, equipment modifiers, all item triggers, item-slot swap/drop, door symmetry, Thief lock flow, guard defeat/opening, Werewolf chase and Silver Bullet, turn budget, Clock rescue, level transition, deterministic generation, and reachability. Control RNG only where a known randomized branch must be reproducible. Use real rule modules.
+
+### 16.2 Microgame tests
+
+Exercise the real microgame state/scoring with realistic human input. At minimum:
+
+- Timed Attack: no cue before 1,000 ms; cue then visible `NOW!`; tap around 250 ms later scores near 100; anticipatory and late taps score lower; timeout scores zero; completion fires once.
+- Concentration: target/mover geometry corresponds to the target progress; corrected 250 ms human response at crossing scores near 100; early/late response degrades linearly; timeout returns zero.
+- Multitap: target relocates, each real tap adds ten points, ten taps reaches 100, timeout retains earned score, and 250 ms spaced input is achievable within the window.
+- Both handedness layouts keep target and hit area aligned.
+
+### 16.3 End-to-end tests
+
+Browser tests should start from title and use visible accessible controls. Reserved fixture seeds may guarantee a route/content order. A complete Hard run should use realistic microgame input and demonstrate items, ordinary combat, Werewolf combat (and, where route permits, its bullet), class support, charged/uncharged class abilities, Thief lockpick without Key, Level 2, and eventual timeout/game-over. The end-to-end route must not exhaust its turn budget just collecting optional content; route planning should prioritize required assertions and use as many available test items as feasible. Tests should model approximately 250 ms reaction time instead of perfect instantaneous taps. Avoid mocks except at true outside boundaries such as storage, WebRTC, RNG control, and human input.
+
+### 16.4 Accessibility and platform verification
+
+Check native/web rule parity; themes; handedness; reduced motion; short viewports; keyboard/focus and screen reader names; timer visibility; text contrast; dialogs and quit confirmation; and haptics setting behavior. CI should run lint, type checking, rule tests, and browser visual/E2E tests with the required browser installed. Browser tests need a free local port and a working app server.
+
+### 16.5 Test-driven change process
+
+For every behavior change: (1) state the design-level change, (2) add/modify a behavior test that fails for the missing behavior, (3) run it to confirm the failure, (4) make the smallest implementation change that passes, and (5) repeat until the behavior is covered. Do not write implementation first and retroactively add a test. Tests should exercise production game logic as close to actual gameplay as practical.
+
+## 17. Current constraints and future limitations
+
+### Player experience
+
+- The game does not explain every rule in a tutorial; the class briefing explains class-specific moves but there is no comprehensive glossary/tutorial flow.
+- The single item and equipment slots create tradeoffs, but all loot does not have a dedicated inventory management screen.
+- There is no run resume or save migration format.
+- There is no explicit campaign ending, maximum level, long-term progression, or endgame balance contract.
+- Microgames require timing or pointer precision and have no equivalent accessibility mode yet.
+- Setup and pause menus expose settings but the settings UX is not a full accessibility/preferences center.
+
+### Gameplay and balance
+
+- Difficulty labels are described, but there is no formal expected completion rate or target run duration.
+- Easy still uses enemy combat and microgames; it only removes the run-wide turn limit and visible action timer.
+- Normal has a run-wide turn budget but no visible countdown, so the player sees turns remaining rather than seconds remaining.
+- Optional item/equipment placement is not guaranteed per floor. A fixed route is available only for reserved Level 1 test seeds.
+- Class selection is random in ordinary runs and cannot be manually chosen or rerolled.
+- Class support has no cooldown; its opportunity cost is the turn/enemy response and, when charged, Energy.
+- Werewolf chase behavior can pull it into the player’s current room after its encounter; its exact movement/pursuit presentation is minimal.
+- Later-floor difficulty scaling is mostly timer shortening and room-count increase. No fully authored per-level enemy composition or content curve is specified.
+- The base-stat, support, and attack descriptions have minor display/rules mismatches listed in §18.
+
+### Multiplayer and operations
+
+- Manual copy/paste signaling is cumbersome and error-prone.
+- No STUN/TURN configuration means some NATs, guest networks, or client-isolated Wi-Fi prevent peer connections.
+- Host is a single point of failure; no migration, rejoin, or durable lobby exists.
+- All players share the same class, limiting cooperative variety.
+- Host must stay foregrounded; background lifecycle handling and connection recovery are constrained.
+- Native multiplayer cannot be validated with Expo Go; a native-capable build is needed.
+
+### Technical and product boundaries
+
+- Native and browser shells remain separate compositions and need parity checks when UI changes.
+- Web navigation state is managed in one page component rather than route-level URL navigation for each game state.
+- Settings persist, but current runs do not. Seed generation is client-local and not an account-level history.
+- No localization, analytics, remote content updates, or user-generated sharing flow exists.
+- The art asset license and all bundled asset provenance should be reviewed before redistributing a remake.
+
+### Recommended roadmap decisions
+
+1. Define an accessible non-timing attack alternative and test it with assistive technology.
+2. Decide whether class choice/reroll, class-specific multiplayer roster, and/or difficulty selection for each player are desired.
+3. Choose reconnect/host migration and signaling service requirements before adding online multiplayer infrastructure.
+4. Define save/resume semantics, schema versioning, and whether a run resumes automatically.
+5. Specify floor cap/ending, expected run length, enemy scaling, and a balance target for each difficulty.
+6. Reconcile numeric UI descriptions with actual rules, then include all balance fields in the content specification.
+7. Add a glossary and optional first-run tutorial only after deciding whether discovery should remain implicit.
+
+## 18. Known implementation discrepancies and remake decisions
+
+These are source-observed mismatches; a no-code remake should resolve them intentionally rather than assume the prose is already consistent.
+
+1. **Charge cost label:** game rules charge 10 Energy by default (5 with Amulet, 2 with Cursed Amulet), while the Charge Up control says “1 energy.” The correct player-facing value should be the actual cost.
+2. **Charged Thief lockpick cost:** ordinary charged movement and pickup refund charge after resolution. A charged Thief lockpick also refunds charge immediately in its movement path. Preserve this behavior when implementing the combined open-and-move action.
+3. **Thief carrying a Key:** ordinary movement uses the Key for non-Thieves; Thieves pick locks and do not consume it. The fixture/test expects the Thief to open a lock with no Key. Keep the distinction explicit.
+4. **Displayed attack damage:** class briefing shows `10 + equipment attack`; charged ordinary attacks, Werewolf profile, microgame score, and target defense can yield different actual results. Prefer display text that names baseline and charged damage separately.
+5. **Multitap timing policy:** the prior implementation used a 4,500 ms window for ten taps. The current design shortens the window to 3,000 ms and reduces the perfect-score target to six taps; future tuning should fit interaction requirements by changing tap count/scoring before extending microgame duration.
+6. **Microgame concentration parameters:** the microgame selects target position/delay, while the visual mover uses progress geometry. Verify that all position/delay variants align exactly before treating the target formula as a final design guarantee.
+7. **Level transition start position:** descent computes a destination start position from the current exit location in the connected flow. The exact mapping between floors should be confirmed as intended; this spec requires a valid centered start room and does not promise the same grid coordinate unless the design chooses it.
+8. **Procedural guards:** guard count targets half the active room count but is capped by unique open connections. The generated number can be lower than the nominal target.
+9. **Random test fixture contents:** the test corridor explicitly creates three Pixel Golems, Werewolf, five items and stairs. Test “same dungeon as test” means identical Level 1 layout/content, with class selected by seed; it does not pin later levels.
+10. **Timer behavior:** Hard’s action timer starts/resets on turn and level changes; it pauses while a menu/microgame/class briefing is active. Confirm pause semantics in any alternate UI before changing them.
+
+## 19. Remake acceptance checklist
+
+A remake claiming feature parity is ready for review when all of the following are true:
+
+- [ ] A new player can choose Singleplayer or Multiplayer from the title and start a run from setup.
+- [ ] Blank seeds become generated seeds; explicit seeds reproduce floor layouts; ordinary seeds do not pin class.
+- [ ] All three classes have their specified briefing, passive/special, support, charge variant, and attack microgame.
+- [ ] All five enemies, five items, and seven equipment entries behave as specified.
+- [ ] A player has exactly one item and one equipment slot, with predictable swap/drop behavior.
+- [ ] Movement respects walls, open edges, locks, keys, Thief lockpick, guards, stairs, and symmetric boundary state.
+- [ ] Every floor is connected, progression items are reachable, and repeated `(seed, level)` generation is stable.
+- [ ] Combat uses microgame score and attack/equipment/defense rules; enemies respond only when the player remains in their room.
+- [ ] Health/Energy recovery items, Cleric Miracle, Clock, Cursed Amulet, and Werewolf/Silver Bullet triggers are covered.
+- [ ] Easy, Normal, and Hard apply the correct turn budget/countdown behavior; timer resets on turn or level changes.
+- [ ] Level transition restores resources, preserves inventory/equipment, advances score/level, and generates the next floor.
+- [ ] Timed Attack `NOW!` appears at the correct time; realistic 250 ms input yields plausible scores in all three microgames.
+- [ ] Reduced motion, handedness, appearance, vibration, responsive layouts, and accessible labels work without hiding rules.
+- [ ] Multiplayer lobby, authoritative turn resolution, stable ordering, party stairs, fallen-player revival, and current connectivity limitations are clearly handled.
+- [ ] Unit and browser tests cover actual rule flows with mocks restricted to external services, human input, and controlled randomness.
+- [ ] Any differences from the open decisions or known discrepancies in §18 are documented as deliberate product choices.

@@ -36,6 +36,7 @@ export type MultiplayerPlayer = {
   equipment: string | null;
   classId: GameClassId;
   defenseBuff: number;
+  defenseBuffTurns: number;
   vanguard: number;
   vanguardSource: string | null;
 };
@@ -64,6 +65,7 @@ export function createMultiplayerState(seed: string, difficulty: Difficulty, ids
     equipment: null,
     classId,
     defenseBuff: 0,
+    defenseBuffTurns: 0,
     vanguard: 0,
     vanguardSource: null,
   }]));
@@ -156,9 +158,13 @@ export function resolveMultiplayerTurn(
     if (source.classId === "warrior") {
       target.vanguard = 1;
       target.vanguardSource = source.id === target.id ? null : source.id;
-      if (charged) source.defenseBuff = Math.max(source.defenseBuff, 1);
+      if (charged) {
+        source.defenseBuff = Math.max(source.defenseBuff, 5);
+        source.defenseBuffTurns = Math.max(source.defenseBuffTurns, 1);
+      }
     } else if (source.classId === "cleric") {
-      target.defenseBuff = Math.max(target.defenseBuff, 2);
+      target.defenseBuff = Math.max(target.defenseBuff, 5);
+      target.defenseBuffTurns = Math.max(target.defenseBuffTurns, 2);
       if (charged) target.health = Math.min(PLAYER_MAX_HEALTH, target.health + 10);
     } else if (Math.random() < (charged ? 0.2 : 0.1)) {
       grantThiefReward(state, target);
@@ -276,7 +282,10 @@ export function resolveMultiplayerTurn(
     }
   }
   for (const player of Object.values(state.players)) {
-    player.defenseBuff = Math.max(0, player.defenseBuff - 1);
+    if (player.defenseBuffTurns > 0) {
+      player.defenseBuffTurns -= 1;
+      if (player.defenseBuffTurns === 0) player.defenseBuff = 0;
+    }
     if (player.health <= 0) continue;
     const curseDamage = getEquipmentStats(player.equipment ?? null).turnDamage;
     if (curseDamage <= 0) continue;

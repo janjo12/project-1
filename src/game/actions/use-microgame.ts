@@ -9,7 +9,8 @@ export const MICROGAME_MAX_DURATION_MS = 1500;
 export const CONCENTRATION_TARGET_DURATION_MS = MICROGAME_MAX_DURATION_MS - HUMAN_REACTION_WINDOW_MS;
 export const TIMED_ATTACK_CUE_DELAY_MS = 1000;
 export const TIMED_ATTACK_WINDOW_MS = TIMED_ATTACK_CUE_DELAY_MS + HUMAN_REACTION_WINDOW_MS + 500;
-export const MULTITAP_WINDOW_MS = 10 * (HUMAN_REACTION_WINDOW_MS + 150) + 500;
+export const MULTITAP_TARGET_TAPS = 6;
+export const MULTITAP_WINDOW_MS = 3000;
 const now = () => globalThis.performance?.now?.() ?? Date.now();
 const scoreWithinRange = (score: number) => Math.max(0, Math.min(100, Math.round(score)));
 
@@ -24,8 +25,8 @@ export function getTimedAttackScore(actualMs: number) {
 }
 
 export function getMultitapScore(clicks: number) {
-  // Each tap is worth ten points, capped by the common score clamp.
-  return scoreWithinRange(clicks * 10);
+  // Six ordinary-paced hits reach a perfect score within the short fixed window.
+  return scoreWithinRange(clicks * 100 / MULTITAP_TARGET_TAPS);
 }
 
 export function useMicrogame(onComplete: (score: number) => void) {
@@ -73,7 +74,7 @@ export function useMicrogame(onComplete: (score: number) => void) {
       const next = clickCount.current + 1;
       clickCount.current = next;
       setTargetSpot(leftHandedRef.current ? 0.58 + ((next * 0.137) % 0.32) : 0.1 + ((next * 0.137) % 0.32));
-      if (next >= 10) finish(100);
+      if (next >= MULTITAP_TARGET_TAPS) finish(getMultitapScore(next));
       return;
     }
     const targetProgress = leftHandedRef.current ? (targetSpot - 0.1) / 0.8 : (0.9 - targetSpot) / 0.8;

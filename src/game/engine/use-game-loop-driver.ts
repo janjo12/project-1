@@ -34,7 +34,7 @@ export function useGameLoopDriver(options: GameLoopDriverOptions) {
         elapsed: 0,
         expired: false,
         levelNumber: options.levelNumber,
-        turnDuration: options.turnDuration,
+        turnDuration: optionsRef.current.turnDuration,
         turnNumber: options.turnNumber,
       };
     }
