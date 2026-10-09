@@ -47,6 +47,7 @@ import {
   applyWerewolfChaseAfterAction,
   getHardTurnLimit, hasTurnLimit, resolveTurnLoss
 } from "@/game/engine/resolveTurn";
+import { getPlayerAttackDamage } from "@/game/engine/combat";
 import { restartAnimations, swapRoomItemWithInventory } from "@/game/engine/run-game-helpers";
 import {
   getNextLevelState,
@@ -137,6 +138,7 @@ export function useRunGame({
   const setPlayerHealth = useCallback((value: SetStateAction<number>) => setGameField("playerHealth", value), [setGameField]);
   const [defenseBuff, setDefenseBuff] = useState(0);
   const defenseBuffRef = useRef(0);
+  const defenseBuffTurnsRef = useRef(0);
   const vanguardRef = useRef(0);
   const [playerHealthLossAmount, setPlayerHealthLossAmount] = useState(0);
   const [playerScenePosition, setPlayerScenePosition] =
@@ -319,8 +321,13 @@ export function useRunGame({
     chargedRef.current = false;
     lastActionRefundsChargeRef.current = false;
     if (chargedMovementOrPickup) setPlayerEnergy(energy => Math.min(PLAYER_MAX_ENERGY, energy + getEquipmentStats(equipmentRef.current).chargeCost));
-    setDefenseBuff(turns => Math.max(0, turns - 1));
-    defenseBuffRef.current = Math.max(0, defenseBuffRef.current - 1);
+    if (defenseBuffTurnsRef.current > 0) {
+      defenseBuffTurnsRef.current -= 1;
+      if (defenseBuffTurnsRef.current === 0) {
+        defenseBuffRef.current = 0;
+        setDefenseBuff(0);
+      }
+    }
     vanguardRef.current = Math.max(0, vanguardRef.current - 1);
     if (!chargedMovementOrPickup && playerEnergy === 0 && inventoryItemRef.current === "energy-meal") {
       setPlayerEnergy(resolveEnergyLoss(0, 0, inventoryItemRef.current).nextEnergy);
@@ -555,12 +562,17 @@ export function useRunGame({
       return;
     }
     if (playerClass.id === "cleric") {
-      defenseBuffRef.current = Math.max(defenseBuffRef.current, 2);
+      defenseBuffRef.current = Math.max(defenseBuffRef.current, 5);
+      defenseBuffTurnsRef.current = Math.max(defenseBuffTurnsRef.current, 2);
       setDefenseBuff(defenseBuffRef.current);
       if (chargedRef.current) setPlayerHealth(health => Math.min(PLAYER_MAX_HEALTH, health + 10));
     } else {
       vanguardRef.current = 1;
-      if (chargedRef.current) { defenseBuffRef.current = Math.max(defenseBuffRef.current, 1); setDefenseBuff(defenseBuffRef.current); }
+      if (chargedRef.current) {
+        defenseBuffRef.current = Math.max(defenseBuffRef.current, 5);
+        defenseBuffTurnsRef.current = Math.max(defenseBuffTurnsRef.current, 1);
+        setDefenseBuff(defenseBuffRef.current);
+      }
     }
     cancelCharge(false);
     if (hasRoomEnemy) {
@@ -591,7 +603,7 @@ export function useRunGame({
       const hasEnergy = chargedRef.current;
       const rawDamage = usesSilverBullet
         ? monster.currentHealth
-        : Math.floor(GAME_PARAMETERS.player.attack * (attackScore ?? 100) / 100) + getEquipmentStats(equipment).attack + (hasEnergy ? 5 : 0);
+        : Math.max(1, Math.floor(getPlayerAttackDamage(monster, hasEnergy) * (attackScore ?? 100) / 100)) + getEquipmentStats(equipment).attack + (hasEnergy ? 5 : 0);
       lastActionRefundsChargeRef.current = false;
       const damage = applyDefense(rawDamage, monster.defense ?? 0);
       const healthLost = Math.min(monster.currentHealth, damage);
@@ -691,6 +703,12 @@ export function useRunGame({
     if (chargedRef.current) cancelCharge();
   }
 
+  function dropItem() {
+    if (isResolving || hasLost || !inventoryItem) return;
+    commitMap(map => addItemToRoom(map, currentRoomId, inventoryItem));
+    setInventoryItem(null);
+  }
+
   async function moveToRoom(direction: Direction) {
     if (isResolving || hasLost) {
       return;
@@ -700,6 +718,7 @@ export function useRunGame({
       canUseKey: inventoryItem === "key",
       direction,
       isThief: playerClass.id === "thief",
+      isCharged: chargedRef.current,
       map: dungeonMap,
       revealAdjacent: equipmentRef.current === "spyglass",
       roomId: currentRoomId,
@@ -787,5 +806,6 @@ export function useRunGame({
     updateGameFrame,
     moveToRoom,
     pickupItem,
+    dropItem,
   };
 }

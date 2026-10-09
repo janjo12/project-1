@@ -9,6 +9,7 @@ export const GAME_PARAMETERS = Object.freeze({
     damageDurationMs: 248,
     enemyTurnDurationMs: 500,
     resourceLossDurationMs: 680,
+    roomTransitionDurationMs: 220,
   }),
   combat: Object.freeze({
     chargeEnergyCost: 10,
@@ -24,7 +25,7 @@ export const GAME_PARAMETERS = Object.freeze({
     doorwayGuardsPerRoom: 0.5,
     extraRoomCountRange: 5,
     extraConnectionChance: 0.25,
-    hardTurnsPerRoom: 3,
+    hardTurnsPerRoom: 4,
     lockedDoorChance: 0.7,
     maxRoomCount: 72,
     optionalLootChance: 0.1,

@@ -7,17 +7,20 @@ type ItemControlProps = {
   activationDescription?: string | null;
   itemLabel?: string | null;
   itemSprite?: string | null;
+  onDrop?: () => void;
 };
 
 export function ItemControl({
   activationDescription = null,
   itemLabel = null,
   itemSprite = null,
+  onDrop,
 }: ItemControlProps) {
   const styles = createStyles(useThemeColors());
 
   return (
-    <View style={styles.container}>
+    <Pressable accessibilityRole="button" accessibilityLabel={itemLabel ? `${itemLabel}. Drop item` : "No item held"}
+      accessibilityHint="Tap to drop your item without using a turn" disabled={!itemLabel} onPress={onDrop} style={styles.container}>
       <View
         accessibilityLabel={itemLabel ? `${itemLabel}. ${activationDescription}` : "No item held"}
         accessibilityRole="text"
@@ -30,7 +33,7 @@ export function ItemControl({
           {activationDescription ?? "Pick up an item to hold it."}
         </Text>
       </View>
-    </View>
+    </Pressable>
   );
 }
 

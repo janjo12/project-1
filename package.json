@@ -51,9 +51,10 @@
   "scripts": {
     "start": "expo start",
     "web:next": "next dev -p 3100",
-    "web:visual-server": "next start -p 3127",
+    "web:visual-server": "next start",
     "web:build": "next build",
     "web:start": "next start -p 3100",
+    "typecheck": "tsc --noEmit",
     "test:visual": "npm run web:build && playwright test",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo run:android",

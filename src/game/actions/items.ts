@@ -12,7 +12,7 @@ export function getItemLabel(itemId: ItemId | null) {
   if (!itemId) return null;
   const item = POSSIBLE_ITEMS.find((candidate) => candidate.id === itemId);
   if (!item) throw new Error(`Unknown inventory item: ${itemId}`);
-  return item.description ?? item.label;
+  return item.label;
 }
 
 export function getEquipmentStats(id: string | null) {

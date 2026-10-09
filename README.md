@@ -3,16 +3,16 @@
 This repository has two app shells backed by shared game rules:
 
 - `src/app/` is the Expo Router app used on Android and iOS. `index.tsx` is the title screen, `setup.tsx` configures a run, and `game.tsx` is the single-player screen.
-- `app/` is the Next.js browser app. `page.tsx` currently holds its title, setup, settings, game, multiplayer, and game-over screens in one file.
+- `app/` is the Next.js browser app. `page.tsx` owns navigation state, while `RunScreens.tsx` contains setup, settings, and single-player screens.
 - `src/game/` contains shared rules and state. Start with `src/game/README.md`; balance values live in `config/gameparameters.js`, class behavior/text in `config/game-classes.ts`, and multiplayer turn resolution in `engine/run-game-multiplayer.ts`.
 - `src/components/` contains shared UI. Files ending in `.web.tsx` are browser-specific implementations selected by the web bundler; check the matching native file when changing a shared component.
 - `src/multiplayer/` contains the WebRTC connection adapters and its README covers setup and limitations.
-- `__tests__/` contains the Jest tests, and `visual-tests/` contains Playwright browser checks.
+- `tests/unit/` contains the Jest tests, and `tests/visual/` contains Playwright browser checks.
 
 ## Change map and duplication
 
-- The single-player game screen exists in both `src/app/game.tsx` and `app/page.tsx`. Gameplay UI changes generally need to be applied to both; shared game rules should go in `src/game/` instead. The Next.js version also owns its screen state and timer setup in `app/page.tsx`.
-- Expo runs `src/game/engine/run-game-loop.ts` through React Native Game Engine. The Next.js screen currently drives the same loop from a `setInterval` in `app/page.tsx`. If changing turn-clock behavior, check both integrations as well as the shared loop.
+- The single-player game screen exists in both `src/app/game.tsx` and `app/RunScreens.tsx`. Gameplay UI changes generally need to be applied to both; shared game rules should go in `src/game/` instead.
+- Both platforms use `src/game/engine/use-game-loop-driver.ts` to advance the shared game loop and turn clock. Keep timer behavior in the shared driver and rules rather than adding screen-local timer implementations.
 - Native and web variants are also present for `ScreenShell`, `ActionButton`, `Walls`, `PlayerHUD`, and `EnemyFeedback`; keep their behavior aligned where the user-facing component is shared.
 - Game tuning has a central table in `src/game/config/gameparameters.js`, but class details live separately in `src/game/config/game-classes.ts`. Search both before changing balance or player-facing class descriptions.
 

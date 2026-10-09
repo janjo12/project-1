@@ -1,14 +1,13 @@
 import { router } from "expo-router";
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Alert, Text, View, useWindowDimensions } from "react-native";
-import { GameEngine } from "react-native-game-engine";
 
-import { Container, Header, Row, StyledModal, Title } from "@/components/Common/Displays";
+import { Container, Header, Row, StyledModal, StyledText, Title } from "@/components/Common/Displays";
 import { DungeonMap } from "@/components/Dungeon/DungeonMap";
 import { ChargeControl, EquipmentControl, ItemControl } from "@/components/Controls/ActionMenu";
 import { GameViewPanel, type RoomSceneActor, type ScenePosition } from "@/components/Dungeon/GameViewPanel";
 import { ClassBriefing } from "@/components/Common/ClassBriefing";
-import { DestructiveButton, NormalButton, PrimaryButton, ToggleButton } from "@/components/Controls/ActionButton";
+import { DestructiveButton, NormalButton, PrimaryButton, SegmentedButton, ToggleButton } from "@/components/Controls/ActionButton";
 import { DebugBar, ResourceBar, ResourceBarGroup } from "@/components/Player/PlayerHUD";
 import { TurnTimerBar } from "@/components/Player/TurnTimerBar";
 import { ScreenShell } from "@/components/Common/ScreenShell";
@@ -16,12 +15,11 @@ import { ThemeProvider, useThemeColors } from "@/components/Common/theme";
 
 import { GAME_PARAMETERS } from "@/game/config/gameparameters";
 import {
-    GameLoopTimer,
     PLAYER_MAX_ENERGY,
     PLAYER_MAX_HEALTH,
-    runGameLoop,
     useRunGame,
 } from "@/game/engine/run-game-singleplayer";
+import { useGameLoopDriver } from "@/game/engine/use-game-loop-driver";
 import { useGameSettings } from "@/hooks/use-game-settings";
 import { MicrogameOverlay } from "@/components/Common/MicrogameOverlay";
 import { useMicrogame } from "@/game/actions/use-microgame";
@@ -83,27 +81,15 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
     pendingAttack.current = null;
     if (target) game.attackMonster(target, score);
   });
-  const gameLoopEntities = useMemo(
-    () => ({
-      gameLoop: {
-        elapsed: 0,
-        expired: false,
-        isTurnClockActive: game.isTurnClockActive,
-        onExpire: game.expireTurn,
-        onFrame: game.updateGameFrame,
-        turnNumber: game.turnNumber,
-        turnDuration: game.turnDuration,
-      },
-    }),
-    [
-      game.expireTurn,
-      game.isTurnClockActive,
-      game.turnDuration,
-      game.turnNumber,
-      game.updateGameFrame,
-    ],
-  );
-  const gameLoopTimer = useMemo(() => new GameLoopTimer(), []);
+  useGameLoopDriver({
+    enabled: game.isGameLoopRunning() && !isMenuOpen && !microgame.active && classIntroPage < 0,
+    isTurnClockActive: game.isTurnClockActive,
+    onExpire: game.expireTurn,
+    onFrame: game.updateGameFrame,
+    levelNumber: game.level,
+    turnDuration: game.turnDuration,
+    turnNumber: game.turnNumber,
+  });
   const map = (
     <DungeonMap currentRoomId={game.currentRoomId} map={game.visibleDungeonMap} />
   );
@@ -154,15 +140,6 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
 
   return (
     <ScreenShell compact>
-      <GameEngine
-        key={game.turnNumber}
-        entities={gameLoopEntities}
-        renderer={() => null}
-        running={game.isGameLoopRunning() && !isMenuOpen && !microgame.active && classIntroPage < 0}
-        systems={[runGameLoop]}
-        timer={gameLoopTimer}
-      />
-
       <Header>
         <NormalButton
           accessibilityLabel="Menu"
@@ -320,19 +297,30 @@ export function PauseMenu({
       <Title>Menu</Title>
 
       <Container>
-        <ToggleButton
-          label="Dark Mode"
-          value={settings.appearance === "dark"}
-          onValueChange={(value) => {
-            onSettingsChange({ appearance: value ? "dark" : "light" });
-          }}
-        />
+        <Row>
+          <StyledText>Appearance</StyledText>
+          <SegmentedButton
+            onChange={(appearance) => onSettingsChange({ appearance: appearance.toLowerCase() as typeof settings.appearance })}
+            options={["System", "Light", "Dark"] as const}
+            value={settings.appearance[0].toUpperCase() + settings.appearance.slice(1)}
+          />
+        </Row>
         <ToggleButton
           label="Vibration"
           value={settings.vibrationEnabled}
           onValueChange={(value) => {
             onSettingsChange({ vibrationEnabled: value });
           }}
+        />
+        <ToggleButton
+          label="Reduce motion"
+          value={settings.reducedMotion}
+          onValueChange={(value) => onSettingsChange({ reducedMotion: value })}
+        />
+        <ToggleButton
+          label="Reduce motion"
+          value={settings.reducedMotion}
+          onValueChange={(value) => onSettingsChange({ reducedMotion: value })}
         />
       </Container>
 

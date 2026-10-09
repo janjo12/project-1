@@ -5,7 +5,7 @@ import { useThemeColors } from "@/components/Common/theme";
 export function EnemyHealthBar({ accessibilityLabel, color, current, max, testID }: { accessibilityLabel: string; color: string; current: number; max: number; testID: string }) {
   const styles = createStyles(useThemeColors());
   const fillPercent = Math.max(0, Math.min(100, current / Math.max(1, max) * 100));
-  return <View accessibilityLabel={accessibilityLabel} style={styles.enemyHealthBarTrack} testID={testID}><View style={[styles.enemyHealthBarFill, { backgroundColor: color, width: `${fillPercent}%` }]} testID={`${testID}-fill`} /></View>;
+  return <View accessibilityLabel={accessibilityLabel} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max, now: current }} aria-valuemin={0} aria-valuemax={max} aria-valuenow={current} style={styles.enemyHealthBarTrack} testID={testID}><View style={[styles.enemyHealthBarFill, { backgroundColor: color, width: `${fillPercent}%` }]} testID={`${testID}-fill`} /></View>;
 }
 
 export function FloatingResourceLoss({ amount, color, icon, progress, testID }: { amount: number; color: string; icon: "bolt" | "heart"; progress: number | null; testID: string }) {

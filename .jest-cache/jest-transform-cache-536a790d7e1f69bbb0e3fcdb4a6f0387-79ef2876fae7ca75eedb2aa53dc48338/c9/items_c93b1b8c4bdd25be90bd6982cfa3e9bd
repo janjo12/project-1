@@ -1,0 +1,5 @@
+7f87dcd0f3aa9b3422657bc3d6aa1d5f
+module.exports = {
+      testUri:
+        "../../../assets/32rogues/items.png"
+    };

@@ -83,13 +83,16 @@ export function randomGameClass() {
 
 export function gameClassForSeed(seed: string) {
   const testClasses: Record<string, GameClassId> = {
+    test: "warrior",
     testwarrior: "warrior",
     testthief: "thief",
     testcleric: "cleric",
   };
 
-  const testClass = testClasses[seed.trim().toLowerCase()];
-  return testClass ? getGameClass(testClass) : randomGameClass();
+  const normalizedSeed = seed.trim().toLowerCase();
+  const testClass = testClasses[normalizedSeed];
+  if (testClass) return getGameClass(testClass);
+  return randomGameClass();
 }
 
 export function getGameClass(id: GameClassId) {

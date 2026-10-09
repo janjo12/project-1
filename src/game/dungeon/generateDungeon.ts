@@ -6,6 +6,7 @@ import {
   createSeededRandom,
   directionDeltas,
   findRoomInGrid,
+  getGridPosition,
   getConnectedRoomIdFromRooms,
   getDoorwayGuardPlacement,
   getNeighbor,
@@ -32,14 +33,20 @@ import {
 } from "@/game/dungeon/types";
 export function createSeededDungeonMap(seed: string, level: number, startingPosition?: GridPosition, includeClock = false) {
   // Deriving the stream from seed + level keeps each floor reproducible and independent of prior RNG calls.
+  const normalizedSeed = seed.trim().toLowerCase();
+  const testDungeonSeeds = ["test", "testwarrior", "testcleric", "testthief"];
+  const generationSeed = level === 1 && testDungeonSeeds.includes(normalizedSeed) ? "test" : seed;
   const map = createDungeonMap(
     level,
-    createSeededRandom(`${seed}:level:${level}`),
+    createSeededRandom(`${generationSeed}:level:${level}`),
     startingPosition,
     includeClock,
   );
 
-  return seed === "test" && level === 1 ? createTestDungeon(map) : map;
+  const testDungeonSeed = testDungeonSeeds.find((candidate) => candidate === normalizedSeed);
+  return testDungeonSeed && level === 1
+    ? createTestDungeon(map, testDungeonSeed)
+    : map;
 }
 
 function createMapFromContext({
@@ -58,69 +65,81 @@ function createMapFromContext({
   };
 }
 
-function createTestDungeon(map: DungeonMap) {
-  // The reserved test seed makes predictable item and werewolf rooms available to game-flow tests.
-  const guardIds = new Set(Object.keys(map.entities.doorwayGuards));
+function createTestDungeon(map: DungeonMap, seed: string) {
+  // The test seed is a real single-path floor so UI tests can follow ordinary doorways without
+  // coordinate injection, hidden state mutation, or probabilistic route planning.
+  const catalogItemIds = GAME_PARAMETERS.items.map(({ id }) => id);
+  const itemIds = ["key", ...catalogItemIds.filter((id) => id !== "key")];
+  const route = findTestDungeonRoute(map.startingRoomId, itemIds.length + 6);
+  if (route.length !== itemIds.length + 6) throw new Error("Test dungeon route does not fit the room grid");
 
+  map.entities = { items: {}, equipment: {}, doorwayGuards: {}, monsters: {} };
   map.rooms.flat().forEach((room) => {
-    (Object.keys(directionDeltas) as Direction[]).forEach((direction) => {
-      if (room[direction] === "guarded" || room[direction] === "locked") {
-        setConnectionBoundary(map.rooms, room.id, direction, "open");
+    room.contents = [];
+    room.isCurrentPosition = room.id === map.startingRoomId;
+    room.isRevealed = room.id === map.startingRoomId;
+    room.north = room.east = room.south = room.west = "wall";
+  });
+
+  route.forEach((roomId, index) => {
+    const room = findRoomInGrid(map.rooms, roomId)!;
+    if (index > 0) {
+      const previous = findRoomInGrid(map.rooms, route[index - 1])!;
+      const direction = (Object.keys(directionDeltas) as Direction[]).find((candidate) =>
+        getConnectedRoomIdFromRooms(map.rooms, previous.id, candidate) === room.id,
+      );
+      if (!direction) {
+        const delta = { column: room.column.charCodeAt(0) - previous.column.charCodeAt(0), row: room.row - previous.row };
+        const routeDirection = (Object.keys(directionDeltas) as Direction[]).find((candidate) => {
+          const step = directionDeltas[candidate];
+          return step.column === delta.column && step.row === delta.row;
+        });
+        if (!routeDirection) throw new Error(`Test route has a non-adjacent step: ${previous.id} to ${room.id}`);
+        setConnectionBoundary(map.rooms, previous.id, routeDirection, "open");
+        if (index === 2) setConnectionBoundary(map.rooms, previous.id, routeDirection, "locked");
       }
-    });
-    room.contents = room.contents.filter(
-      (content) => content.type !== "item" &&
-        !(content.type === "monster" && map.entities.monsters[content.id]?.chases),
-    );
-  });
-
-  map.entities.items = {};
-  map.entities.doorwayGuards = {};
-  Object.keys(map.entities.monsters).forEach((monsterId) => {
-    if (guardIds.has(monsterId) || map.entities.monsters[monsterId]?.chases) {
-      delete map.entities.monsters[monsterId];
+    }
+    if (index > 0 && index <= itemIds.length) {
+      const item = createItem(itemIds[index - 1], `test:${itemIds[index - 1]}:${room.id}`);
+      map.entities.items[item.id] = item;
+      room.contents.push({ id: item.id, type: "item" });
+    } else if (index > itemIds.length && index <= itemIds.length + 3) {
+      const monster = createMonster((index - itemIds.length - 1) * 4, room.id, () => 0);
+      map.entities.monsters[monster.id] = monster;
+      room.contents.push({ id: monster.id, type: "monster" });
+    } else if (index === itemIds.length + 4) {
+      const werewolf = createWerewolf(room.id);
+      map.entities.monsters[werewolf.id] = werewolf;
+      room.contents.push({ id: werewolf.id, type: "monster" });
+    } else if (index === itemIds.length + 5) {
+      room.contents.push({ id: "stairs", label: "Stairs", type: "stairs" });
     }
   });
-
-  const reachableRooms = [...getReachableRoomIds(map.rooms, map.startingRoomId)]
-    .map((roomId) => findRoomInGrid(map.rooms, roomId))
-    .filter((room): room is NonNullable<typeof room> =>
-      Boolean(
-        room &&
-          room.id !== map.startingRoomId &&
-          !room.contents.some((content) => content.type === "stairs"),
-      ),
-    )
-    .sort((left, right) => left.id.localeCompare(right.id));
-  const itemIds = GAME_PARAMETERS.items.map((item) => item.id);
-  const itemRooms = reachableRooms.slice(0, itemIds.length);
-  const werewolfRoom = reachableRooms[itemIds.length];
-
-  itemIds.forEach((itemId, index) => {
-    const room = itemRooms[index];
-    if (!room) return;
-    const item = createItem(itemId, `test:${itemId}:${room.id}`);
-    map.entities.items[item.id] = item;
-    room.contents.push({ id: item.id, type: "item" });
-  });
-
-  if (werewolfRoom) {
-    const werewolf = createWerewolf(werewolfRoom.id);
-    map.entities.monsters[werewolf.id] = werewolf;
-    werewolfRoom.contents = [
-      ...werewolfRoom.contents.filter((content) => content.type !== "monster"),
-      { id: werewolf.id, type: "monster" },
-    ];
-
-    const lockedDirection = (Object.keys(directionDeltas) as Direction[]).find(
-      (direction) => werewolfRoom[direction] === "open",
-    );
-    if (lockedDirection) {
-      setConnectionBoundary(map.rooms, werewolfRoom.id, lockedDirection, "locked");
-    }
-  }
 
   return map;
+}
+
+function findTestDungeonRoute(startingRoomId: string, length: number) {
+  const route = [startingRoomId];
+  const visited = new Set(route);
+  const walk = (): boolean => {
+    if (route.length >= length) return true;
+    const current = getGridPosition(route[route.length - 1]);
+    for (const direction of Object.keys(directionDeltas) as Direction[]) {
+      const neighbor = getNeighbor(current, direction);
+      if (!neighbor) continue;
+      const nextId = getRoomId(neighbor);
+      if (visited.has(nextId)) continue;
+      visited.add(nextId);
+      route.push(nextId);
+      if (walk()) return true;
+      route.pop();
+      visited.delete(nextId);
+    }
+    return false;
+  };
+  walk();
+  return route;
 }
 
 function growRoomNetwork({

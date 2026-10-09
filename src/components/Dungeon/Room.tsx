@@ -9,13 +9,14 @@ import { createStyles } from "@/components/Dungeon/room-scene-styles";
 import { CombatantSprite } from "@/components/Enemy/Enemy";
 import { EnemyHealthBar, FloatingResourceLoss } from "@/components/Enemy/EnemyFeedback";
 import { COMBAT_ANIMATION, type CombatAnimationFrame } from "@/game/entities";
+import { GAME_PARAMETERS } from "@/game/config/gameparameters";
 import { getAdjacentRoomTransition } from "@/utils/room-transition";
 import { AccessibilityInfo } from "react-native";
 import Animated from "react-native-reanimated";
 
 const ROOM_FADE_IN = { from: { opacity: 0 }, to: { opacity: 1 } };
 const ROOM_FADE_OUT = { from: { opacity: 1 }, to: { opacity: 0 } };
-const ROOM_TRANSITION_DURATION_MS = 220;
+const ROOM_TRANSITION_DURATION_MS = GAME_PARAMETERS.animation.roomTransitionDurationMs;
 
 export type ScenePosition = "top" | "bottom" | "left" | "right" | "center";
 type DoorPosition = Exclude<ScenePosition, "center">;

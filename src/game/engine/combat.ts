@@ -2,8 +2,8 @@ import { GAME_PARAMETERS } from "@/game/config/gameparameters";
 import type { WorldMonster } from "@/game/dungeon/types";
 
 export function getPlayerAttackDamage(monster: WorldMonster, hasEnergy: boolean) {
-  // The werewolf ignores ordinary energy scaling; other monsters use the stronger attack when energized.
-  if (monster.chases) return GAME_PARAMETERS.player.attack;
+  // A werewolf is especially dangerous, but charged attacks still benefit from the normal combat bonus.
+  if (monster.chases) return GAME_PARAMETERS.player.attack + (hasEnergy ? 5 : 0);
   return hasEnergy ? GAME_PARAMETERS.combat.strongAttackDamage : GAME_PARAMETERS.combat.normalAttackDamage;
 }
 

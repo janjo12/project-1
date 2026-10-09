@@ -1,0 +1,164 @@
+a7abfdfa06cb62aa584dabc902acf809
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+Object.defineProperty(exports, "PLAYER_MAX_ENERGY", {
+  enumerable: true,
+  get: function () {
+    return _types.PLAYER_MAX_ENERGY;
+  }
+});
+Object.defineProperty(exports, "PLAYER_MAX_HEALTH", {
+  enumerable: true,
+  get: function () {
+    return _types.PLAYER_MAX_HEALTH;
+  }
+});
+Object.defineProperty(exports, "canUseInventoryItem", {
+  enumerable: true,
+  get: function () {
+    return _items.canUseInventoryItem;
+  }
+});
+Object.defineProperty(exports, "createLevelMap", {
+  enumerable: true,
+  get: function () {
+    return _runGameLevel.createLevelMap;
+  }
+});
+Object.defineProperty(exports, "defaultRoomDoorways", {
+  enumerable: true,
+  get: function () {
+    return _types.defaultRoomDoorways;
+  }
+});
+Object.defineProperty(exports, "directionScenePositions", {
+  enumerable: true,
+  get: function () {
+    return _types.directionScenePositions;
+  }
+});
+Object.defineProperty(exports, "getCurrentEnemy", {
+  enumerable: true,
+  get: function () {
+    return _runGameSnapshot.getCurrentEnemy;
+  }
+});
+Object.defineProperty(exports, "getInventoryItemActivationDescription", {
+  enumerable: true,
+  get: function () {
+    return _items.getInventoryItemActivationDescription;
+  }
+});
+Object.defineProperty(exports, "getInventoryItemSprite", {
+  enumerable: true,
+  get: function () {
+    return _items.getInventoryItemSprite;
+  }
+});
+Object.defineProperty(exports, "getItemLabel", {
+  enumerable: true,
+  get: function () {
+    return _items.getItemLabel;
+  }
+});
+Object.defineProperty(exports, "getNextLevelState", {
+  enumerable: true,
+  get: function () {
+    return _runGameLevel.getNextLevelState;
+  }
+});
+Object.defineProperty(exports, "getPlayerAttackDamage", {
+  enumerable: true,
+  get: function () {
+    return _runGameLevel.getPlayerAttackDamage;
+  }
+});
+Object.defineProperty(exports, "getRoomDoorways", {
+  enumerable: true,
+  get: function () {
+    return _runGameScene.getRoomDoorways;
+  }
+});
+Object.defineProperty(exports, "getRoomSceneActors", {
+  enumerable: true,
+  get: function () {
+    return _runGameScene.getRoomSceneActors;
+  }
+});
+Object.defineProperty(exports, "getRunSnapshot", {
+  enumerable: true,
+  get: function () {
+    return _runGameSnapshot.getRunSnapshot;
+  }
+});
+Object.defineProperty(exports, "getTurnStatus", {
+  enumerable: true,
+  get: function () {
+    return _runGameStatus.getTurnStatus;
+  }
+});
+Object.defineProperty(exports, "playerEntryPositions", {
+  enumerable: true,
+  get: function () {
+    return _types.playerEntryPositions;
+  }
+});
+Object.defineProperty(exports, "recoverStat", {
+  enumerable: true,
+  get: function () {
+    return _items.recoverStat;
+  }
+});
+Object.defineProperty(exports, "resetRoomFeedback", {
+  enumerable: true,
+  get: function () {
+    return _items.resetRoomFeedback;
+  }
+});
+Object.defineProperty(exports, "resolveEnergyLoss", {
+  enumerable: true,
+  get: function () {
+    return _items.resolveEnergyLoss;
+  }
+});
+Object.defineProperty(exports, "resolveHealthLoss", {
+  enumerable: true,
+  get: function () {
+    return _items.resolveHealthLoss;
+  }
+});
+Object.defineProperty(exports, "resolveTurnLoss", {
+  enumerable: true,
+  get: function () {
+    return _resolveTurn.resolveTurnLoss;
+  }
+});
+exports.restartAnimations = restartAnimations;
+exports.swapRoomItemWithInventory = swapRoomItemWithInventory;
+var _rooms = require("@/game/dungeon/rooms");
+var _runGameLevel = require("@/game/engine/run-game-level");
+var _items = require("@/game/actions/items");
+var _resolveTurn = require("@/game/engine/resolveTurn");
+var _runGameSnapshot = require("@/game/engine/run-game-snapshot");
+var _runGameScene = require("@/game/engine/run-game-scene");
+var _runGameStatus = require("@/game/engine/run-game-status");
+var _types = require("@/game/state/types");
+function restartAnimations(setFrame, animationKeys) {
+  setFrame(frame => {
+    var nextFrame = Object.assign({}, frame);
+    animationKeys.forEach(key => {
+      nextFrame[key] = 0;
+    });
+    return nextFrame;
+  });
+}
+function swapRoomItemWithInventory(_ref) {
+  var currentRoomId = _ref.currentRoomId,
+    currentRoomItemId = _ref.currentRoomItemId,
+    dungeonMap = _ref.dungeonMap,
+    inventoryItem = _ref.inventoryItem;
+  var mapWithoutPickedItem = (0, _rooms.removeItemFromRoom)(dungeonMap, currentRoomId, currentRoomItemId);
+  return inventoryItem ? (0, _rooms.addItemToRoom)(mapWithoutPickedItem, currentRoomId, inventoryItem) : mapWithoutPickedItem;
+}
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJfcm9vbXMiLCJyZXF1aXJlIiwiX3J1bkdhbWVMZXZlbCIsIl9pdGVtcyIsIl9yZXNvbHZlVHVybiIsIl9ydW5HYW1lU25hcHNob3QiLCJfcnVuR2FtZVNjZW5lIiwiX3J1bkdhbWVTdGF0dXMiLCJfdHlwZXMiLCJyZXN0YXJ0QW5pbWF0aW9ucyIsInNldEZyYW1lIiwiYW5pbWF0aW9uS2V5cyIsImZyYW1lIiwibmV4dEZyYW1lIiwiT2JqZWN0IiwiYXNzaWduIiwiZm9yRWFjaCIsImtleSIsInN3YXBSb29tSXRlbVdpdGhJbnZlbnRvcnkiLCJfcmVmIiwiY3VycmVudFJvb21JZCIsImN1cnJlbnRSb29tSXRlbUlkIiwiZHVuZ2Vvbk1hcCIsImludmVudG9yeUl0ZW0iLCJtYXBXaXRob3V0UGlja2VkSXRlbSIsInJlbW92ZUl0ZW1Gcm9tUm9vbSIsImFkZEl0ZW1Ub1Jvb20iXSwic291cmNlcyI6WyJydW4tZ2FtZS1oZWxwZXJzLnRzIl0sInNvdXJjZXNDb250ZW50IjpbImltcG9ydCB0eXBlIHsgRGlzcGF0Y2gsIFNldFN0YXRlQWN0aW9uIH0gZnJvbSBcInJlYWN0XCI7XG5pbXBvcnQgdHlwZSB7IENvbWJhdEFuaW1hdGlvbkZyYW1lIH0gZnJvbSBcIkAvZ2FtZS9lbnRpdGllc1wiO1xuaW1wb3J0IHsgYWRkSXRlbVRvUm9vbSwgcmVtb3ZlSXRlbUZyb21Sb29tIH0gZnJvbSBcIkAvZ2FtZS9kdW5nZW9uL3Jvb21zXCI7XG5pbXBvcnQgdHlwZSB7IER1bmdlb25NYXAsIEl0ZW1JZCB9IGZyb20gXCJAL2dhbWUvZHVuZ2Vvbi90eXBlc1wiO1xuXG4vLyBDb21wYXRpYmlsaXR5IGVudHJ5IHBvaW50LiBOZXcgY29kZSBzaG91bGQgaW1wb3J0IGZyb20gdGhlIHJlc3BvbnNpYmlsaXR5LXNwZWNpZmljIG1vZHVsZXMuXG5leHBvcnQgeyBjcmVhdGVMZXZlbE1hcCwgZ2V0TmV4dExldmVsU3RhdGUsIGdldFBsYXllckF0dGFja0RhbWFnZSB9IGZyb20gXCJAL2dhbWUvZW5naW5lL3J1bi1nYW1lLWxldmVsXCI7XG5leHBvcnQge1xuICBjYW5Vc2VJbnZlbnRvcnlJdGVtLCBnZXRJbnZlbnRvcnlJdGVtQWN0aXZhdGlvbkRlc2NyaXB0aW9uLCBnZXRJbnZlbnRvcnlJdGVtU3ByaXRlLFxuICBnZXRJdGVtTGFiZWwsIHJlY292ZXJTdGF0LCByZXNldFJvb21GZWVkYmFjaywgcmVzb2x2ZUVuZXJneUxvc3MsIHJlc29sdmVIZWFsdGhMb3NzLFxufSBmcm9tIFwiQC9nYW1lL2FjdGlvbnMvaXRlbXNcIjtcbmV4cG9ydCB7IHJlc29sdmVUdXJuTG9zcyB9IGZyb20gXCJAL2dhbWUvZW5naW5lL3Jlc29sdmVUdXJuXCI7XG5leHBvcnQgeyBnZXRDdXJyZW50RW5lbXksIGdldFJ1blNuYXBzaG90IH0gZnJvbSBcIkAvZ2FtZS9lbmdpbmUvcnVuLWdhbWUtc25hcHNob3RcIjtcbmV4cG9ydCB7IGdldFJvb21Eb29yd2F5cywgZ2V0Um9vbVNjZW5lQWN0b3JzIH0gZnJvbSBcIkAvZ2FtZS9lbmdpbmUvcnVuLWdhbWUtc2NlbmVcIjtcbmV4cG9ydCB7IGdldFR1cm5TdGF0dXMgfSBmcm9tIFwiQC9nYW1lL2VuZ2luZS9ydW4tZ2FtZS1zdGF0dXNcIjtcbmV4cG9ydCB7IGRlZmF1bHRSb29tRG9vcndheXMsIGRpcmVjdGlvblNjZW5lUG9zaXRpb25zLCBwbGF5ZXJFbnRyeVBvc2l0aW9ucywgUExBWUVSX01BWF9FTkVSR1ksIFBMQVlFUl9NQVhfSEVBTFRIIH0gZnJvbSBcIkAvZ2FtZS9zdGF0ZS90eXBlc1wiO1xuZXhwb3J0IHR5cGUgeyBVc2VHYW1lUnVuT3B0aW9ucyB9IGZyb20gXCJAL2dhbWUvc3RhdGUvdHlwZXNcIjtcblxuZXhwb3J0IGZ1bmN0aW9uIHJlc3RhcnRBbmltYXRpb25zKFxuICBzZXRGcmFtZTogRGlzcGF0Y2g8U2V0U3RhdGVBY3Rpb248Q29tYmF0QW5pbWF0aW9uRnJhbWU+PixcbiAgYW5pbWF0aW9uS2V5czogKGtleW9mIENvbWJhdEFuaW1hdGlvbkZyYW1lKVtdLFxuKSB7XG4gIC8vIFJlc3RhcnQgb25seSB0aGUgcmVxdWVzdGVkIG9uZS1zaG90IGNoYW5uZWxzLlxuICBzZXRGcmFtZShmcmFtZSA9PiB7XG4gICAgY29uc3QgbmV4dEZyYW1lID0geyAuLi5mcmFtZSB9O1xuICAgIGFuaW1hdGlvbktleXMuZm9yRWFjaChrZXkgPT4geyBuZXh0RnJhbWVba2V5XSA9IDA7IH0pO1xuICAgIHJldHVybiBuZXh0RnJhbWU7XG4gIH0pO1xufVxuXG5leHBvcnQgZnVuY3Rpb24gc3dhcFJvb21JdGVtV2l0aEludmVudG9yeSh7IGN1cnJlbnRSb29tSWQsIGN1cnJlbnRSb29tSXRlbUlkLCBkdW5nZW9uTWFwLCBpbnZlbnRvcnlJdGVtIH06IHtcbiAgY3VycmVudFJvb21JZDogc3RyaW5nOyBjdXJyZW50Um9vbUl0ZW1JZDogSXRlbUlkOyBkdW5nZW9uTWFwOiBEdW5nZW9uTWFwOyBpbnZlbnRvcnlJdGVtOiBJdGVtSWQgfCBudWxsO1xufSkge1xuICAvLyBQaWNraW5nIHVwIGEgbmV3IGl0ZW0gZHJvcHMgdGhlIGhlbGQgb25lIGludG8gdGhlIHNhbWUgcm9vbSBiZWZvcmUgdXBkYXRpbmcgaW52ZW50b3J5IHN0YXRlLlxuICBjb25zdCBtYXBXaXRob3V0UGlja2VkSXRlbSA9IHJlbW92ZUl0ZW1Gcm9tUm9vbShkdW5nZW9uTWFwLCBjdXJyZW50Um9vbUlkLCBjdXJyZW50Um9vbUl0ZW1JZCk7XG4gIHJldHVybiBpbnZlbnRvcnlJdGVtID8gYWRkSXRlbVRvUm9vbShtYXBXaXRob3V0UGlja2VkSXRlbSwgY3VycmVudFJvb21JZCwgaW52ZW50b3J5SXRlbSkgOiBtYXBXaXRob3V0UGlja2VkSXRlbTtcbn1cbiJdLCJtYXBwaW5ncyI6Ijs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7QUFFQSxJQUFBQSxNQUFBLEdBQUFDLE9BQUE7QUFJQSxJQUFBQyxhQUFBLEdBQUFELE9BQUE7QUFDQSxJQUFBRSxNQUFBLEdBQUFGLE9BQUE7QUFJQSxJQUFBRyxZQUFBLEdBQUFILE9BQUE7QUFDQSxJQUFBSSxnQkFBQSxHQUFBSixPQUFBO0FBQ0EsSUFBQUssYUFBQSxHQUFBTCxPQUFBO0FBQ0EsSUFBQU0sY0FBQSxHQUFBTixPQUFBO0FBQ0EsSUFBQU8sTUFBQSxHQUFBUCxPQUFBO0FBR08sU0FBU1EsaUJBQWlCQSxDQUMvQkMsUUFBd0QsRUFDeERDLGFBQTZDLEVBQzdDO0VBRUFELFFBQVEsQ0FBQ0UsS0FBSyxJQUFJO0lBQ2hCLElBQU1DLFNBQVMsR0FBQUMsTUFBQSxDQUFBQyxNQUFBLEtBQVFILEtBQUssQ0FBRTtJQUM5QkQsYUFBYSxDQUFDSyxPQUFPLENBQUNDLEdBQUcsSUFBSTtNQUFFSixTQUFTLENBQUNJLEdBQUcsQ0FBQyxHQUFHLENBQUM7SUFBRSxDQUFDLENBQUM7SUFDckQsT0FBT0osU0FBUztFQUNsQixDQUFDLENBQUM7QUFDSjtBQUVPLFNBQVNLLHlCQUF5QkEsQ0FBQUMsSUFBQSxFQUV0QztFQUFBLElBRnlDQyxhQUFhLEdBQUFELElBQUEsQ0FBYkMsYUFBYTtJQUFFQyxpQkFBaUIsR0FBQUYsSUFBQSxDQUFqQkUsaUJBQWlCO0lBQUVDLFVBQVUsR0FBQUgsSUFBQSxDQUFWRyxVQUFVO0lBQUVDLGFBQWEsR0FBQUosSUFBQSxDQUFiSSxhQUFhO0VBSXJHLElBQU1DLG9CQUFvQixHQUFHLElBQUFDLHlCQUFrQixFQUFDSCxVQUFVLEVBQUVGLGFBQWEsRUFBRUMsaUJBQWlCLENBQUM7RUFDN0YsT0FBT0UsYUFBYSxHQUFHLElBQUFHLG9CQUFhLEVBQUNGLG9CQUFvQixFQUFFSixhQUFhLEVBQUVHLGFBQWEsQ0FBQyxHQUFHQyxvQkFBb0I7QUFDakgiLCJpZ25vcmVMaXN0IjpbXX0=

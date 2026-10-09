@@ -1,0 +1,5 @@
+881e9a70eacb7cb897c260219118f204
+module.exports = {
+      testUri:
+        "../../../assets/32rogues/monsters.png"
+    };

@@ -1,20 +1,24 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const visualPort = Number(process.env.PLAYWRIGHT_PORT ?? 3127);
+
 export default defineConfig({
-  testDir: "./visual-tests",
+  testDir: "./tests",
+  testMatch: "**/*.spec.ts",
   fullyParallel: false,
   reporter: "list",
   use: {
     ...devices["Desktop Chrome"],
-    channel: "msedge",
-    baseURL: "http://127.0.0.1:3127",
+    browserName: "chromium",
+    ...(process.env.PLAYWRIGHT_CHANNEL ? { channel: process.env.PLAYWRIGHT_CHANNEL } : {}),
+    baseURL: `http://127.0.0.1:${visualPort}`,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },
   webServer: {
-    command: "npm run web:visual-server -- --hostname 127.0.0.1",
-    url: "http://127.0.0.1:3127",
-    reuseExistingServer: false,
+    command: `npm run web:visual-server -- --hostname 127.0.0.1 --port ${visualPort}`,
+    url: `http://127.0.0.1:${visualPort}`,
+    reuseExistingServer: !process.env.CI,
     timeout: 120_000,
   },
 });

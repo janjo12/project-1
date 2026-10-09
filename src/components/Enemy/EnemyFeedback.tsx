@@ -27,6 +27,8 @@ export function EnemyHealthBar({
   return (
     <View
       accessibilityLabel={accessibilityLabel}
+      accessibilityRole="progressbar"
+      accessibilityValue={{ min: 0, max: safeMax, now: current }}
       style={styles.enemyHealthBarTrack}
       testID={testID}
     >

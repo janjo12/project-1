@@ -54,6 +54,7 @@ export type MultiplayerState = GameState & {
 export function createMultiplayerState(seed: string, difficulty: Difficulty, ids: string[]): MultiplayerState {
   // Multiplayer starts from one shared level and gives every roster member independent character resources.
   const map = createLevelMap(seed, 1, undefined, difficulty !== "easy");
+  const classId = gameClassForSeed(seed).id;
   const players = Object.fromEntries(ids.map(id => [id, {
     id,
     roomId: map.startingRoomId,
@@ -61,7 +62,7 @@ export function createMultiplayerState(seed: string, difficulty: Difficulty, ids
     energy: PLAYER_MAX_ENERGY,
     item: null,
     equipment: null,
-    classId: gameClassForSeed(seed).id,
+    classId,
     defenseBuff: 0,
     vanguard: 0,
     vanguardSource: null,

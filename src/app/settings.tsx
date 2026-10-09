@@ -1,7 +1,7 @@
 import { router } from "expo-router";
 
-import { Container, Header, Title } from "@/components/Common/Displays";
-import { CancelButton, ToggleButton } from "@/components/Controls/ActionButton";
+import { Container, Header, Row, StyledText, Title } from "@/components/Common/Displays";
+import { CancelButton, SegmentedButton, ToggleButton } from "@/components/Controls/ActionButton";
 import { ScreenShell } from "@/components/Common/ScreenShell";
 import { ThemeProvider } from "@/components/Common/theme";
 
@@ -26,13 +26,14 @@ export default function SettingsRoute() {
 
           <Container>
             <Title>Settings</Title>
-            <ToggleButton
-              label="Dark Mode"
-              value={settings.appearance === "dark"}
-              onValueChange={(value) => {
-                updateSettings({ appearance: value ? "dark" : "light" });
-              }}
-            />
+            <Row>
+              <StyledText>Appearance</StyledText>
+              <SegmentedButton
+                onChange={(appearance) => updateSettings({ appearance: appearance.toLowerCase() as typeof settings.appearance })}
+                options={["System", "Light", "Dark"] as const}
+                value={settings.appearance[0].toUpperCase() + settings.appearance.slice(1)}
+              />
+            </Row>
             <ToggleButton
               label="Vibration"
               value={settings.vibrationEnabled}
@@ -47,6 +48,12 @@ export default function SettingsRoute() {
                 updateSettings({ handedness: value ? "left" : "right" });
               }}
             />
+            <ToggleButton
+              label="Reduce motion"
+              value={settings.reducedMotion}
+              onValueChange={(value) => updateSettings({ reducedMotion: value })}
+            />
+            <StyledText>Skips room slides, doorway pulsing, and idle enemy bobbing.</StyledText>
           </Container>
         </Container>
       </ScreenShell>

@@ -20,6 +20,7 @@ export function resolveRoomMovement({
   canUseKey,
   direction,
   isThief,
+  isCharged = false,
   map,
   revealAdjacent,
   roomId,
@@ -27,6 +28,7 @@ export function resolveRoomMovement({
   canUseKey: boolean;
   direction: Direction;
   isThief: boolean;
+  isCharged?: boolean;
   map: DungeonMap;
   revealAdjacent: boolean;
   roomId: string;
@@ -37,14 +39,19 @@ export function resolveRoomMovement({
   const pickedLock = isThief && isLocked;
   const opensDoor = usedKey || pickedLock;
   const openedMap = opensDoor ? unlockDoor(map, roomId, direction) : map;
-  const nextRoomId = getConnectedRoomId(openedMap, roomId, direction);
+  const thiefNeedsSeparateMove = isThief && isLocked && !canUseKey && !isCharged;
+  const nextRoomId = thiefNeedsSeparateMove
+    ? roomId
+    : getConnectedRoomId(openedMap, roomId, direction);
   const nextRoom = nextRoomId ? getRoom(openedMap, nextRoomId) : undefined;
 
   // A missing connection stays an invalid move, even if an attempted unlock changed a temporary map.
   if (!nextRoomId || !nextRoom) return null;
 
   return {
-    map: revealRooms(moveCurrentPosition(openedMap, nextRoomId), nextRoomId, revealAdjacent),
+    map: thiefNeedsSeparateMove
+      ? revealRooms(openedMap, roomId, revealAdjacent)
+      : revealRooms(moveCurrentPosition(openedMap, nextRoomId), nextRoomId, revealAdjacent),
     nextRoomId,
     usedKey,
     // Entering a stairs room starts at its center; other rooms preserve normal entry placement.

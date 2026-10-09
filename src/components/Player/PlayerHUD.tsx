@@ -22,6 +22,7 @@ type ResourceBarGroupProps = {
 type DebugBarProps = {
   accessibilityLabel: string;
   accessibilityRole: "text";
+  testID?: string;
   children: React.ReactNode;
 };
 
@@ -43,6 +44,8 @@ export function ResourceBar({
   return (
     <View
       accessibilityLabel={accessibilityLabel}
+      accessibilityRole="progressbar"
+      accessibilityValue={{ min: 0, max: safeMax, now: current }}
       style={[
         styles.row,
         panelPosition !== "single" && styles.connectedRow,
@@ -91,13 +94,16 @@ export function ResourceBarGroup({ children, compact = false }: ResourceBarGroup
 }
 
 export function DebugBar({
-  children
+  children,
+  accessibilityLabel,
+  accessibilityRole,
+  testID,
 }: DebugBarProps) {
   const colors = useThemeColors();
   const styles = createStyles(colors);
 
   return (
-    <Text style={styles.turnStatus}>
+    <Text accessibilityLabel={accessibilityLabel} accessibilityRole={accessibilityRole} testID={testID} style={styles.turnStatus}>
       {children}
     </Text>
   );

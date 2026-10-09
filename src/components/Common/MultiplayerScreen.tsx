@@ -257,6 +257,7 @@ function Multiplayer({ settings, onLeave }: { settings: GameSettings; onLeave: (
             elapsedStore={microgame.elapsedStore}
             targetDelay={microgame.targetDelay}
             targetSpot={microgame.targetSpot}
+            clicks={microgame.clicks}
             leftHanded={settings.handedness === "left"}
             isTest={microgame.istest}
             onTap={microgame.tap}
