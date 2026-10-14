@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { HUMAN_REACTION_WINDOW_MS, TIMED_ATTACK_CUE_DELAY_MS } from "@/game/actions/use-microgame";
+import { HUMAN_REACTION_WINDOW_MS, MULTITAP_TARGET_TAPS, TIMED_ATTACK_CUE_DELAY_MS } from "@/game/actions/use-microgame";
 import { GAME_PARAMETERS } from "@/game/config/gameparameters";
 import { applyDefense } from "@/game/engine/combat";
 import { getTurnDuration } from "@/game/engine/resolveTurn";
@@ -256,7 +256,7 @@ async function healthFillPercent(page: import("@playwright/test").Page) {
 async function playClassMicrogame(page: import("@playwright/test").Page, className: string) {
   if (className === "Warrior") {
     const target = page.getByRole("button", { name: "Tap circle" });
-    for (let tap = 0; tap < 10; tap += 1) {
+    for (let tap = 0; tap < MULTITAP_TARGET_TAPS; tap += 1) {
       await page.clock.runFor(HUMAN_REACTION_WINDOW_MS);
       await target.click();
     }

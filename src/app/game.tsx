@@ -250,7 +250,7 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
         <ClassBriefing
           page={classIntroPage}
           classId={game.playerClass.id}
-          damage={game.playerAttack}
+          damage={microgameScore === null ? game.playerAttack : Math.max(1, Math.floor(game.playerAttack * microgameScore / 100))}
           multiplayer={false}
           onNext={() => setClassIntroPage(1)}
           onBack={() => setClassIntroPage(0)}

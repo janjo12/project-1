@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Text, View, type StyleProp, type ViewStyle } from "react-native";
+import { Image, Text, View, type ImageStyle, type StyleProp, type ViewStyle } from "react-native";
+import monsters from "../../../assets/32rogues/monsters.png";
+import tiles from "../../../assets/32rogues/tiles.png";
+import rogues from "../../../assets/32rogues/rogues.png";
+import items from "../../../assets/32rogues/items.png";
 
-const monsters = require("../../../assets/32rogues/monsters.png");
-const tiles = require("../../../assets/32rogues/tiles.png");
-const rogues = require("../../../assets/32rogues/rogues.png");
-const items = require("../../../assets/32rogues/items.png");
-type Tile = { source: { uri?: string; src?: string }; width: number; height: number; row: number; column: number };
+type WebAsset = { uri?: string; src?: string };
+type Tile = { source: WebAsset; width: number; height: number; row: number; column: number };
 const monster = (row: number, column: number): Tile => ({ source: monsters, width: 384, height: 416, row, column });
 const item = (row: number, column: number): Tile => ({ source: items, width: 352, height: 832, row, column });
 const sprites: Record<string, Tile> = {
@@ -27,8 +28,9 @@ export function PixelSprite({ sprite, label, size = 32, style }: { sprite: strin
   if (!uri) return <View style={[{ minWidth: size }, style]}><Text accessibilityLabel={label} accessibilityRole="image">[{sprite}]</Text></View>;
   const scale = size / 32;
   return <View accessibilityLabel={label} accessibilityRole="image" style={[{ width: size, height: size, overflow: "hidden" }, style]}>
-    <View testID="pixel-sprite-image" data-sprite={sprite} style={{ position: "absolute", width: size, height: size,
-      backgroundImage: `url("${uri}")`, backgroundRepeat: "no-repeat", backgroundSize: `${tile.width * scale}px ${tile.height * scale}px`,
-      backgroundPosition: `${-tile.column * size}px ${-tile.row * size}px`, imageRendering: "pixelated" } as unknown as ViewStyle} />
+    <Image testID="pixel-sprite-image" source={{ uri }} resizeMode="stretch" style={{
+      position: "absolute", width: tile.width * scale, height: tile.height * scale,
+      left: -tile.column * size, top: -tile.row * size, imageRendering: "pixelated",
+    } as unknown as ImageStyle} />
   </View>;
 }
