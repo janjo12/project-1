@@ -2,6 +2,7 @@ import { useState, useSyncExternalStore } from "react";
 import { Pressable, Text, View, useWindowDimensions } from "react-native";
 
 import { MicrogameCircle, MicrogameCircleOutline } from "@/components/Common/MicrogameCircle";
+import { PixelSprite } from "@/components/Common/PixelSprite";
 import { useThemeColors } from "@/components/Common/theme";
 import { MULTITAP_TARGET_TAPS } from "@/game/actions/use-microgame";
 import { CONCENTRATION_TARGET_DURATION_MS, HUMAN_REACTION_WINDOW_MS, type MicrogameKind } from "@/game/actions/use-microgame";
@@ -16,6 +17,7 @@ type MicrogameOverlayProps = {
   clicks?: number;
   leftHanded: boolean;
   isTest?: boolean;
+  playerSprite?: string;
   onTap: () => void;
 };
 
@@ -28,6 +30,7 @@ export function MicrogameOverlay({
   clicks = 0,
   leftHanded,
   isTest = false,
+  playerSprite,
   onTap,
 }: MicrogameOverlayProps) {
   const colors = useThemeColors();
@@ -76,6 +79,14 @@ export function MicrogameOverlay({
         leftHanded={leftHanded}
         onTap={onTap}
       />
+      {playerSprite ? (
+        <PixelSprite
+          sprite={playerSprite}
+          label="Hero practicing attack"
+          size={64}
+          style={{ position: "absolute", top: 48 }}
+        />
+      ) : null}
     </View>
   );
 }

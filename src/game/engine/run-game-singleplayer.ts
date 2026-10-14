@@ -412,6 +412,7 @@ export function useRunGame({
           return;
         }
 
+        setActiveMonsterId(monsterId);
         restartAnimations(setAnimationFrame, ["enemyAttackElapsed"]);
         let resolvedMap = currentMap;
         // Vanguard's reflected damage is consumed by the first enemy that attacks this turn.

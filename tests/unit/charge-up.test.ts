@@ -2,6 +2,8 @@ import { PLAYER_MAX_ENERGY, useRunGame } from "@/game/engine/run-game-singleplay
 import { createSeededDungeonMap } from "@/game/dungeon/generateDungeon";
 import type { DungeonMap } from "@/game/dungeon/types";
 import { getRoom } from "@/game/dungeon/rooms";
+import { applyDefense } from "@/game/engine/combat";
+import { GAME_PARAMETERS } from "@/game/config/gameparameters";
 import { act, renderHook } from "@testing-library/react-native";
 
 jest.mock("@/game/dungeon/mapStorage", () => ({
@@ -28,15 +30,19 @@ function fixture(): DungeonMap {
   return map;
 }
 
-async function setup(enemy = false, meal = false, enemyHealth = 20, enemyDamage = 2, difficulty: "easy" | "normal" | "hard" = "normal", seed = "charge-test", lockedDoor = false) {
+async function setup(enemy = false, meal = false, enemyHealth = 20, enemyDamage = 2, difficulty: "easy" | "normal" | "hard" = "normal", seed = "charge-test", lockedDoor = false, enemyCount = 1) {
   const map = fixture();
   if (lockedDoor) {
     getRoom(map, "A1")!.east = "locked";
     getRoom(map, "A2")!.west = "locked";
   }
   if (enemy) {
-    map.entities.monsters.zombie = { id: "zombie", name: "Zombie", sprite: "🧟", type: "monster", currentHealth: enemyHealth, maximumHealth: enemyHealth, damage: enemyDamage };
-    getRoom(map, "A1")!.contents = [{ id: "zombie", type: "monster" }];
+    getRoom(map, "A1")!.contents = [];
+    for (let index = 0; index < enemyCount; index += 1) {
+      const id = index === 0 ? "zombie" : `zombie-${index}`;
+      map.entities.monsters[id] = { id, name: `Zombie ${index + 1}`, sprite: "🧟", type: "monster", currentHealth: enemyHealth, maximumHealth: enemyHealth, damage: enemyDamage };
+      getRoom(map, "A1")!.contents.push({ id, type: "monster" });
+    }
   }
   if (meal) {
     map.entities.items.meal = { id: "meal", itemId: "energy-meal", label: "Energy Meal", sprite: "🍔", type: "item" };
@@ -66,6 +72,30 @@ test("charge can be cancelled and re-enabled without advancing the turn", async 
     expect(result.current.isCharged).toBe(false);
   }
   expect(result.current.turnNumber).toBe(0);
+});
+
+test("an attack damages its target, then every living enemy attacks once", async () => {
+  const enemyCount = 3;
+  const enemyDamage = 30;
+  const { result } = await setup(true, false, 100, enemyDamage, "easy", "testwarrior", false, enemyCount);
+  const startingPlayerHealth = result.current.playerHealth;
+  const startingTargetHealth = result.current.dungeonMap.entities.monsters.zombie.currentHealth;
+
+  act(() => result.current.attackMonster("zombie", 100));
+  expect(result.current.isResolving).toBe(true);
+  act(() => jest.advanceTimersByTime(GAME_PARAMETERS.animation.attackDurationMs));
+
+  expect(result.current.dungeonMap.entities.monsters.zombie.currentHealth).toBeLessThan(startingTargetHealth);
+  expect(result.current.playerHealth).toBe(startingPlayerHealth);
+  expect(result.current.isResolving).toBe(true);
+
+  act(() => jest.advanceTimersByTime(enemyCount * GAME_PARAMETERS.animation.enemyTurnDurationMs));
+
+  const warriorDefense = GAME_PARAMETERS.player.defense + 5;
+  const expectedDamage = enemyCount * applyDefense(enemyDamage, warriorDefense);
+  expect(result.current.playerHealth).toBe(startingPlayerHealth - expectedDamage);
+  expect(result.current.isResolving).toBe(false);
+  expect(result.current.turnNumber).toBe(1);
 });
 
 test("blocked moves keep charge; valid moves cancel it and always consume a turn", async () => {
