@@ -8,6 +8,7 @@ export type GameSettings = {
   appearance: Appearance;
   difficulty: Difficulty;
   seed: string;
+  microgamesEnabled: boolean;
   vibrationEnabled: boolean;
   reducedMotion: boolean;
   handedness: Handedness;
@@ -25,6 +26,7 @@ export const DEFAULT_GAME_SETTINGS: GameSettings = {
   appearance: "system",
   difficulty: "easy",
   seed: "",
+  microgamesEnabled: true,
   vibrationEnabled: true,
   reducedMotion: false,
   handedness: "right",
@@ -61,6 +63,9 @@ function normalizeSettings(value: unknown): GameSettings {
       typeof candidate.seed === "string"
         ? candidate.seed
         : DEFAULT_GAME_SETTINGS.seed,
+    microgamesEnabled: typeof candidate.microgamesEnabled === "boolean"
+      ? candidate.microgamesEnabled
+      : DEFAULT_GAME_SETTINGS.microgamesEnabled,
     vibrationEnabled:
       typeof candidate.vibrationEnabled === "boolean"
         ? candidate.vibrationEnabled

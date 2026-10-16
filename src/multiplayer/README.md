@@ -10,6 +10,13 @@
 
 There is no signaling server or third game-host device. This first version uses copy/paste signaling; QR scanning and automatic discovery are not implemented. Both sides use `iceServers: []`, so no STUN/TURN service is contacted. Wi-Fi client isolation can prevent peers from connecting even on the same SSID.
 
+## If multiplayer cannot start
+
+- **WebRTC unavailable:** Expo Go and builds without the native `react-native-webrtc` module cannot host or join. Install the Android development build, or use the on-screen singleplayer fallback. Multiplayer is loaded only when selected, so this does not block singleplayer.
+- **Offer gathering or peer connection times out:** Put both devices on the same local Wi-Fi, disable VPNs, and avoid guest networks or routers with client/device isolation. Internet access is not required for the peer connection after the invitation and reply have been exchanged; the local network must allow devices to communicate directly.
+- **Bad or mismatched invitation/reply:** Copy the full text and retry the current lobby step. A failed attempt leaves the singleplayer option available.
+- **Emulator limitations:** Use a native development build to exercise WebRTC. Some emulator images or host network setups do not provide working peer-to-peer networking; validate multiplayer on two real devices before relying on it. Singleplayer can still be run in Expo Go on the emulator.
+
 ## Gameplay
 
 Each device controls its own character, position, inventory, health and energy in a shared dungeon. Choose one action per team turn by tapping doors, enemies, items or your character to use its class-specific support skill. Charge modifies the next action. The host resolves actions in stable roster order, so contested loot goes to the first player in that order. Shared enemy health and doors update on all devices.

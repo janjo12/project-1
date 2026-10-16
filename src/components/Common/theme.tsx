@@ -1,4 +1,4 @@
-import { createContext, PropsWithChildren, useContext } from "react";
+import { createContext, PropsWithChildren, useContext, useEffect, useState } from "react";
 import { ColorSchemeName, useColorScheme } from "react-native";
 
 import type { Appearance } from "@/utils/settings-storage";
@@ -59,7 +59,7 @@ const ThemeContext = createContext<ThemeContextValue>({
 
 function resolveAppearance(
   appearance: Appearance,
-  systemColorScheme: ColorSchemeName,
+  systemColorScheme: ColorSchemeName | null,
 ) {
   if (appearance === "system") {
     return systemColorScheme === "dark" ? "dark" : "light";
@@ -74,7 +74,18 @@ type ThemeProviderProps = PropsWithChildren<{
 
 export function ThemeProvider({ appearance, children }: ThemeProviderProps) {
   const systemColorScheme = useColorScheme();
-  const colorScheme = resolveAppearance(appearance, systemColorScheme);
+  // Keep the server render and the browser's first render identical. The OS
+  // preference is applied after hydration when appearance is set to "system".
+  const [hydratedSystemColorScheme, setHydratedSystemColorScheme] = useState<ColorSchemeName | null>(null);
+
+  useEffect(() => {
+    setHydratedSystemColorScheme(systemColorScheme);
+  }, [systemColorScheme]);
+
+  const colorScheme = resolveAppearance(
+    appearance,
+    appearance === "system" ? hydratedSystemColorScheme : systemColorScheme,
+  );
 
   return (
     <ThemeContext.Provider

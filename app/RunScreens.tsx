@@ -46,6 +46,8 @@ export function SetupScreen({ settings, onBack, onSettings, onUpdate, onStart }:
             <SegmentedButton onChange={difficulty => onUpdate({ difficulty })} options={["easy", "normal", "hard"] as const} value={settings.difficulty} />
             <HelpButton accessibilityLabel="Difficulty help" accessibilityRole="button" onPress={() => setHelpTopic("difficulty")} />
           </Row>
+          <ToggleButton label="Attack microgames" value={settings.microgamesEnabled} onValueChange={microgamesEnabled => onUpdate({ microgamesEnabled })} />
+          <StyledText>Turn off for direct attacks without a timing game.</StyledText>
           <Row>
             <StyledText>Seed</StyledText>
             <TextEntry accessibilityLabel="Seed" accessibilityRole="textbox" onChangeText={seed => onUpdate({ seed })} placeholder="Random" value={settings.seed} />
@@ -159,7 +161,14 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
         enemyHealthLossAmount={game.enemyHealthLossAmount}
         hardTurnCounter={game.hardTurnCounter}
         onActorPress={actor => {
-          if (actor.kind === "enemy") { pendingAttack.current = actor.id; startMicrogame(); }
+          if (actor.kind === "enemy") {
+            if (settings.microgamesEnabled) {
+              pendingAttack.current = actor.id;
+              startMicrogame();
+            } else {
+              game.attackMonster(actor.id);
+            }
+          }
           else if (actor.kind === "item") void game.pickupItem();
           else if (actor.kind === "equipment") game.pickupEquipment();
           else if (actor.kind === "stairs") game.descend();
@@ -177,7 +186,7 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
         playerHealthLossAmount={game.playerHealthLossAmount}
       />
       <MicrogameOverlay visible={microgame.active} kind={microgame.kind} elapsedStore={microgame.elapsedStore} targetDelay={microgame.targetDelay} targetSpot={microgame.targetSpot} clicks={microgame.clicks} leftHanded={settings.handedness === "left"} isTest={microgame.istest} playerSprite={game.playerClass.sprite} onTap={microgame.tap} />
-      {classIntroPage >= 0 ? <ClassBriefing page={classIntroPage} classId={game.playerClass.id} damage={microgameScore === null ? game.playerAttack : Math.max(1, Math.floor(game.playerAttack * microgameScore / 100))} multiplayer={false} onNext={() => setClassIntroPage(1)} onBack={() => setClassIntroPage(0)} onPractice={startMicrogame} onStart={() => setClassIntroPage(-1)} /> : null}
+      {classIntroPage >= 0 ? <ClassBriefing page={classIntroPage} classId={game.playerClass.id} damage={microgameScore === null ? game.playerAttack : Math.max(1, Math.floor(game.playerAttack * microgameScore / 100))} multiplayer={false} microgamesEnabled={settings.microgamesEnabled} onNext={() => setClassIntroPage(1)} onBack={() => setClassIntroPage(0)} onPractice={startMicrogame} onStart={() => setClassIntroPage(-1)} /> : null}
       <StyledModal accessibilityLabel="Game menu" accessibilityRole="dialog" animationType="fade" onRequestClose={() => setIsMenuOpen(false)} visible={isMenuOpen}>
         <Title>Menu</Title>
         <Container>
@@ -193,7 +202,7 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
           <ToggleButton label="Reduce motion" value={settings.reducedMotion} onValueChange={value => onSettingsChange({ reducedMotion: value })} />
         </Container>
         {tinyLayout ? <NormalButton accessibilityLabel="Open dungeon map" accessibilityRole="button" label="Dungeon Map" onPress={() => { setIsMenuOpen(false); setIsMapOpen(true); }} /> : null}
-        <NormalButton accessibilityLabel="Practice attack microgame" accessibilityRole="button" label="Practice Attack" onPress={() => { setIsMenuOpen(false); startMicrogame(); }} />
+        {settings.microgamesEnabled ? <NormalButton accessibilityLabel="Practice attack microgame" accessibilityRole="button" label="Practice Attack" onPress={() => { setIsMenuOpen(false); startMicrogame(); }} /> : null}
         <PrimaryButton accessibilityLabel="Back to Game" accessibilityRole="button" label="Back to Game" onPress={() => setIsMenuOpen(false)} />
         <DestructiveButton accessibilityLabel="Quit to Title" accessibilityRole="button" label="Quit to Title" onPress={() => setIsQuitConfirmOpen(true)} />
       </StyledModal>

@@ -87,6 +87,14 @@ function Multiplayer({ settings }: { settings: GameSettings }) {
       {error ? <StyledText>{error}</StyledText> : null}
       {busy ? <StyledText>Preparing connection…</StyledText> : null}
       {disconnected ? <StyledText>Disconnected from the host. Leave and join a new lobby.</StyledText> : null}
+      {error || disconnected ? (
+        <PrimaryButton
+          accessibilityLabel="Play singleplayer instead"
+          accessibilityRole="button"
+          label="Play singleplayer instead"
+          onPress={() => router.replace({ pathname: "/setup", params: { mode: "singleplayer" } })}
+        />
+      ) : null}
 
       {!state ? (
         <>
@@ -151,7 +159,7 @@ function Multiplayer({ settings }: { settings: GameSettings }) {
       ) : player && map && snapshot ? (
         <>
           <StyledText>{isTestSeed(state.seed) ? "TEST · " : ""}Level {state.level} · Turn {state.turn + 1} · You: {playerId}</StyledText>
-          {state.phase === "playing" ? (
+          {state.phase === "playing" && settings.microgamesEnabled ? (
             <ActionButton
               label="Practice attack game"
               onPress={() => microgame.start(getGameClass(player.classId).microgame, settings.handedness, { istest: isTestSeed(state.seed) })}
@@ -233,8 +241,12 @@ function Multiplayer({ settings }: { settings: GameSettings }) {
             onDoorwayPress={position => submit({ type: "MOVE", target: getDirection(position) })}
             onActorPress={actor => {
               if (actor.kind === "enemy") {
-                pendingAttack.current = actor.id;
-                microgame.start(getGameClass(player.classId).microgame, settings.handedness, { istest: isTestSeed(state.seed) });
+                if (settings.microgamesEnabled) {
+                  pendingAttack.current = actor.id;
+                  microgame.start(getGameClass(player.classId).microgame, settings.handedness, { istest: isTestSeed(state.seed) });
+                } else {
+                  submit({ type: "ATTACK", target: actor.id });
+                }
                 return;
               }
 
@@ -276,6 +288,7 @@ function Multiplayer({ settings }: { settings: GameSettings }) {
               classId={player.classId}
               damage={10 + getEquipmentStats(player.equipment).attack}
               multiplayer
+              microgamesEnabled={settings.microgamesEnabled}
               onNext={() => setIntroPage(1)}
               onBack={() => setIntroPage(0)}
               onPractice={() => microgame.start(getGameClass(player.classId).microgame, settings.handedness, { istest: isTestSeed(state.seed) })}

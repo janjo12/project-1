@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { AppState } from "react-native";
 
 import type { createClientConnection, createHostSession, GameState, PlayerAction } from "@/multiplayer/connection";
+import { describeMultiplayerFailure } from "@/multiplayer/multiplayer-errors";
 import { GAME_PARAMETERS } from "@/game/config/gameparameters";
 import { createLevelMap } from "@/game/engine/run-game-level";
 import { getRunSnapshot } from "@/game/engine/run-game-snapshot";
@@ -25,6 +26,7 @@ import {
 } from "@/game/dungeon/rooms";
 import { applyDefense, getEquipmentStats, resolveEnergyLoss, resolveHealthLoss } from "@/game/actions/items";
 import { gameClassForSeed, type GameClassId } from "@/game/config/game-classes";
+import { getPlayerAttackDamage, resolveAttackDamage } from "@/game/engine/combat";
 import type { Difficulty, GameSettings } from "@/utils/settings-storage";
 
 export type MultiplayerPlayer = {
@@ -226,10 +228,15 @@ export function resolveMultiplayerTurn(
       if (monster) {
         const silver = monster.chases && player.item === "silver-bullet";
         const attackScore = action.microgameScore ?? 100;
-        const baseDamage = Math.floor(GAME_PARAMETERS.player.attack * attackScore / 100);
         const damage = silver
           ? monster.currentHealth
-          : baseDamage + getEquipmentStats(player.equipment).attack + (charged ? 5 : 0);
+          : resolveAttackDamage({
+            profile: getPlayerAttackDamage(monster, charged),
+            score: attackScore,
+            equipmentAttack: getEquipmentStats(player.equipment).attack,
+            charged,
+            target: monster,
+          });
         state.map = damageMonsterInRoom(
           state.map,
           player.roomId,
@@ -370,7 +377,7 @@ export function useRunMultiplayerGame(settings: GameSettings) {
   const [seconds, setSeconds] = useState(0);
   const [disconnected, setDisconnected] = useState(false);
   const [foreground, setForeground] = useState(true);
-  const report = (e: unknown) => { if (mounted.current) setError(e instanceof Error ? e.message : String(e)); };
+  const report = (e: unknown) => { if (mounted.current) setError(describeMultiplayerFailure(e)); };
   function receive(next: MultiplayerState) {
     if (!mounted.current) return;
     setState(next); setCharged(false); setSubmitted(null);
@@ -417,7 +424,7 @@ export function useRunMultiplayerGame(settings: GameSettings) {
         },
       });
       setRole("host");
-    } catch { setError("Multiplayer needs the installed native development build. Expo Go does not include WebRTC."); }
+    } catch (error) { report(error); }
   }
   async function addGuest() {
     const id = `player-${nextGuest.current++}`;

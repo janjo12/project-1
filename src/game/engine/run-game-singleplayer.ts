@@ -47,7 +47,7 @@ import {
   applyWerewolfChaseAfterAction,
   getHardTurnLimit, hasTurnLimit, resolveTurnLoss
 } from "@/game/engine/resolveTurn";
-import { getPlayerAttackDamage } from "@/game/engine/combat";
+import { getPlayerAttackDamage, resolveAttackDamage } from "@/game/engine/combat";
 import { restartAnimations, swapRoomItemWithInventory } from "@/game/engine/run-game-helpers";
 import {
   getNextLevelState,
@@ -604,9 +604,15 @@ export function useRunGame({
       const hasEnergy = chargedRef.current;
       const rawDamage = usesSilverBullet
         ? monster.currentHealth
-        : Math.max(1, Math.floor(getPlayerAttackDamage(monster, hasEnergy) * (attackScore ?? 100) / 100)) + getEquipmentStats(equipment).attack + (hasEnergy ? 5 : 0);
+        : resolveAttackDamage({
+          profile: getPlayerAttackDamage(monster, hasEnergy),
+          score: attackScore ?? 100,
+          equipmentAttack: getEquipmentStats(equipment).attack,
+          charged: hasEnergy,
+          target: monster,
+        });
       lastActionRefundsChargeRef.current = false;
-      const damage = applyDefense(rawDamage, monster.defense ?? 0);
+      const damage = rawDamage;
       const healthLost = Math.min(monster.currentHealth, damage);
 
       setTurnTimeRemaining(0);
@@ -754,7 +760,7 @@ export function useRunGame({
     playerClass,
     playerLabel: `${playerClass.sprite} ${playerClass.name} · Support`,
     supportSelf,
-    playerAttack: GAME_PARAMETERS.player.attack + getEquipmentStats(equipment).attack,
+    playerAttack: GAME_PARAMETERS.combat.normalAttackDamage + getEquipmentStats(equipment).attack,
     playerDefense: GAME_PARAMETERS.player.defense + (playerClass.id === "warrior" ? 5 : 0) + getEquipmentStats(equipment).defense + defenseBuff,
     isCharged,
     toggleCharge,

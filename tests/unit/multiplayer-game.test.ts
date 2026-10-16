@@ -58,6 +58,23 @@ test("remote attacks cannot target monsters outside the player's room", () => {
   expect(next.map.entities.monsters.remote.currentHealth).toBe(9);
 });
 
+test("multiplayer attacks use shared charged and Werewolf damage profiles", () => {
+  const state = initial();
+  const room = getRoom(state.map, state.players.host.roomId)!;
+  room.contents = [{ type: "monster", id: "werewolf" }];
+  state.map.entities.monsters.werewolf = {
+    id: "werewolf", type: "monster", name: "Werewolf", sprite: "w", chases: true,
+    damage: 19, currentHealth: 60, maximumHealth: 60,
+  };
+
+  const next = resolveMultiplayerTurn(state, new Map([["host", {
+    type: "ATTACK", target: "werewolf", charged: true, microgameScore: 80,
+  }]]));
+
+  // Werewolf charged profile 15 × 80%, plus the charged +5 bonus.
+  expect(next.map.entities.monsters.werewolf.currentHealth).toBe(43);
+});
+
 test("team descends together and revives fallen teammates", () => {
   const state = initial();
   getRoom(state.map, state.players.host.roomId)!.contents = [{ type: "stairs", id: "stairs" }];

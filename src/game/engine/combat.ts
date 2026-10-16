@@ -1,7 +1,10 @@
 import type { WorldMonster } from "@/game/entities/enemies";
+import { GAME_PARAMETERS } from "@/game/config/gameparameters";
 
 export function getPlayerAttackDamage(target: WorldMonster, charged: boolean): number {
-  return target.chases ? (charged ? 15 : 10) : (charged ? 20 : 10);
+  return target.chases
+    ? (charged ? GAME_PARAMETERS.combat.werewolfChargedAttackDamage : GAME_PARAMETERS.combat.normalAttackDamage)
+    : (charged ? GAME_PARAMETERS.combat.strongAttackDamage : GAME_PARAMETERS.combat.normalAttackDamage);
 }
 
 export function applyDefense(damage: number, defense: number): number {

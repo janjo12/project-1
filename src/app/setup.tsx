@@ -17,7 +17,8 @@ import {
   NormalButton,
   PrimaryButton,
   SegmentedButton,
-  TextEntry
+  TextEntry,
+  ToggleButton,
 } from "@/components/Controls/ActionButton";
 import { useGameSettings } from "@/hooks/use-game-settings";
 import { generateRandomSeed } from "@/utils/seed";
@@ -86,6 +87,16 @@ export default function Setup() {
                 onPress={() => setHelpTopic("difficulty")}
               />
             </Row>
+
+            <Row>
+              <StyledText>Attack microgames</StyledText>
+              <SegmentedButton
+                onChange={(choice) => updateSettings({ microgamesEnabled: choice === "On" })}
+                options={["On", "Off"] as const}
+                value={settings.microgamesEnabled ? "On" : "Off"}
+              />
+            </Row>
+            <StyledText>Turn off for direct attacks without a timing game.</StyledText>
 
             <Row>
               <StyledText>Seed</StyledText>

@@ -16,6 +16,13 @@ This repository has two app shells backed by shared game rules:
 - Native and web variants are also present for `ScreenShell`, `ActionButton`, `Walls`, `PlayerHUD`, and `EnemyFeedback`; keep their behavior aligned where the user-facing component is shared.
 - Game tuning has a central table in `src/game/config/gameparameters.js`, but class details live separately in `src/game/config/game-classes.ts`. Search both before changing balance or player-facing class descriptions.
 
+## Local development
+
+- Run the Next.js browser version with `npm run dev`, then open `http://localhost:3100`. Changes refresh locally without waiting for a Vercel deployment.
+- Run the Expo app with `npm start`. With an Android emulator open, press `a` in the Expo terminal to launch the app in Expo Go. Singleplayer is supported there; WebRTC is loaded only when multiplayer is selected.
+- For a native Android development build, start an emulator in Android Studio and run `npm run android`. This is required to try multiplayer because Expo Go does not include `react-native-webrtc`. Multiplayer can still fail on a device or emulator without compatible WebRTC support or when the Wi-Fi/router blocks local device traffic; the game reports recovery guidance and offers a direct singleplayer fallback.
+- Check `adb devices` if Expo cannot find the emulator. The emulator must be running and listed before the native build can be installed.
+
 ## Wireframe
 
 ![Wireframe](wireframe-project-1.png)

@@ -41,6 +41,33 @@ test.each(["singleplayer", "multiplayer"])("settings start the selected %s flow 
   await waitFor(() => expect(router.replace).toHaveBeenCalledWith(mode === "multiplayer" ? "/multiplayer" : "/game"));
 });
 
+test("setup lets players disable attack microgames and persists the choice", async () => {
+  mockMode = "singleplayer";
+  const screen = renderWithSafeArea(<Setup />);
+  await screen.findByText("Difficulty");
+
+  fireEvent.press(screen.getByText("Off"));
+  fireEvent.press(screen.getByText("Start"));
+
+  await waitFor(async () => {
+    const saved = JSON.parse((await AsyncStorage.getItem("project-1:game-settings")) ?? "{}");
+    expect(saved.microgamesEnabled).toBe(false);
+  });
+});
+
+test("setup persists disabled attack microgames before starting", async () => {
+  mockMode = "singleplayer";
+  const screen = renderWithSafeArea(<Setup />);
+  await screen.findByText("Difficulty");
+  fireEvent.press(screen.getByText("Off"));
+  fireEvent.press(screen.getByText("Start"));
+
+  await waitFor(async () => {
+    const saved = JSON.parse((await AsyncStorage.getItem("project-1:game-settings")) ?? "{}");
+    expect(saved.microgamesEnabled).toBe(false);
+  });
+});
+
 test("setup does not offer class selection and starts with a random class", async () => {
   mockMode = "singleplayer";
   const screen = renderWithSafeArea(<Setup />);

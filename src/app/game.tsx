@@ -31,6 +31,7 @@ type PauseMenuProps = {
   onPractice: () => void;
   onOpenMap?: () => void;
   onSettingsChange: (settings: Partial<GameSettings>) => void;
+  microgamesEnabled: boolean;
   settings: GameSettings;
   visible: boolean;
 };
@@ -102,8 +103,12 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
 
   function handleActorPress(actor: RoomSceneActor) {
     if (actor.kind === "enemy") {
-      pendingAttack.current = actor.id;
-      microgame.start(game.playerClass.microgame, settings.handedness, { istest: isTestSeed(settings.seed) });
+      if (settings.microgamesEnabled) {
+        pendingAttack.current = actor.id;
+        microgame.start(game.playerClass.microgame, settings.handedness, { istest: isTestSeed(settings.seed) });
+      } else {
+        game.attackMonster(actor.id);
+      }
     } else if (actor.kind === "item") {
       void game.pickupItem();
     } else if (actor.kind === "equipment") {
@@ -242,17 +247,19 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
         elapsedStore={microgame.elapsedStore}
         targetDelay={microgame.targetDelay}
         targetSpot={microgame.targetSpot}
+        clicks={microgame.clicks}
         leftHanded={settings.handedness === "left"}
         isTest={microgame.istest}
         onTap={microgame.tap}
       />
-      {classIntroPage >= 0 ? (
+      {classIntroPage >= 0 && !(classIntroPage === 1 && !settings.microgamesEnabled) ? (
         <ClassBriefing
           page={classIntroPage}
           classId={game.playerClass.id}
           damage={microgameScore === null ? game.playerAttack : Math.max(1, Math.floor(game.playerAttack * microgameScore / 100))}
           multiplayer={false}
-          onNext={() => setClassIntroPage(1)}
+          microgamesEnabled={settings.microgamesEnabled}
+          onNext={() => setClassIntroPage(settings.microgamesEnabled ? 1 : -1)}
           onBack={() => setClassIntroPage(0)}
           onPractice={() => microgame.start(game.playerClass.microgame, settings.handedness, { istest: isTestSeed(settings.seed) })}
           onStart={() => setClassIntroPage(-1)}
@@ -263,6 +270,7 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
         onBackToGame={() => setIsMenuOpen(false)}
         onQuitToTitle={confirmQuitToTitle}
         onPractice={() => { setIsMenuOpen(false); microgame.start(game.playerClass.microgame, settings.handedness, { istest: isTestSeed(settings.seed) }); }}
+        microgamesEnabled={settings.microgamesEnabled}
         onOpenMap={tinyLayout ? () => { setIsMenuOpen(false); setIsMapOpen(true); } : undefined}
         onSettingsChange={onSettingsChange}
         settings={settings}
@@ -283,6 +291,7 @@ export function PauseMenu({
   onPractice,
   onOpenMap,
   onSettingsChange,
+  microgamesEnabled,
   settings,
   visible,
 }: PauseMenuProps) {
@@ -325,12 +334,12 @@ export function PauseMenu({
       </Container>
 
       {onOpenMap ? <NormalButton accessibilityLabel="Open dungeon map" accessibilityRole="button" label="Dungeon Map" onPress={onOpenMap} /> : null}
-      <NormalButton
+      {microgamesEnabled ? <NormalButton
         accessibilityLabel="Practice attack microgame"
         accessibilityRole="button"
         label="Practice Attack"
         onPress={onPractice}
-      />
+      /> : null}
 
       <PrimaryButton 
         accessibilityLabel="Back to Game"

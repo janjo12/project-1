@@ -142,7 +142,7 @@ function Multiplayer({ settings, onLeave }: { settings: GameSettings; onLeave: (
       ) : player && map && snapshot ? (
         <>
           <StyledText>{isTestSeed(state.seed) ? "TEST · " : ""}Level {state.level} · Turn {state.turn + 1} · You: {playerId}</StyledText>
-          {state.phase === "playing" ? (
+          {state.phase === "playing" && settings.microgamesEnabled ? (
             <ActionButton
               label="Practice attack game"
               onPress={() => microgame.start(getGameClass(player.classId).microgame, settings.handedness, { istest: isTestSeed(state.seed) })}
@@ -224,8 +224,12 @@ function Multiplayer({ settings, onLeave }: { settings: GameSettings; onLeave: (
             onDoorwayPress={position => submit({ type: "MOVE", target: getDirection(position) })}
             onActorPress={actor => {
               if (actor.kind === "enemy") {
-                pendingAttack.current = actor.id;
-                microgame.start(getGameClass(player.classId).microgame, settings.handedness, { istest: isTestSeed(state.seed) });
+                if (settings.microgamesEnabled) {
+                  pendingAttack.current = actor.id;
+                  microgame.start(getGameClass(player.classId).microgame, settings.handedness, { istest: isTestSeed(state.seed) });
+                } else {
+                  submit({ type: "ATTACK", target: actor.id });
+                }
                 return;
               }
 
@@ -268,6 +272,7 @@ function Multiplayer({ settings, onLeave }: { settings: GameSettings; onLeave: (
               classId={player.classId}
               damage={10 + getEquipmentStats(player.equipment).attack}
               multiplayer
+              microgamesEnabled={settings.microgamesEnabled}
               onNext={() => setIntroPage(1)}
               onBack={() => setIntroPage(0)}
               onPractice={() => microgame.start(getGameClass(player.classId).microgame, settings.handedness, { istest: isTestSeed(state.seed) })}

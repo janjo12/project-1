@@ -10,6 +10,7 @@ type ClassBriefingProps = {
   page: number;
   damage: number;
   multiplayer: boolean;
+  microgamesEnabled?: boolean;
   onNext: () => void;
   onBack: () => void;
   onPractice: () => void;
@@ -21,6 +22,7 @@ export function ClassBriefing({
   page,
   damage,
   multiplayer,
+  microgamesEnabled = true,
   onNext,
   onBack,
   onPractice,
@@ -68,45 +70,51 @@ export function ClassBriefing({
         </>
       ) : (
         <>
-          <View style={{ alignItems: "center", gap: 8 }}>
-            {gameClass.microgame === "concentration" ? (
-              <View style={{ height: 48, width: 104, justifyContent: "center" }}>
-                <MicrogameCircleOutline
-                  size={40}
-                  style={{ position: "absolute", left: 32 }}
-                  accessibilityElementsHidden
-                  importantForAccessibility="no-hide-descendants"
-                />
-                <MicrogameCircle
-                  size={44}
-                  style={{ position: "absolute", left: 30 }}
-                  accessibilityElementsHidden
-                  importantForAccessibility="no-hide-descendants"
-                />
-              </View>
-            ) : gameClass.microgame === "multitap" ? (
-              <View style={{ flexDirection: "row", gap: 10 }}>
-                <MicrogameCircle size={32} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />
-                <MicrogameCircle size={32} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />
-                <MicrogameCircle size={32} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />
-              </View>
-            ) : null}
-            {gameClass.microgame === "timed-attack" ? (
-              <Text style={{ color: colors.accent, fontSize: 36, fontWeight: "900" }}>NOW!</Text>
-            ) : null}
-          <Text style={{ color: colors.ink, fontSize: compactLayout ? 15 : 17 }}>
-            Attack game · {gameClass.microgameText}
-          </Text>
-          </View>
+          {microgamesEnabled ? (
+            <View style={{ alignItems: "center", gap: 8 }}>
+              {gameClass.microgame === "concentration" ? (
+                <View style={{ height: 48, width: 104, justifyContent: "center" }}>
+                  <MicrogameCircleOutline
+                    size={40}
+                    style={{ position: "absolute", left: 32 }}
+                    accessibilityElementsHidden
+                    importantForAccessibility="no-hide-descendants"
+                  />
+                  <MicrogameCircle
+                    size={44}
+                    style={{ position: "absolute", left: 30 }}
+                    accessibilityElementsHidden
+                    importantForAccessibility="no-hide-descendants"
+                  />
+                </View>
+              ) : gameClass.microgame === "multitap" ? (
+                <View style={{ flexDirection: "row", gap: 10 }}>
+                  <MicrogameCircle size={32} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />
+                  <MicrogameCircle size={32} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />
+                  <MicrogameCircle size={32} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />
+                </View>
+              ) : null}
+              {gameClass.microgame === "timed-attack" ? (
+                <Text style={{ color: colors.accent, fontSize: 36, fontWeight: "900" }}>NOW!</Text>
+              ) : null}
+              <Text style={{ color: colors.ink, fontSize: compactLayout ? 15 : 17 }}>
+                Attack game · {gameClass.microgameText}
+              </Text>
+            </View>
+          ) : (
+            <StyledText>Attack microgames are off. Attacks use full damage without timing bonuses.</StyledText>
+          )}
           <Text style={{ color: colors.ink, fontSize: compactLayout ? 18 : 20, textAlign: "center" }}>
             Damage: {damage}
           </Text>
-          <PrimaryButton
-            accessibilityLabel="Practice attack game"
-            accessibilityRole="button"
-            label="Practice"
-            onPress={onPractice}
-          />
+          {microgamesEnabled ? (
+            <PrimaryButton
+              accessibilityLabel="Practice attack game"
+              accessibilityRole="button"
+              label="Practice"
+              onPress={onPractice}
+            />
+          ) : null}
           <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
             <NormalButton
               accessibilityLabel="Back to class instructions"
