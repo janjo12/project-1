@@ -57,6 +57,7 @@
     "web:start": "next start -p 3100",
     "typecheck": "tsc --noEmit",
     "test:visual": "npm run web:build && playwright test",
+    "test:quick": "npm run web:build && playwright test tests/quick/setup-smoke.spec.ts --config=playwright.config.ts",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo run:android",
     "ios": "expo run:ios",

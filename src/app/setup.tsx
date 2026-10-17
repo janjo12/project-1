@@ -117,7 +117,7 @@ export default function Setup() {
 
           <Footer>
             <PrimaryButton
-              accessibilityLabel={isLoading ? "Loading" : "Start Game"}
+                accessibilityLabel={isLoading ? "Loading" : "Start"}
               accessibilityRole="button"
               label={isLoading ? "Loading" : "Start"}
               onPress={handleStartGame}
@@ -136,7 +136,7 @@ export default function Setup() {
               <Title>{activeHelp.title}</Title>
               <StyledText>{activeHelp.body}</StyledText>
               <PrimaryButton
-                accessibilityLabel="Close help"
+                accessibilityLabel="Got it"
                 accessibilityRole="button"
                 label="Got it"
                 onPress={() => setHelpTopic(null)}

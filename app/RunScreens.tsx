@@ -55,11 +55,11 @@ export function SetupScreen({ settings, onBack, onSettings, onUpdate, onStart }:
           </Row>
         </Container>
         <Footer>
-          <PrimaryButton accessibilityLabel="Start Game" accessibilityRole="button" label="Start" onPress={onStart} />
+          <PrimaryButton accessibilityLabel="Start" accessibilityRole="button" label="Start" onPress={onStart} />
         </Footer>
       </Container>
       <StyledModal accessibilityLabel={helpContent ? `${helpContent.title} help` : "Help"} accessibilityRole="dialog" animationType="fade" onRequestClose={() => setHelpTopic(null)} visible={helpContent !== null}>
-        {helpContent ? <><Title>{helpContent.title}</Title><StyledText>{helpContent.body}</StyledText><PrimaryButton accessibilityLabel="Close help" accessibilityRole="button" label="Got it" onPress={() => setHelpTopic(null)} /></> : null}
+        {helpContent ? <><Title>{helpContent.title}</Title><StyledText>{helpContent.body}</StyledText><PrimaryButton accessibilityLabel="Got it" accessibilityRole="button" label="Got it" onPress={() => setHelpTopic(null)} /></> : null}
       </StyledModal>
     </ScreenShell>
   );

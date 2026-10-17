@@ -4,7 +4,8 @@ const visualPort = Number(process.env.PLAYWRIGHT_PORT ?? 3127);
 
 export default defineConfig({
   testDir: "./tests",
-  testMatch: ["**/*.spec.ts", "!emulator/**"],
+  testMatch: "**/*.spec.ts",
+  testIgnore: "**/emulator/**",
   fullyParallel: false,
   reporter: "list",
   use: {
