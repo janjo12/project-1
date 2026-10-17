@@ -2,6 +2,7 @@ import { PLAYER_MAX_ENERGY, useRunGame } from "@/game/engine/run-game-singleplay
 import { createSeededDungeonMap } from "@/game/dungeon/generateDungeon";
 import type { DungeonMap } from "@/game/dungeon/types";
 import { getRoom } from "@/game/dungeon/rooms";
+import { placeDoorwayGuard } from "@/game/dungeon/types";
 import { applyDefense } from "@/game/engine/combat";
 import { GAME_PARAMETERS } from "@/game/config/gameparameters";
 import { act, renderHook } from "@testing-library/react-native";
@@ -30,7 +31,7 @@ function fixture(): DungeonMap {
   return map;
 }
 
-async function setup(enemy = false, meal = false, enemyHealth = 20, enemyDamage = 2, difficulty: "easy" | "normal" | "hard" = "normal", seed = "charge-test", lockedDoor = false, enemyCount = 1) {
+async function setup(enemy = false, meal = false, enemyHealth = 20, enemyDamage = 2, difficulty: "easy" | "normal" | "hard" = "normal", seed = "charge-test", lockedDoor = false, enemyCount = 1, doorwayGuard = false, werewolf = false, silverBullet = false) {
   const map = fixture();
   if (lockedDoor) {
     getRoom(map, "A1")!.east = "locked";
@@ -43,6 +44,25 @@ async function setup(enemy = false, meal = false, enemyHealth = 20, enemyDamage 
       map.entities.monsters[id] = { id, name: `Zombie ${index + 1}`, sprite: "🧟", type: "monster", currentHealth: enemyHealth, maximumHealth: enemyHealth, damage: enemyDamage };
       getRoom(map, "A1")!.contents.push({ id, type: "monster" });
     }
+  }
+  if (doorwayGuard) {
+    placeDoorwayGuard(map, "A1", "east", {
+      id: "doorway-golem", type: "monster", name: "Pixel Golem", sprite: "golem",
+      currentHealth: 20, maximumHealth: 20, damage: 2,
+    });
+  }
+  if (werewolf) {
+    map.entities.monsters.werewolf = {
+      id: "werewolf", type: "monster", name: "Werewolf", sprite: "werewolf",
+      chases: true, currentHealth: 60, maximumHealth: 60, damage: 19,
+    };
+    getRoom(map, "A1")!.contents.push({ id: "werewolf", type: "monster" });
+  }
+  if (silverBullet) {
+    map.entities.items.bullet = {
+      id: "bullet", itemId: "silver-bullet", label: "Silver Bullet", sprite: "bullet", type: "item",
+    };
+    getRoom(map, "A1")!.contents.push({ id: "bullet", type: "item" });
   }
   if (meal) {
     map.entities.items.meal = { id: "meal", itemId: "energy-meal", label: "Energy Meal", sprite: "🍔", type: "item" };
@@ -96,6 +116,45 @@ test("an attack damages its target, then every living enemy attacks once", async
   expect(result.current.playerHealth).toBe(startingPlayerHealth - expectedDamage);
   expect(result.current.isResolving).toBe(false);
   expect(result.current.turnNumber).toBe(1);
+});
+
+test("singleplayer attacks damage a doorway guard and defeating it opens the doorway", async () => {
+  const { result } = await setup(false, false, 20, 2, "easy", "charge-test", false, 1, true);
+
+  act(() => result.current.attackMonster("doorway-golem"));
+  await act(async () => { jest.runAllTimers(); });
+  expect(result.current.dungeonMap.entities.monsters["doorway-golem"].currentHealth).toBe(10);
+  expect(getRoom(result.current.dungeonMap, "A1")!.east).toBe("guarded");
+
+  act(() => result.current.attackMonster("doorway-golem"));
+  await act(async () => { jest.runAllTimers(); });
+  expect(result.current.dungeonMap.entities.monsters["doorway-golem"].currentHealth).toBe(0);
+  expect(getRoom(result.current.dungeonMap, "A1")!.east).toBe("open");
+});
+
+test("singleplayer ordinary and charged attacks cannot hurt the Werewolf, but a Silver Bullet kills it", async () => {
+  const { result } = await setup(false, false, 60, 19, "easy", "charge-test", false, 1, false, true, true);
+
+  await act(async () => { await result.current.pickupItem(); });
+  await act(async () => { jest.runAllTimers(); });
+  expect(result.current.inventoryItem).toBe("silver-bullet");
+
+  act(() => result.current.dropItem());
+  act(() => result.current.attackMonster("werewolf"));
+  await act(async () => { jest.runAllTimers(); });
+  expect(result.current.dungeonMap.entities.monsters.werewolf.currentHealth).toBe(60);
+
+  act(() => result.current.toggleCharge());
+  act(() => result.current.attackMonster("werewolf"));
+  await act(async () => { jest.runAllTimers(); });
+  expect(result.current.dungeonMap.entities.monsters.werewolf.currentHealth).toBe(60);
+
+  await act(async () => { await result.current.pickupItem(); });
+  await act(async () => { jest.runAllTimers(); });
+  act(() => result.current.attackMonster("werewolf"));
+  await act(async () => { jest.runAllTimers(); });
+  expect(result.current.dungeonMap.entities.monsters.werewolf.currentHealth).toBe(0);
+  expect(result.current.inventoryItem).toBeNull();
 });
 
 test("blocked moves keep charge; valid moves cancel it and always consume a turn", async () => {

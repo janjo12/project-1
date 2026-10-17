@@ -83,30 +83,26 @@ function createTestDungeon(map: DungeonMap, seed: string) {
 
   route.forEach((roomId, index) => {
     const room = findRoomInGrid(map.rooms, roomId)!;
+    let incomingDirection: Direction | undefined;
     if (index > 0) {
       const previous = findRoomInGrid(map.rooms, route[index - 1])!;
-      const direction = (Object.keys(directionDeltas) as Direction[]).find((candidate) =>
-        getConnectedRoomIdFromRooms(map.rooms, previous.id, candidate) === room.id,
-      );
-      if (!direction) {
-        const delta = { column: room.column.charCodeAt(0) - previous.column.charCodeAt(0), row: room.row - previous.row };
-        const routeDirection = (Object.keys(directionDeltas) as Direction[]).find((candidate) => {
-          const step = directionDeltas[candidate];
-          return step.column === delta.column && step.row === delta.row;
-        });
-        if (!routeDirection) throw new Error(`Test route has a non-adjacent step: ${previous.id} to ${room.id}`);
-        setConnectionBoundary(map.rooms, previous.id, routeDirection, "open");
-        if (index === 2) setConnectionBoundary(map.rooms, previous.id, routeDirection, "locked");
+      const delta = { column: room.column.charCodeAt(0) - previous.column.charCodeAt(0), row: room.row - previous.row };
+      incomingDirection = (Object.keys(directionDeltas) as Direction[]).find((candidate) => {
+        const step = directionDeltas[candidate];
+        return step.column === delta.column && step.row === delta.row;
+      });
+      if (!incomingDirection) throw new Error(`Test route has a non-adjacent step: ${previous.id} to ${room.id}`);
+      setConnectionBoundary(map.rooms, previous.id, incomingDirection, index === 2 ? "locked" : "open");
+
+      if (index > itemIds.length && index <= itemIds.length + 3) {
+        const monster = createMonster((index - itemIds.length - 1) * 4, `${previous.id}:${incomingDirection}`, () => 0);
+        placeDoorwayGuard(map, previous.id, incomingDirection, monster);
       }
     }
     if (index > 0 && index <= itemIds.length) {
       const item = createItem(itemIds[index - 1], `test:${itemIds[index - 1]}:${room.id}`);
       map.entities.items[item.id] = item;
       room.contents.push({ id: item.id, type: "item" });
-    } else if (index > itemIds.length && index <= itemIds.length + 3) {
-      const monster = createMonster((index - itemIds.length - 1) * 4, room.id, () => 0);
-      map.entities.monsters[monster.id] = monster;
-      room.contents.push({ id: monster.id, type: "monster" });
     } else if (index === itemIds.length + 4) {
       const werewolf = createWerewolf(room.id);
       map.entities.monsters[werewolf.id] = werewolf;

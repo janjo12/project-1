@@ -13,7 +13,7 @@ import { TurnTimerBar } from "@/components/Player/TurnTimerBar";
 import { ScreenShell } from "@/components/Common/ScreenShell";
 import { ThemeProvider, useThemeColors } from "@/components/Common/theme";
 
-import { GAME_PARAMETERS } from "@/game/config/gameparameters";
+import { getEquipmentStats } from "@/game/actions/items";
 import {
     PLAYER_MAX_ENERGY,
     PLAYER_MAX_HEALTH,
@@ -100,6 +100,7 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
       <ItemControl activationDescription={game.inventoryItemActivationDescription} itemLabel={game.inventoryItemLabel} itemSprite={game.inventoryItemSprite} />
     </View>
   );
+  const chargeCost = getEquipmentStats(game.equipment).chargeCost;
 
   function handleActorPress(actor: RoomSceneActor) {
     if (actor.kind === "enemy") {
@@ -163,7 +164,8 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
           <>
             <ChargeControl
               charged={game.isCharged}
-              disabled={game.isResolving || game.hasLost || (!game.isCharged && game.playerEnergy < GAME_PARAMETERS.combat.chargeEnergyCost)}
+              chargeCost={chargeCost}
+              disabled={game.isResolving || game.hasLost || (!game.isCharged && game.playerEnergy < chargeCost)}
               onPress={game.toggleCharge}
             />
             {controls}
@@ -173,7 +175,8 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
             {controls}
             <ChargeControl
               charged={game.isCharged}
-              disabled={game.isResolving || game.hasLost || (!game.isCharged && game.playerEnergy < GAME_PARAMETERS.combat.chargeEnergyCost)}
+              chargeCost={chargeCost}
+              disabled={game.isResolving || game.hasLost || (!game.isCharged && game.playerEnergy < chargeCost)}
               onPress={game.toggleCharge}
             />
           </>

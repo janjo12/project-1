@@ -1,12 +1,9 @@
 import { expect, test } from "@playwright/test";
 import { HUMAN_REACTION_WINDOW_MS, MULTITAP_TARGET_TAPS, TIMED_ATTACK_CUE_DELAY_MS } from "@/game/actions/use-microgame";
 import { GAME_PARAMETERS } from "@/game/config/gameparameters";
-import { applyDefense } from "@/game/engine/combat";
 import { getTurnDuration } from "@/game/engine/resolveTurn";
 
 const ROOM_TRANSITION_MS = GAME_PARAMETERS.animation.roomTransitionDurationMs;
-const WEREWOLF_DAMAGE = (className: string) =>
-  applyDefense(19, GAME_PARAMETERS.player.defense + (className === "Warrior" ? 5 : 0));
 
 for (const { seed, className } of [
   { seed: "testwarrior", className: "Warrior" },
@@ -76,24 +73,24 @@ test(`plays a complete ${className} hard-mode run through Level 2`, async ({ pag
       await page.getByRole("button", { name: "Silver Bullet. Drop item" }).click();
       await expect(page.getByTestId("item-status")).toContainText("No Item");
       await page.getByRole("button", { name: "Charge Up" }).click();
-      const startHealth = await healthFillPercent(page);
       await werewolf.click();
       await expect(page.getByTestId("microgame-overlay")).toBeVisible();
       const initialEnemyHealth = await enemyHealthPercent(page);
       await playClassMicrogame(page, className);
       await page.clock.runFor(GAME_PARAMETERS.animation.attackDurationMs + GAME_PARAMETERS.animation.enemyTurnDurationMs + ROOM_TRANSITION_MS);
-      const chargedHealth = await healthFillPercent(page);
-      expect(startHealth - chargedHealth, `charged werewolf damage for ${className}`).toBeCloseTo(WEREWOLF_DAMAGE(className), 0);
       const finalEnemyHealth = await enemyHealthPercent(page);
-      const minimumChargedDamage = className === "Cleric" ? 18 : className === "Thief" ? 19 : 20;
-      expect(initialEnemyHealth - finalEnemyHealth, "the charged attack should deal realistic damage for its microgame score").toBeGreaterThanOrEqual(minimumChargedDamage);
-      expect(initialEnemyHealth, "werewolf health before the attack").toBeGreaterThan(finalEnemyHealth);
-      while (await werewolf.isVisible().catch(() => false)) {
-        await werewolf.click();
-        await expect(page.getByTestId("microgame-overlay")).toBeVisible();
-        await playClassMicrogame(page, className);
-        await page.clock.runFor(GAME_PARAMETERS.animation.attackDurationMs + GAME_PARAMETERS.animation.enemyTurnDurationMs + ROOM_TRANSITION_MS);
-      }
+      expect(finalEnemyHealth, "a charged attack must not damage the Werewolf").toBe(initialEnemyHealth);
+
+      const droppedBullet = page.getByRole("button", { name: "Silver Bullet", exact: true });
+      await expect(droppedBullet).toBeVisible();
+      await droppedBullet.click();
+      await page.clock.runFor(GAME_PARAMETERS.animation.enemyTurnDurationMs + ROOM_TRANSITION_MS);
+      await expect(page.getByTestId("item-status")).toContainText("Silver Bullet");
+
+      await werewolf.click();
+      await expect(page.getByTestId("microgame-overlay")).toBeVisible();
+      await playClassMicrogame(page, className);
+      await page.clock.runFor(GAME_PARAMETERS.animation.attackDurationMs + GAME_PARAMETERS.animation.enemyTurnDurationMs + ROOM_TRANSITION_MS);
       await expect(werewolf).toHaveCount(0);
       foughtWerewolf = true;
       firstHealthyHit = true;
@@ -247,10 +244,6 @@ function readTurns(counter: string) {
 async function enemyHealthPercent(page: import("@playwright/test").Page) {
   const bar = page.getByTestId("enemy-health-bar");
   return Number(await bar.getAttribute("aria-valuenow"));
-}
-
-async function healthFillPercent(page: import("@playwright/test").Page) {
-  return Number(await page.getByTestId("player-health-bar").getAttribute("aria-valuenow"));
 }
 
 async function playClassMicrogame(page: import("@playwright/test").Page, className: string) {

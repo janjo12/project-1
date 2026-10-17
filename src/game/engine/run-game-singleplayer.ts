@@ -422,12 +422,20 @@ export function useRunGame({
           monster.damage,
           classBaseDefense + getEquipmentStats(equipment).defense + defenseBuffRef.current,
         );
+        console.info(
+          `[combat] ${monster.name} dealt ${damageTaken} damage to Player (${damageTaken === 0 ? "blocked" : `base ${monster.damage}, reduced by ${monster.damage - damageTaken} defense`}).`,
+        );
 
         if (reflects) {
-          setEnemyHealthLossAmount(applyDefense(monster.damage, monster.defense ?? 0));
+          const reflectedDamage = Math.min(
+            monster.currentHealth,
+            applyDefense(monster.damage, monster.defense ?? 0),
+          );
+          console.info(`[combat] Player reflected ${reflectedDamage} damage to ${monster.name}.`);
+          setEnemyHealthLossAmount(reflectedDamage);
           restartAnimations(setAnimationFrame, ["playerAttackElapsed", "enemyDamageElapsed", "enemyHealthLossElapsed"]);
           resolvedMap = commitMap(
-            map => damageMonsterInRoom(map, roomId, monsterId, applyDefense(monster.damage, monster.defense ?? 0)),
+            map => damageMonsterInRoom(map, roomId, monsterId, reflectedDamage),
             resolvedMap,
           );
           vanguardRef.current = 0;
@@ -614,6 +622,9 @@ export function useRunGame({
       lastActionRefundsChargeRef.current = false;
       const damage = rawDamage;
       const healthLost = Math.min(monster.currentHealth, damage);
+      console.info(
+        `[combat] Player dealt ${healthLost} damage to ${monster.name}${usesSilverBullet ? " with a Silver Bullet" : monster.chases ? " (immune to ordinary attacks)" : ""}.`,
+      );
 
       setTurnTimeRemaining(0);
       setIsResolving(true);

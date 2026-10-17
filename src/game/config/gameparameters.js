@@ -17,7 +17,6 @@ export const GAME_PARAMETERS = Object.freeze({
     strongAttackDamage: 20,
     strongAttackEnergyCost: 0,
     werewolfMeleeDamage: 0,
-    werewolfChargedAttackDamage: 15,
   }),
   dungeon: Object.freeze({
     mapWidthRooms: 12,

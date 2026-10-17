@@ -1,5 +1,5 @@
-import { createContext, PropsWithChildren, useContext, useEffect, useState } from "react";
-import { ColorSchemeName, useColorScheme } from "react-native";
+import { createContext, PropsWithChildren, useContext, useSyncExternalStore } from "react";
+import { Appearance as SystemAppearance, ColorSchemeName } from "react-native";
 
 import type { Appearance } from "@/utils/settings-storage";
 
@@ -73,18 +73,20 @@ type ThemeProviderProps = PropsWithChildren<{
 }>;
 
 export function ThemeProvider({ appearance, children }: ThemeProviderProps) {
-  const systemColorScheme = useColorScheme();
-  // Keep the server render and the browser's first render identical. The OS
-  // preference is applied after hydration when appearance is set to "system".
-  const [hydratedSystemColorScheme, setHydratedSystemColorScheme] = useState<ColorSchemeName | null>(null);
-
-  useEffect(() => {
-    setHydratedSystemColorScheme(systemColorScheme);
-  }, [systemColorScheme]);
+  // Read OS appearance as an external store. A null server snapshot keeps SSR
+  // and the browser's first render identical; React applies the real value after hydration.
+  const systemColorScheme = useSyncExternalStore(
+    (onChange) => {
+      const subscription = SystemAppearance.addChangeListener(onChange);
+      return () => subscription.remove();
+    },
+    () => SystemAppearance.getColorScheme() ?? null,
+    () => null,
+  );
 
   const colorScheme = resolveAppearance(
     appearance,
-    appearance === "system" ? hydratedSystemColorScheme : systemColorScheme,
+    systemColorScheme,
   );
 
   return (

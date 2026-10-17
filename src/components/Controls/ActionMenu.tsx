@@ -51,8 +51,9 @@ export function EquipmentControl({ label, description, sprite, onDrop, disabled 
   </Pressable>;
 }
 
-export function ChargeControl({ charged, disabled, onPress }: {
+export function ChargeControl({ charged, chargeCost, disabled, onPress }: {
   charged: boolean;
+  chargeCost: number;
   disabled: boolean;
   onPress: () => void;
 }) {
@@ -61,7 +62,7 @@ export function ChargeControl({ charged, disabled, onPress }: {
       accessibilityRole="button"
       accessibilityLabel={charged ? "Cancel Charge Up" : "Charge Up"}
       accessibilityState={{ selected: charged, disabled }}
-      accessibilityHint="Reserves one energy for the next action. Press again to cancel and refund it."
+      accessibilityHint={`Reserves ${chargeCost} Energy for the next action. Press again to cancel and refund it.`}
       disabled={disabled}
       onPress={onPress}
       testID="charge-up-button"
@@ -77,7 +78,7 @@ export function ChargeControl({ charged, disabled, onPress }: {
         {charged ? "Charged ⚡ · Cancel" : "Charge Up ⚡"}
       </Text>
       <Text style={{ color: "#ecfccb", fontSize: 10, textAlign: "center" }}>
-        {charged ? "Tap to refund 1 energy" : "Next action · 1 energy"}
+        {charged ? `Tap to refund ${chargeCost} Energy` : `Next action · ${chargeCost} Energy`}
       </Text>
     </Pressable>
   );

@@ -15,7 +15,7 @@ import { GameViewPanel } from "@/components/Dungeon/GameViewPanel";
 import { DebugBar, ResourceBar, ResourceBarGroup } from "@/components/Player/PlayerHUD";
 import { TurnTimerBar } from "@/components/Player/TurnTimerBar";
 import { useMicrogame } from "@/game/actions/use-microgame";
-import { GAME_PARAMETERS } from "@/game/config/gameparameters";
+import { getEquipmentStats } from "@/game/actions/items";
 import { PLAYER_MAX_ENERGY, PLAYER_MAX_HEALTH, useRunGame } from "@/game/engine/run-game-singleplayer";
 import { useGameLoopDriver } from "@/game/engine/use-game-loop-driver";
 import { isTestSeed } from "@/utils/seed";
@@ -137,6 +137,7 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
     <EquipmentControl label={game.equipmentLabel} description={game.equipmentDescription} sprite={game.equipmentSprite} onDrop={game.dropEquipment} />
     <ItemControl activationDescription={game.inventoryItemActivationDescription} itemLabel={game.inventoryItemLabel} itemSprite={game.inventoryItemSprite} onDrop={game.dropItem} />
   </View>;
+  const chargeCost = getEquipmentStats(game.equipment).chargeCost;
   const startMicrogame = () => microgame.start(game.playerClass.microgame, settings.handedness, { istest: isTestSeed(settings.seed) });
 
   return (
@@ -145,7 +146,7 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
       {!tinyLayout ? <DebugBar accessibilityLabel="Turn status" accessibilityRole="text" testID="turn-status">{`${game.istest ? "TEST · " : ""}${microgameScore === null ? game.turnStatus : `${game.turnStatus} · Last microgame ${microgameScore}/100`}`}</DebugBar> : null}
       {!tinyLayout ? <DungeonMap currentRoomId={game.currentRoomId} map={game.visibleDungeonMap} /> : null}
       <Row>
-        {settings.handedness === "left" ? <><ChargeControl charged={game.isCharged} disabled={game.isResolving || game.hasLost || (!game.isCharged && game.playerEnergy < GAME_PARAMETERS.combat.chargeEnergyCost)} onPress={game.toggleCharge} />{controls}</> : <>{controls}<ChargeControl charged={game.isCharged} disabled={game.isResolving || game.hasLost || (!game.isCharged && game.playerEnergy < GAME_PARAMETERS.combat.chargeEnergyCost)} onPress={game.toggleCharge} /></>}
+        {settings.handedness === "left" ? <><ChargeControl charged={game.isCharged} chargeCost={chargeCost} disabled={game.isResolving || game.hasLost || (!game.isCharged && game.playerEnergy < chargeCost)} onPress={game.toggleCharge} />{controls}</> : <>{controls}<ChargeControl charged={game.isCharged} chargeCost={chargeCost} disabled={game.isResolving || game.hasLost || (!game.isCharged && game.playerEnergy < chargeCost)} onPress={game.toggleCharge} /></>}
       </Row>
       {!compactLayout ? <Text style={{ color: colors.sepia, fontSize: 12, textAlign: "center" }}>Charge: stronger attack, full block + counter, or move / pick up without using a turn.</Text> : null}
       <ResourceBarGroup compact={compactLayout}>

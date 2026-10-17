@@ -156,12 +156,13 @@ export function NormalButton({
   );
 }
 
-export function PrimaryButton({ label, onPress }: PrimaryButtonProps) {
+export function PrimaryButton({ accessibilityLabel, label, onPress }: PrimaryButtonProps) {
   const colors = useThemeColors();
   const styles = createInputStyles(colors);
 
   return (
     <Pressable
+      accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
       onPress={onPress}
       style={({ pressed }) => [

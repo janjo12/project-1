@@ -237,11 +237,13 @@ export function resolveMultiplayerTurn(
             charged,
             target: monster,
           });
+        const damageApplied = Math.min(monster.currentHealth, damage);
+        console.info(`[combat] Player ${player.id} dealt ${damageApplied} damage to ${monster.name}${silver ? " with a Silver Bullet" : monster.chases ? " (immune to ordinary attacks)" : ""}.`);
         state.map = damageMonsterInRoom(
           state.map,
           player.roomId,
           monster.id,
-          applyDefense(damage, monster.defense ?? 0),
+          damageApplied,
         );
         if (silver) player.item = null;
       }
@@ -275,13 +277,21 @@ export function resolveMultiplayerTurn(
           getEquipmentStats(recipient.equipment).defense +
           recipient.defenseBuff,
       );
+      console.info(
+        `[combat] ${enemy.name} dealt ${incomingDamage} damage to Player ${recipient.id} (${incomingDamage === 0 ? "blocked" : `base ${enemy.damage}, reduced by ${enemy.damage - incomingDamage} defense`}).`,
+      );
       applyPlayerDamage(recipient, incomingDamage);
       if (player.vanguard > 0) {
+        const reflectedDamage = Math.min(
+          enemy.currentHealth,
+          applyDefense(enemy.damage, enemy.defense ?? 0),
+        );
+        console.info(`[combat] Player ${player.id} reflected ${reflectedDamage} damage to ${enemy.name}.`);
         state.map = damageMonsterInRoom(
           state.map,
           player.roomId,
           enemy.id,
-          applyDefense(enemy.damage, enemy.defense ?? 0),
+          reflectedDamage,
         );
         player.vanguard = 0;
       }

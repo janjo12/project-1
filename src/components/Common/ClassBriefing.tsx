@@ -48,6 +48,8 @@ export function ClassBriefing({
     borderRadius: 18,
   };
 
+  if (!microgamesEnabled && page > 0) return null;
+
   return (
     <View testID="class-briefing" style={panelStyle}>
       <Text style={{ color: colors.ink, fontSize: compactLayout ? 22 : 28, textAlign: "center" }}>
@@ -62,10 +64,10 @@ export function ClassBriefing({
           </Text>
           <Text style={{ color: colors.ink, fontSize: compactLayout ? 15 : 17 }}>Special · {gameClass.special}</Text>
           <PrimaryButton
-            accessibilityLabel="Next class instructions"
+            accessibilityLabel={microgamesEnabled ? "Next class instructions" : "Start playing"}
             accessibilityRole="button"
-            label="Next"
-            onPress={onNext}
+            label={microgamesEnabled ? "Next" : "Start"}
+            onPress={microgamesEnabled ? onNext : onStart}
           />
         </>
       ) : (

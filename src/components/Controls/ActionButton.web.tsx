@@ -25,9 +25,9 @@ export function NormalButton({ accessibilityLabel, icon, label, onPress, testID 
   return <Pressable accessibilityLabel={accessibilityLabel} accessibilityRole="button" onPress={onPress} testID={testID} style={({ pressed }) => [icon ? styles.iconButton : styles.textButton, pressed && styles.pressed]}>{icon ? <Text style={{ color: colors.ink, fontSize: 24 }}>⚙</Text> : null}{label ? <Text style={styles.label}>{label}</Text> : null}</Pressable>;
 }
 
-export function PrimaryButton({ label, onPress }: ButtonProps) {
+export function PrimaryButton({ accessibilityLabel, label, onPress }: ButtonProps) {
   const colors = useThemeColors(); const styles = createInputStyles(colors);
-  return <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}><Text style={[styles.label, styles.primaryLabel]}>{label}</Text></Pressable>;
+  return <Pressable accessibilityLabel={accessibilityLabel} accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}><Text style={[styles.label, styles.primaryLabel]}>{label}</Text></Pressable>;
 }
 
 export function SelectableOption({ isSelected, label, onPress, variant }: SelectableOptionProps) {

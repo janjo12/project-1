@@ -5,9 +5,12 @@ import { GAME_PARAMETERS } from "@/game/config/gameparameters";
 const enemy: WorldMonster = { id: "e", type: "monster", name: "Enemy", sprite: "e", damage: 12, currentHealth: 9, maximumHealth: 20, defense: 2 };
 
 describe("documented combat math", () => {
-  it("selects ordinary and Werewolf attack profiles by charge state", () => {
+  it("selects ordinary attack profiles and leaves the Werewolf immune to ordinary attacks", () => {
     expect(getPlayerAttackDamage(enemy, false)).toBe(10);
-    expect(getPlayerAttackDamage({ ...enemy, chases: true }, true)).toBe(15);
+    expect(getPlayerAttackDamage({ ...enemy, chases: true }, false)).toBe(0);
+    expect(getPlayerAttackDamage({ ...enemy, chases: true }, true)).toBe(0);
+    expect(resolveAttackDamage({ profile: 10, score: 100, target: { ...enemy, chases: true } })).toBe(0);
+    expect(resolveAttackDamage({ profile: 20, score: 100, charged: true, target: { ...enemy, chases: true } })).toBe(0);
   });
   it("scales attack by score, adds equipment and charged bonus, then applies target defense", () => {
     expect(resolveAttackDamage({ profile: 20, score: 50, equipmentAttack: 3, charged: true, target: { ...enemy, currentHealth: 100 } })).toBe(16);
@@ -22,7 +25,7 @@ describe("documented combat math", () => {
   });
   it("keeps catalog health within a survivable number of average-score turns", () => {
     const averageScore = 80;
-    const nonWarriorDamageTaken = GAME_PARAMETERS.monsters.map((monster) => {
+    const nonWarriorDamageTaken = GAME_PARAMETERS.monsters.filter(monster => !("chases" in monster && monster.chases)).map((monster) => {
       const attackCount = Math.ceil(monster.maximumHealth / resolveAttackDamage({
         profile: getPlayerAttackDamage({ ...enemy, chases: "chases" in monster && monster.chases }, false),
         score: averageScore,

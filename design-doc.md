@@ -203,7 +203,7 @@ The charge control’s implementation-level description currently says “1 ener
 
 ### 8.1 Shared contract
 
-Each enemy attack requires a class microgame. Its returned score is an integer in `[0,100]`. The microgame must use a monotonic clock, complete at most once, and return score 0 on timed-out single-tap challenges. The player’s tap is treated as a human input; do not silently auto-perfect the score. A 250 ms response is the design reference for a human reaction time.
+When attack microgames are enabled, each player attack against a monster runs the current class microgame and returns a score in `[0,100]`. When disabled, the attack resolves directly at full score without a tutorial or extra start step. Microgames use a monotonic clock, complete at most once, and return score 0 on timed-out single-tap challenges. The player’s tap is treated as a human input; do not silently auto-perfect the score. A 250 ms response is the design reference for a human reaction time. Silver Bullet attacks bypass the microgame.
 
 ### 8.2 Concentration (Cleric)
 
@@ -242,9 +242,9 @@ Base attack damage before microgame score and equipment:
 | Target | Uncharged raw profile | Charged raw profile |
 |---|---:|---:|
 | Ordinary monster | 10 | 20 |
-| Werewolf | 10 | 15 |
+| Werewolf | 0 (immune) | 0 (immune) |
 
-Current calculation is `max(1, floor(profile × score / 100)) + equipmentAttack + (charged ? 5 : 0)`, then subtract target defense and clamp at zero. Thus the displayed raw profiles omit equipment and, for charged attacks, the extra +5 modifier. Werewolf attacks are unusual: charged is only +5 over its 10 profile, rather than using the ordinary 20 profile. Silver Bullet against a Werewolf deals its remaining health and bypasses the attack microgame; it is consumed. Ordinary enemies have defense 0 in the current catalog.
+Ordinary attack calculation is `max(1, floor(profile × score / 100)) + equipmentAttack + (charged ? 5 : 0)`, then subtract target defense and clamp at zero. Thus the displayed raw profiles omit equipment and, for charged attacks, the extra +5 modifier. The Werewolf takes no damage from normal or charged attacks. Silver Bullet against a Werewolf deals its remaining health and is consumed. Ordinary enemies have defense 0 in the current catalog.
 
 The game applies actual damage no greater than the target’s remaining HP. Player damage is calculated after class defense, equipment defense, and temporary defense are summed. Incoming damage is `max(0, enemyDamage − totalPlayerDefense)`. Damage cannot heal either party.
 
@@ -305,7 +305,7 @@ Room count formula: `min(72, 12 × 6, 7 + level + floor(random × 5))`. A candid
 
 ### 10.4 Reserved deterministic test seeds
 
-The case-insensitive exact normalized seeds `test`, `testwarrior`, `testcleric`, and `testthief` are development fixtures, not ordinary player seeds. All four pin Level 1 to the same authored single-corridor route and content. The class mapping is Warrior for `test` and `testwarrior`, Cleric for `testcleric`, and Thief for `testthief`. The route contains, in order after the start: the five catalog items with Key first, three Pixel Golems, a Werewolf, and stairs; a locked passage is positioned after the key. Level 2 uses normal seeded generation. These exact test seeds are reserved by the UI seed generator and may be special-cased in class selection and map construction.
+The case-insensitive exact normalized seeds `test`, `testwarrior`, `testcleric`, and `testthief` are development fixtures, not ordinary player seeds. All four pin Level 1 to the same authored single-corridor route and content. The class mapping is Warrior for `test` and `testwarrior`, Cleric for `testcleric`, and Thief for `testthief`. The route contains, in order after the start: the five catalog items with Key first, three Pixel Golems guarding successive doorway boundaries, a Werewolf, and stairs; a locked passage is positioned after the key. Level 2 uses normal seeded generation. These exact test seeds are reserved by the UI seed generator and may be special-cased in class selection and map construction.
 
 ### 10.5 Level transition
 

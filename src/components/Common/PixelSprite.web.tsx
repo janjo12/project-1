@@ -31,6 +31,6 @@ export function PixelSprite({ sprite, label, size = 32, style }: { sprite: strin
     <Image testID="pixel-sprite-image" source={{ uri }} resizeMode="stretch" style={{
       position: "absolute", width: tile.width * scale, height: tile.height * scale,
       left: -tile.column * size, top: -tile.row * size, imageRendering: "pixelated",
-    } as unknown as ImageStyle} />
+    } as unknown as ImageStyle} onError={() => setFailed(true)} />
   </View>;
 }

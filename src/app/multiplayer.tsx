@@ -182,7 +182,8 @@ function Multiplayer({ settings }: { settings: GameSettings }) {
               <>
                 <ChargeControl
                   charged={charged}
-                  disabled={state.ended || player.health <= 0 || submitted === state.turn || player.energy < 1}
+                  chargeCost={getEquipmentStats(player.equipment).chargeCost}
+                  disabled={state.ended || player.health <= 0 || submitted === state.turn || player.energy < getEquipmentStats(player.equipment).chargeCost}
                   onPress={toggleCharge}
                 />
                 <EquipmentInventoryControls
@@ -200,7 +201,8 @@ function Multiplayer({ settings }: { settings: GameSettings }) {
                 />
                 <ChargeControl
                   charged={charged}
-                  disabled={state.ended || player.health <= 0 || submitted === state.turn || player.energy < 1}
+                  chargeCost={getEquipmentStats(player.equipment).chargeCost}
+                  disabled={state.ended || player.health <= 0 || submitted === state.turn || player.energy < getEquipmentStats(player.equipment).chargeCost}
                   onPress={toggleCharge}
                 />
               </>
