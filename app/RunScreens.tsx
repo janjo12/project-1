@@ -144,7 +144,7 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
     <ScreenShell compact>
       <GameHeader onMenu={() => setIsMenuOpen(true)} />
       {!tinyLayout ? <DebugBar accessibilityLabel="Turn status" accessibilityRole="text" testID="turn-status">{`${game.istest ? "TEST · " : ""}${microgameScore === null ? game.turnStatus : `${game.turnStatus} · Last microgame ${microgameScore}/100`}`}</DebugBar> : null}
-      {!tinyLayout ? <DungeonMap currentRoomId={game.currentRoomId} map={game.visibleDungeonMap} /> : null}
+      {!tinyLayout ? <View style={{ flexShrink: 1, maxHeight: compactLayout ? 116 : undefined, minHeight: 0 }}><DungeonMap currentRoomId={game.currentRoomId} map={game.visibleDungeonMap} compact={compactLayout} /></View> : null}
       <Row>
         {settings.handedness === "left" ? <><ChargeControl charged={game.isCharged} chargeCost={chargeCost} disabled={game.isResolving || game.hasLost || (!game.isCharged && game.playerEnergy < chargeCost)} onPress={game.toggleCharge} />{controls}</> : <>{controls}<ChargeControl charged={game.isCharged} chargeCost={chargeCost} disabled={game.isResolving || game.hasLost || (!game.isCharged && game.playerEnergy < chargeCost)} onPress={game.toggleCharge} /></>}
       </Row>

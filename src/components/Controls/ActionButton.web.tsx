@@ -52,5 +52,5 @@ export function TextEntry({ accessibilityLabel, onChangeText, placeholder, value
 
 export function ToggleButton({ label, value, onValueChange }: { label: string; value: boolean; onValueChange: (value: boolean) => void }) {
   const colors = useThemeColors(); const styles = createInputStyles(colors);
-  return <View style={styles.toggleRow}><Text numberOfLines={1} style={styles.toggleLabel}>{label}</Text><Switch accessibilityLabel={label} onValueChange={onValueChange} value={value} trackColor={{ false: colors.fadedInk, true: colors.accent }} /></View>;
+  return <View style={styles.optionRow}><Text numberOfLines={1} style={styles.optionLabel}>{label}</Text><Switch accessibilityLabel={label} onValueChange={onValueChange} value={value} trackColor={{ false: colors.fadedInk, true: colors.accent }} /></View>;
 }

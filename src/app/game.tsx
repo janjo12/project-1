@@ -92,7 +92,9 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
     turnNumber: game.turnNumber,
   });
   const map = (
-    <DungeonMap currentRoomId={game.currentRoomId} map={game.visibleDungeonMap} />
+    <View style={{ flexShrink: 1, maxHeight: compactLayout ? 116 : undefined, minHeight: 0 }}>
+      <DungeonMap currentRoomId={game.currentRoomId} map={game.visibleDungeonMap} compact={compactLayout} />
+    </View>
   );
   const controls = (
     <View style={{ flex: 1, gap: 4 }}>
@@ -323,11 +325,6 @@ export function PauseMenu({
           onValueChange={(value) => {
             onSettingsChange({ vibrationEnabled: value });
           }}
-        />
-        <ToggleButton
-          label="Reduce motion"
-          value={settings.reducedMotion}
-          onValueChange={(value) => onSettingsChange({ reducedMotion: value })}
         />
         <ToggleButton
           label="Reduce motion"

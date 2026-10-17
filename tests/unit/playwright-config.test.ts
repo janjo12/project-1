@@ -4,6 +4,7 @@ describe("browser test configuration", () => {
   it("discovers visual and complex end-to-end specs from the shared tests folder", () => {
     expect(config.testDir).toBe("./tests");
     expect(config.testMatch).toContain("**/*.spec.ts");
+    expect(config.testMatch).toContain("!emulator/**");
   });
 
   it("uses Playwright-managed Chromium by default instead of requiring installed Edge", () => {

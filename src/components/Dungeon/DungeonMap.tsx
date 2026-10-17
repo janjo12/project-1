@@ -8,15 +8,17 @@ import type { DungeonMap as DungeonMapType } from "@/game/dungeon/types";
 type DungeonMapProps = {
   currentRoomId: string;
   map: DungeonMapType;
+  compact?: boolean;
 };
 
 export function DungeonMap({
   currentRoomId,
   map,
+  compact: forceCompact = false,
 }: DungeonMapProps) {
   const colors = useThemeColors();
   const { height } = useWindowDimensions();
-  const compact = height < 800;
+  const compact = forceCompact || height < 800;
   const veryCompact = height < 500;
   const styles = createStyles(colors, compact, veryCompact);
   const roomMap = new Map(getRooms(map).map((room) => [room.id, room]));

@@ -116,18 +116,23 @@ export function RoomScene({
     ...actors.map(actor => ({ id: `${actor.kind}:${actor.id}`, position: actor.position })),
     { id: "local-player", position: playerPosition },
   ]), [actors, playerPosition]);
-  const worldScale = Math.min(width / SCENE_WIDTH, maxHeight === undefined ? Infinity : Math.max(0, maxHeight - 28) / SCENE_HEIGHT);
   function slotStyle(id: string): ViewStyle {
     const slot = slots[id];
     return { left: slot.x, top: slot.y, width: slot.size, height: slot.size };
   }
 
+  const scale = width > 0
+    ? Math.min(width / SCENE_WIDTH, Math.max(0, (maxHeight ?? Infinity) - 10) / SCENE_HEIGHT)
+    : 0;
+  const sceneWidth = SCENE_WIDTH * scale;
+  const sceneHeight = SCENE_HEIGHT * scale;
+
   return (
-    <View style={[styles.sceneArea, { height: Math.min(width > 0 ? width * SCENE_HEIGHT / SCENE_WIDTH + 10 : 240, maxHeight ?? Infinity) }]}
-      onLayout={event => setWidth(Math.max(0, event.nativeEvent.layout.width - 10))}>
-      <Animated.View pointerEvents="box-none" style={{ position: "absolute", left: 0, top: 0,
+    <View style={{ alignItems: "center", width: "100%" }} onLayout={event => setWidth(Math.max(0, event.nativeEvent.layout.width - 10))}>
+    <View style={[styles.sceneArea, { width: sceneWidth + 10, height: sceneHeight + 10 }]}>
+      <Animated.View pointerEvents="box-none" style={{ position: "absolute", top: 0, left: 0,
         width: SCENE_WIDTH, height: SCENE_HEIGHT, transformOrigin: "top left",
-        transform: [{ scale: worldScale }], opacity: width > 0 ? 1 : 0 }}>
+        transform: [{ scale }], opacity: width > 0 ? 1 : 0 }}>
       {transitionKey !== null ? <Animated.View key={`outgoing-${transitionKey}`} pointerEvents="none" testID="room-transition-snapshot" style={{
         position: "absolute", zIndex: 5, width: SCENE_WIDTH, height: SCENE_HEIGHT,
         animationName: ROOM_FADE_OUT,
@@ -181,7 +186,8 @@ export function RoomScene({
       />
       </Animated.View>
       </Animated.View>
-      </View>
+    </View>
+    </View>
   );
 }
 

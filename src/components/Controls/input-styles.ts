@@ -30,6 +30,9 @@ export function createInputStyles(colors: ThemeColors) {
     radioGroup: { alignItems: "center", flex: 1, flexDirection: "row", flexWrap: "wrap", gap: 10, justifyContent: "space-between", minHeight: 42, minWidth: 0 },
     toggleLabel: { color: colors.ink, flex: 1, fontSize: 22, fontWeight: "700" },
     toggleRow: { alignItems: "center", backgroundColor: colors.paperLight, borderColor: colors.ink, borderCurve: "continuous", borderRadius: 8, borderWidth: 2, flexDirection: "row", gap: 14, justifyContent: "space-between", minHeight: 48, paddingHorizontal: 12, paddingVertical: 6 },
+    // The browser setup uses a compact option row here; native keeps the larger, bordered preference row.
+    optionRow: { alignItems: "center", flexDirection: "row", gap: 12, justifyContent: "space-between", minHeight: 44, width: "100%" },
+    optionLabel: { color: colors.ink, flex: 1, fontSize: 17, fontWeight: "500" },
   });
 }
 
