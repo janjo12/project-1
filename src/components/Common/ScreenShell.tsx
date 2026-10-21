@@ -36,6 +36,7 @@ function createStyles(colors: ThemeColors) {
     root: {
       backgroundColor: colors.paper,
       flex: 1,
+      height: "100%",
       overflow: "hidden",
     },
     phoneFrame: {

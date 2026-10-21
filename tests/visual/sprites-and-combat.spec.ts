@@ -13,10 +13,10 @@ test("web renders atlas sprites and practice timeout updates the damage preview"
   await page.getByRole("button", { name: "Singleplayer" }).click();
   await page.getByRole("textbox", { name: "Seed" }).fill("testwarrior");
   await page.getByRole("button", { name: "Start", exact: true }).click();
-  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await page.getByRole("button", { name: "Next class instructions", exact: true }).click();
 
   await expect(page.getByText("Damage: 10", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Practice", exact: true }).click();
+  await page.getByRole("button", { name: "Practice attack game", exact: true }).click();
   await expect(page.getByTestId("microgame-overlay")).toBeVisible();
   const practiceSprite = page.getByTestId("microgame-overlay").getByTestId("pixel-sprite-image").locator("img");
   await expect(practiceSprite).toBeVisible();
@@ -25,7 +25,7 @@ test("web renders atlas sprites and practice timeout updates the damage preview"
   await expect(page.getByTestId("microgame-overlay")).toBeHidden();
   await expect(page.getByText("Damage: 1", { exact: true })).toBeVisible();
 
-  await page.getByRole("button", { name: "Start", exact: true }).click();
+  await page.getByRole("button", { name: "Start playing", exact: true }).click();
 
   const sprites = page.getByTestId("pixel-sprite-image");
   await expect(sprites.first()).toBeVisible();

@@ -26,7 +26,7 @@ test("phone: setup, settings, game menu, and seeded run reach level 2 without re
   await page.getByRole("textbox", { name: "Seed" }).fill("testwarrior");
   await page.getByRole("button", { name: "Start", exact: true }).click();
   await expect(page.getByTestId("class-briefing")).toBeVisible();
-  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await page.getByRole("button", { name: "Next class instructions", exact: true }).click();
   await page.getByRole("button", { name: "Start", exact: true }).click();
   await expect(page.getByRole("button", { name: "Menu" })).toBeVisible();
   await expect(page.getByTestId("room-incoming-snapshot")).toBeVisible();

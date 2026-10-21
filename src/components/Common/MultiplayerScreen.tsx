@@ -83,9 +83,9 @@ function Multiplayer({ settings, onLeave }: { settings: GameSettings; onLeave: (
 
       {!state ? (
         <>
-          <Title>{isWeb ? "Browser multiplayer playtest" : "Same Wi-Fi multiplayer"}</Title>
+          <Title>Multiplayer</Title>
           <StyledText>
-            {isWeb ? "Temporary browser playtest rooms use this server. Open a second browser tab or device and join with the room code." : "Connect every device to the same Wi-Fi. Keep the host app open while playing. Guest networks with device isolation may block connections."}
+            {isWeb ? "Host a room, or join with a room code from another browser." : "Host a game, then invite other players to join. Keep the host app open while playing."}
           </StyledText>
           {!role ? (
             <>
@@ -219,6 +219,7 @@ function Multiplayer({ settings, onLeave }: { settings: GameSettings; onLeave: (
             />
           </ResourceBarGroup>
 
+          <View style={{ flex: 1, minHeight: 0, overflow: "hidden", position: "relative", zIndex: microgame.active ? 100 : undefined }}>
           <GameViewPanel
             disabled={state.phase !== "playing" || state.ended || disconnected || submitted === state.turn || microgame.active}
             reducedMotion={settings.reducedMotion}
@@ -249,6 +250,18 @@ function Multiplayer({ settings, onLeave }: { settings: GameSettings; onLeave: (
               submit({ type: actionType, target: actor.id });
             }}
           />
+          <MicrogameOverlay
+            visible={microgame.active}
+            kind={microgame.kind}
+            elapsedStore={microgame.elapsedStore}
+            targetDelay={microgame.targetDelay}
+            targetSpot={microgame.targetSpot}
+            clicks={microgame.clicks}
+            leftHanded={settings.handedness === "left"}
+            isTest={microgame.istest}
+            onTap={microgame.tap}
+          />
+          </View>
 
           <Text style={{ color: colors.sepia }}>
             Everyone living must reach the stairs before descending. Enemies cannot target ghosts. Ghosts can pass any doorway, attack for 5 damage (except against the Werewolf), or add 5 damage to the next attack by themselves or an ally. Ghosts return as living players on the next level.
@@ -265,17 +278,6 @@ function Multiplayer({ settings, onLeave }: { settings: GameSettings; onLeave: (
             ))}
           {storedScore === null ? null : <StyledText>Last microgame score: {storedScore}/100</StyledText>}
 
-          <MicrogameOverlay
-            visible={microgame.active}
-            kind={microgame.kind}
-            elapsedStore={microgame.elapsedStore}
-            targetDelay={microgame.targetDelay}
-            targetSpot={microgame.targetSpot}
-            clicks={microgame.clicks}
-            leftHanded={settings.handedness === "left"}
-            isTest={microgame.istest}
-            onTap={microgame.tap}
-          />
           {state.phase === "briefing" ? (
             <ClassBriefing
               page={introPage}

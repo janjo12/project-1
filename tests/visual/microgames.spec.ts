@@ -5,7 +5,7 @@ const MICROGAME_START_URL = "/";
 test.beforeEach(async ({ page }) => {
   const frozenTime = new Date("2026-01-01T00:00:00Z");
   await page.clock.install({ time: frozenTime });
-  await page.clock.pauseAt(frozenTime);
+  await page.clock.pauseAt(new Date(frozenTime.getTime() + 1_000));
   await page.goto(MICROGAME_START_URL);
   await page.evaluate(() => localStorage.clear());
   await page.reload();
@@ -92,8 +92,8 @@ async function startPractice(page: import("@playwright/test").Page, seed: string
   await page.getByRole("button", { name: "hard", exact: true }).click();
   await page.getByRole("textbox", { name: "Seed" }).fill(seed);
   await page.getByRole("button", { name: "Start", exact: true }).click();
-  await page.getByRole("button", { name: "Next", exact: true }).click();
-  await page.getByRole("button", { name: "Start", exact: true }).click();
+  await page.getByRole("button", { name: "Next class instructions", exact: true }).click();
+  await page.getByRole("button", { name: "Start playing", exact: true }).click();
   await page.getByRole("button", { name: "Menu" }).click();
   await page.getByRole("dialog", { name: "Game menu" }).getByRole("button", { name: "Practice attack microgame" }).click();
   await expect(page.getByTestId("microgame-overlay")).toBeVisible();

@@ -1,6 +1,6 @@
 const BUILD_FAILURE = "Multiplayer is unavailable in this app build or on this device. Install the Android development build to enable WebRTC; singleplayer is still available.";
-const NETWORK_FAILURE = "Couldn't connect to the other device. Both devices need the same Wi-Fi, and the router must allow local device traffic. Internet access isn't required for a local game; turn off VPNs or avoid guest Wi-Fi with device isolation, then retry. Singleplayer is still available.";
-const UNKNOWN_FAILURE = "Multiplayer couldn't start. Check that both devices are on the same Wi-Fi and that this device supports WebRTC, then retry. Singleplayer is still available.";
+const NETWORK_FAILURE = "Couldn't connect to the other player. Check the connection and retry. Singleplayer is still available.";
+const UNKNOWN_FAILURE = "Multiplayer couldn't start. Check the connection and device support, then retry. Singleplayer is still available.";
 
 const actionableMessages = [
   "Paste the complete host invitation.",

@@ -34,7 +34,6 @@ export function MicrogameOverlay({
   onTap,
 }: MicrogameOverlayProps) {
   const colors = useThemeColors();
-  const { height } = useWindowDimensions();
   const elapsed = useSyncExternalStore(elapsedStore.subscribe, elapsedStore.getSnapshot, elapsedStore.getSnapshot);
 
   if (!visible) return null;
@@ -48,7 +47,7 @@ export function MicrogameOverlay({
         left: 0,
         right: 0,
         top: 0,
-        height,
+        bottom: 0,
         alignItems: "center",
         justifyContent: "center",
         backgroundColor: colors.paper,
@@ -152,12 +151,13 @@ function TimedAttackMicrogame({ elapsed, targetDelay }: MicrogameContentProps) {
 
 function MultitapMicrogame({ targetSpot, onTap, clicks = 0 }: MicrogameContentProps) {
   const [trackWidth, setTrackWidth] = useState(0);
+  const { height } = useWindowDimensions();
   const colors = useThemeColors();
   return (
     <>
       <Text pointerEvents="none" style={{ color: colors.ink, fontSize: 24, fontWeight: "900", textAlign: "center" }}>Tap the ●</Text>
       <Text accessibilityRole="text" accessibilityLiveRegion="polite" testID="multitap-progress">{clicks}/{MULTITAP_TARGET_TAPS} hits</Text>
-      <View onLayout={event => setTrackWidth(event.nativeEvent.layout.width)} style={{ width: "100%", height: 110, position: "relative", marginTop: 24, justifyContent: "center" }}>
+      <View onLayout={event => setTrackWidth(event.nativeEvent.layout.width)} style={{ width: "100%", height: height <= 600 ? 48 : 110, position: "relative", marginTop: height <= 600 ? 8 : 24, justifyContent: "center" }}>
         <Pressable onPress={onTap} accessibilityRole="button" accessibilityLabel="Tap circle" style={{ position: "absolute", left: targetSpot * trackWidth - 22 }}>
           <MicrogameCircle size={44} />
         </Pressable>

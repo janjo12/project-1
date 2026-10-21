@@ -29,7 +29,7 @@ test("choose a play mode before seeing seed and difficulty", async () => {
   expect(screen.queryByText("Difficulty")).toBeNull();
   fireEvent.press(screen.getByText("Singleplayer"));
   expect(router.push).toHaveBeenLastCalledWith({ pathname: "/setup", params: { mode: "singleplayer" } });
-  fireEvent.press(screen.getByText("Multiplayer · Same Wi-Fi"));
+  fireEvent.press(screen.getByText("Multiplayer"));
   expect(router.push).toHaveBeenLastCalledWith({ pathname: "/setup", params: { mode: "multiplayer" } });
 });
 test.each(["singleplayer", "multiplayer"])("settings start the selected %s flow without handedness", async mode => {

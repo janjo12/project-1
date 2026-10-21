@@ -155,6 +155,7 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
         {game.hasTurnTimer ? <TurnTimerBar compact={compactLayout} accessibilityLabel="Turn timer" color={colors.timer} max={game.turnDuration} panelPosition="last" store={game.turnClockStore} testID="turn-timer" /> : null}
       </ResourceBarGroup>
       {!compactLayout ? <Text style={{ color: colors.ink, fontSize: 13, fontWeight: "700", textAlign: "center" }}>Tap a monster to attack, an item to pick it up, a doorway to move, your hero to use their class support skill, or stairs to descend.</Text> : null}
+      <View style={{ flex: 1, minHeight: 0, overflow: "hidden", position: "relative", zIndex: microgame.active ? 100 : undefined }}>
       <GameViewPanel
         sceneFrameStore={game.sceneFrameStore}
         canUnlockDoors={game.inventoryItem === "key" || game.playerClass.id === "thief"}
@@ -187,6 +188,7 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
         playerHealthLossAmount={game.playerHealthLossAmount}
       />
       <MicrogameOverlay visible={microgame.active} kind={microgame.kind} elapsedStore={microgame.elapsedStore} targetDelay={microgame.targetDelay} targetSpot={microgame.targetSpot} clicks={microgame.clicks} leftHanded={settings.handedness === "left"} isTest={microgame.istest} playerSprite={game.playerClass.sprite} onTap={microgame.tap} />
+      </View>
       {classIntroPage >= 0 ? <ClassBriefing page={classIntroPage} classId={game.playerClass.id} damage={microgameScore === null ? game.playerAttack : Math.max(1, Math.floor(game.playerAttack * microgameScore / 100))} multiplayer={false} microgamesEnabled={settings.microgamesEnabled} onNext={() => setClassIntroPage(1)} onBack={() => setClassIntroPage(0)} onPractice={startMicrogame} onStart={() => setClassIntroPage(-1)} /> : null}
       <StyledModal accessibilityLabel="Game menu" accessibilityRole="dialog" animationType="fade" onRequestClose={() => setIsMenuOpen(false)} visible={isMenuOpen}>
         <Title>Menu</Title>

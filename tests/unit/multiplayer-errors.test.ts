@@ -7,10 +7,10 @@ describe("multiplayer failure guidance", () => {
     expect(describeMultiplayerFailure(new Error("WebRTC is not supported on this emulator"))).toMatch(/singleplayer/i);
   });
 
-  it("gives local network troubleshooting for timeouts and failed peer connections", () => {
+  it("gives general connection guidance for timeouts and failed peer connections", () => {
     const guidance = describeMultiplayerFailure(new Error("ICE gathering timed out"));
-    expect(guidance).toMatch(/same Wi-Fi/i);
-    expect(guidance).toMatch(/VPN|device isolation/i);
+    expect(guidance).toMatch(/check the connection/i);
+    expect(guidance).not.toMatch(/Wi-Fi/i);
     expect(guidance).toMatch(/singleplayer/i);
   });
 

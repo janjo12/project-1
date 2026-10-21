@@ -226,6 +226,7 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
         Tap a monster to attack, an item to pick it up, a doorway to move, your hero to use their class support skill, or stairs to descend.
       </Text> : null}
 
+      <View style={{ flex: 1, minHeight: 0, overflow: "hidden", position: "relative", zIndex: microgame.active ? 100 : undefined }}>
       <GameViewPanel
         sceneFrameStore={game.sceneFrameStore}
         canUnlockDoors={game.inventoryItem === "key" || game.playerClass.id === "thief"}
@@ -257,6 +258,7 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
         isTest={microgame.istest}
         onTap={microgame.tap}
       />
+      </View>
       {classIntroPage >= 0 && !(classIntroPage === 1 && !settings.microgamesEnabled) ? (
         <ClassBriefing
           page={classIntroPage}

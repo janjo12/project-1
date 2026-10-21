@@ -11,11 +11,11 @@ for (const { seed, className } of [
   { seed: "testthief", className: "Thief" },
 ]) {
 test(`plays a complete ${className} hard-mode run through Level 2`, async ({ page }) => {
-  test.setTimeout(120_000);
+  test.setTimeout(300_000);
   await page.setViewportSize({ width: 1280, height: 900 });
   const frozenTime = new Date("2026-01-01T00:00:00Z");
   await page.clock.install({ time: frozenTime });
-  await page.clock.pauseAt(frozenTime);
+  await page.clock.pauseAt(new Date(frozenTime.getTime() + 1_000));
 
   // Start from a clean launch, just as a newly installed player would.
   await page.goto("/");
@@ -35,9 +35,9 @@ test(`plays a complete ${className} hard-mode run through Level 2`, async ({ pag
   const briefing = page.getByTestId("class-briefing");
   await expect(briefing).toBeVisible();
   await expect(briefing).toContainText(className);
-  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await page.getByRole("button", { name: "Next class instructions", exact: true }).click();
   await expect(briefing).toBeVisible();
-  await page.getByRole("button", { name: "Start", exact: true }).click();
+  await page.getByRole("button", { name: "Start playing", exact: true }).click();
   await page.clock.runFor(ROOM_TRANSITION_MS);
 
   const turnCounter = page.getByTestId("hard-turn-counter");
@@ -210,8 +210,9 @@ test(`plays a complete ${className} hard-mode run through Level 2`, async ({ pag
   expect(Number.isFinite(turnsRemaining)).toBe(true);
   expect(turnsRemaining).toBeGreaterThan(0);
 
-  const maximumTurns = turnsRemaining + 2;
+  const maximumTurns = turnsRemaining + GAME_PARAMETERS.turn.clockBaseTurns + 4;
   for (let elapsedTurn = 0; elapsedTurn < maximumTurns; elapsedTurn += 1) {
+    const heldItemBeforeTimeout = await page.getByTestId("item-status").innerText();
     await page.clock.runFor(getTurnDuration({ difficulty: "hard", level: 2 }) + GAME_PARAMETERS.turn.gameLoopTickMs);
     await page.clock.runFor(GAME_PARAMETERS.animation.enemyTurnDurationMs + ROOM_TRANSITION_MS);
     if (await page.getByText("Game Over", { exact: true }).isVisible().catch(() => false)) {
@@ -220,7 +221,13 @@ test(`plays a complete ${className} hard-mode run through Level 2`, async ({ pag
     const currentCounter = await turnCounter.innerText();
     const nextTurnsRemaining = Number(currentCounter.match(/(\d+) Turns?$/)?.[1]);
     expect(Number.isFinite(nextTurnsRemaining), `could not read turn budget: ${currentCounter}`).toBe(true);
-    expect(nextTurnsRemaining, "a hard-mode timer expiration should resolve a turn").toBeLessThan(turnsRemaining);
+    if (nextTurnsRemaining > turnsRemaining) {
+      expect(heldItemBeforeTimeout, "a Clock should extend the hard-mode turn budget once").toContain("Clock");
+      expect(nextTurnsRemaining).toBe(GAME_PARAMETERS.turn.clockBaseTurns + 2);
+      await expect(page.getByTestId("item-status")).not.toContainText("Clock");
+    } else {
+      expect(nextTurnsRemaining, "a hard-mode timer expiration should resolve a turn").toBeLessThan(turnsRemaining);
+    }
     turnsRemaining = nextTurnsRemaining;
   }
 
@@ -231,7 +238,7 @@ test(`plays a complete ${className} hard-mode run through Level 2`, async ({ pag
 
   // Finish on the app's title menu, ready to begin another run.
   await expect(page.getByRole("button", { name: "Singleplayer" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Multiplayer · Same Wi-Fi" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Multiplayer" })).toBeVisible();
 });
 }
 

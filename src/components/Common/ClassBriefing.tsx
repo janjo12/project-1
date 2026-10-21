@@ -1,5 +1,6 @@
 import { StyledText } from "@/components/Common/Displays";
 import { MicrogameCircle, MicrogameCircleOutline } from "@/components/Common/MicrogameCircle";
+import { PixelSprite } from "@/components/Common/PixelSprite";
 import { useThemeColors } from "@/components/Common/theme";
 import { NormalButton, PrimaryButton } from "@/components/Controls/ActionButton";
 import { getGameClass, getSupportDescription, type GameClassId } from "@/game/config/game-classes";
@@ -52,9 +53,12 @@ export function ClassBriefing({
 
   return (
     <View testID="class-briefing" style={panelStyle}>
-      <Text style={{ color: colors.ink, fontSize: compactLayout ? 22 : 28, textAlign: "center" }}>
-        {gameClass.sprite} {gameClass.name}
-      </Text>
+      <View style={{ alignItems: "center", flexDirection: "row", gap: 10, justifyContent: "center" }}>
+        <PixelSprite sprite={gameClass.sprite} label={`${gameClass.name} class sprite`} size={compactLayout ? 32 : 40} />
+        <Text style={{ color: colors.ink, fontSize: compactLayout ? 22 : 28, textAlign: "center" }}>
+          {gameClass.name}
+        </Text>
+      </View>
       {page < 0 ? (
         <StyledText>Waiting for all players to finish their class instructions…</StyledText>
       ) : page === 0 ? (

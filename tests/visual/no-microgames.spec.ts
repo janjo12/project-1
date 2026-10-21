@@ -9,7 +9,7 @@ test("attacks resolve directly and enemies still respond when attack microgames 
   await page.getByRole("button", { name: "Singleplayer", exact: true }).click();
   await page.getByRole("switch", { name: "Attack microgames", exact: true }).uncheck();
   await page.getByRole("textbox", { name: "Seed" }).fill("testwarrior");
-  await page.getByRole("button", { name: "Start Game", exact: true }).click();
+  await page.getByRole("button", { name: "Start", exact: true }).click();
   await expect(page.getByTestId("class-briefing")).toBeVisible();
   await expect(page.getByText("Attack microgames are off.", { exact: false })).toHaveCount(0);
   await page.getByRole("button", { name: "Start playing", exact: true }).click();

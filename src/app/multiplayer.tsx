@@ -98,9 +98,9 @@ function Multiplayer({ settings }: { settings: GameSettings }) {
 
       {!state ? (
         <>
-          <Title>Same Wi-Fi multiplayer</Title>
+          <Title>Multiplayer</Title>
           <StyledText>
-            Connect every device to the same Wi-Fi. Keep the host app open while playing. Guest networks with device isolation may block connections.
+            Host a game, then invite other players to join. Keep the host app open while playing.
           </StyledText>
           {!role ? (
             <>
@@ -230,6 +230,7 @@ function Multiplayer({ settings }: { settings: GameSettings }) {
             />
           </ResourceBarGroup>
 
+          <View style={{ flex: 1, minHeight: 0, overflow: "hidden", position: "relative", zIndex: microgame.active ? 100 : undefined }}>
           <GameViewPanel
             disabled={state.phase !== "playing" || state.ended || disconnected || submitted === state.turn || microgame.active}
             reducedMotion={settings.reducedMotion}
@@ -260,6 +261,17 @@ function Multiplayer({ settings }: { settings: GameSettings }) {
               submit({ type: actionType, target: actor.id });
             }}
           />
+          <MicrogameOverlay
+            visible={microgame.active}
+            kind={microgame.kind}
+            elapsedStore={microgame.elapsedStore}
+            targetDelay={microgame.targetDelay}
+            targetSpot={microgame.targetSpot}
+            leftHanded={settings.handedness === "left"}
+            isTest={microgame.istest}
+            onTap={microgame.tap}
+          />
+          </View>
 
           <Text style={{ color: colors.sepia }}>
             Everyone living must reach the stairs before descending. Enemies cannot target ghosts. Ghosts can pass any doorway, attack for 5 damage (except against the Werewolf), or add 5 damage to the next attack by themselves or an ally. Ghosts return as living players on the next level.
@@ -276,16 +288,6 @@ function Multiplayer({ settings }: { settings: GameSettings }) {
             ))}
           {storedScore === null ? null : <StyledText>Last microgame score: {storedScore}/100</StyledText>}
 
-          <MicrogameOverlay
-            visible={microgame.active}
-            kind={microgame.kind}
-            elapsedStore={microgame.elapsedStore}
-            targetDelay={microgame.targetDelay}
-            targetSpot={microgame.targetSpot}
-            leftHanded={settings.handedness === "left"}
-            isTest={microgame.istest}
-            onTap={microgame.tap}
-          />
           {state.phase === "briefing" ? (
             <ClassBriefing
               page={introPage}

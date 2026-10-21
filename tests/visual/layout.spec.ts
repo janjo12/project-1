@@ -119,11 +119,11 @@ for (const viewport of viewports) {
 
     await page.getByRole("textbox", { name: "Seed" }).fill("testwarrior");
     await page.getByRole("button", { name: "Start" }).click();
-    await expect(page.getByRole("button", { name: "Next", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Next class instructions", exact: true })).toBeVisible();
     await expectScreenFits(page, "class briefing");
-    await page.getByRole("button", { name: "Next", exact: true }).click();
+    await page.getByRole("button", { name: "Next class instructions", exact: true }).click();
     await expectScreenFits(page, "class instructions");
-    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await page.getByRole("button", { name: "Start playing", exact: true }).click();
 
     await expect(page.getByRole("button", { name: "Menu" })).toBeVisible();
     await expectScreenFits(page, "gameplay");
@@ -145,10 +145,10 @@ for (const viewport of viewports) {
     await expectScreenFits(page, "microgame overlay");
 
     await page.reload();
-    await page.getByRole("button", { name: "Multiplayer · Same Wi-Fi" }).click();
+    await page.getByRole("button", { name: "Multiplayer" }).click();
     await page.getByRole("textbox", { name: "Seed" }).fill("testwarrior");
     await page.getByRole("button", { name: "Start" }).click();
-    await expect(page.getByText("Same Wi-Fi multiplayer", { exact: true })).toBeVisible();
+    await expect(page.getByText("Multiplayer", { exact: true })).toBeVisible();
     await expectScreenFits(page, "multiplayer lobby");
   });
 }
