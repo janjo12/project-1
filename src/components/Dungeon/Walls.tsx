@@ -1,6 +1,6 @@
 import { PixelSprite } from "@/components/Common/PixelSprite";
 import Animated from "react-native-reanimated";
-import { Pressable, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 
 import { createStyles } from "@/components/Dungeon/room-scene-styles";
 import { useThemeColors } from "@/components/Common/theme";
@@ -84,7 +84,7 @@ export function RoomWalls({
               <PixelSprite sprite="guard_graphic" label="" size={16} />
             ) : null}
             {state === "locked" ? (
-              <PixelSprite sprite="lock_graphic" label="" size={16} />
+              <Text accessible={false} style={{ fontSize: 16, lineHeight: 18 }}>🔒</Text>
             ) : null}
             {state === "open" ? (
               <Animated.Text

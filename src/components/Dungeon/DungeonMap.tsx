@@ -119,7 +119,7 @@ export function DungeonMap({
                           <View style={[styles.door, styles.northDoor]} />
                         ) : null}
                         {hasNorthLock ? (
-                          <PixelSprite sprite="lock_graphic" label="Locked doorway" size={10} style={[styles.iconOverlay, styles.northLock]} />
+                          <Text accessible={false} style={[styles.iconOverlay, styles.lockIcon, styles.northLock]}>🔒</Text>
                         ) : null}
                         {hasNorthGuard ? (
                           <PixelSprite sprite="guard_graphic" label="Guarded doorway" size={10} style={[styles.iconOverlay, styles.northGuard]} />
@@ -128,7 +128,7 @@ export function DungeonMap({
                           <View style={[styles.door, styles.eastDoor]} />
                         ) : null}
                         {hasEastLock ? (
-                          <PixelSprite sprite="lock_graphic" label="Locked doorway" size={10} style={[styles.iconOverlay, styles.eastLock]} />
+                          <Text accessible={false} style={[styles.iconOverlay, styles.lockIcon, styles.eastLock]}>🔒</Text>
                         ) : null}
                         {hasEastGuard ? (
                           <PixelSprite sprite="guard_graphic" label="Guarded doorway" size={10} style={[styles.iconOverlay, styles.eastGuard]} />
@@ -137,7 +137,7 @@ export function DungeonMap({
                           <View style={[styles.door, styles.southDoor]} />
                         ) : null}
                         {hasSouthLock ? (
-                          <PixelSprite sprite="lock_graphic" label="Locked doorway" size={10} style={[styles.iconOverlay, styles.southLock]} />
+                          <Text accessible={false} style={[styles.iconOverlay, styles.lockIcon, styles.southLock]}>🔒</Text>
                         ) : null}
                         {hasSouthGuard ? (
                           <PixelSprite sprite="guard_graphic" label="Guarded doorway" size={10} style={[styles.iconOverlay, styles.southGuard]} />
@@ -146,7 +146,7 @@ export function DungeonMap({
                           <View style={[styles.door, styles.westDoor]} />
                         ) : null}
                         {hasWestLock ? (
-                          <PixelSprite sprite="lock_graphic" label="Locked doorway" size={10} style={[styles.iconOverlay, styles.westLock]} />
+                          <Text accessible={false} style={[styles.iconOverlay, styles.lockIcon, styles.westLock]}>🔒</Text>
                         ) : null}
                         {hasWestGuard ? (
                           <PixelSprite sprite="guard_graphic" label="Guarded doorway" size={10} style={[styles.iconOverlay, styles.westGuard]} />
@@ -275,6 +275,7 @@ function createStyles(colors: ThemeColors, compact: boolean, veryCompact: boolea
     legendSwatch: { borderColor: colors.fadedInk, borderRadius: 3, borderWidth: 1, height: 12, width: 12 },
     legendLabel: { color: colors.ink, fontSize: 10, fontWeight: "700" },
     iconOverlay: { position: "absolute" },
+    lockIcon: { fontSize: 12, lineHeight: 14, textAlign: "center" },
     door: {
       backgroundColor: colors.ink,
       position: "absolute",

@@ -29,10 +29,10 @@ test("a new singleplayer run reaches gameplay with default microgame settings", 
 
   const briefing = page.getByTestId("class-briefing");
   await expect(briefing).toBeVisible();
-  await expect(page.getByRole("button", { name: "Next", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Next", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Start", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Start", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Next class instructions", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Next class instructions", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Start playing", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Start playing", exact: true }).click();
   await expect(page.getByRole("button", { name: "Menu" })).toBeVisible();
   await expect(briefing).toHaveCount(0);
 });

@@ -94,7 +94,7 @@ export function RoomWalls({
               <PixelSprite sprite="guard_graphic" label="" size={16} />
             ) : null}
             {state === "locked" ? (
-              <PixelSprite sprite="lock_graphic" label="" size={16} />
+              <Text accessible={false} style={{ fontSize: 16, lineHeight: 18 }}>🔒</Text>
             ) : null}
             {state === "open" ? (
               <Text
