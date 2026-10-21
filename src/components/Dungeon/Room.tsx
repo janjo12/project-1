@@ -36,6 +36,7 @@ export type RoomSceneActor = {
 
 type RoomSceneProps = {
   canUnlockDoors?: boolean;
+  canPassBlockedDoorways?: boolean;
   animationFrame: CombatAnimationFrame;
   doorways: RoomDoorways;
   enemyHealthLossAmount: number;
@@ -71,6 +72,7 @@ export function RoomScene({
   playerLabel = "Player",
   sceneScale,
   canUnlockDoors = false,
+  canPassBlockedDoorways = false,
   disabled = false,
   onActorPress,
   onDoorwayPress,
@@ -150,6 +152,7 @@ export function RoomScene({
       <View pointerEvents="none" testID="room-floor-layer" style={{ position: "absolute", width: SCENE_WIDTH, height: SCENE_HEIGHT }}>{floorLayer ?? <RoomFloor />}</View>
       <RoomWalls
         canUnlockDoors={canUnlockDoors}
+        canPassBlockedDoorways={canPassBlockedDoorways}
         disabled={disabled}
         doorways={doorways}
         reducedMotion={reducedMotion || systemReducedMotion}

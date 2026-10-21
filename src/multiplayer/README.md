@@ -8,7 +8,13 @@
 4. Guest: paste the invitation and choose **Create reply**. Copy the reply back to the host.
 5. Host: paste it and select **Accept reply**. Wait until the player is connected. Repeat for more devices, then **Start together**.
 
-There is no signaling server or third game-host device. This first version uses copy/paste signaling; QR scanning and automatic discovery are not implemented. Both sides use `iceServers: []`, so no STUN/TURN service is contacted. Wi-Fi client isolation can prevent peers from connecting even on the same SSID.
+Mobile same-Wi-Fi multiplayer uses copy/paste signaling; QR scanning and automatic discovery are not implemented. Both sides use `iceServers: []`, so no STUN/TURN service is contacted. Wi-Fi client isolation can prevent peers from connecting even on the same SSID.
+
+## Browser playtest
+
+The Next.js browser app uses a temporary in-memory room service at `/api/multiplayer`. Start the web app with `npm run dev`, host a room in one browser tab, then join it from another tab with the displayed room code. The server runs the shared `resolveMultiplayerTurn` rules and sends room snapshots to each browser every 400 ms. Restarting the Next.js process clears all rooms; this service is for local multiplayer logic playtests and is not a persistent or production-ready game service. Mobile continues to use the same turn rules over its WebRTC connection.
+
+Fallen characters stay in the shared roster as ghosts. Each turn they can move through any doorway except a wall, attack for 5 damage (but cannot damage the Werewolf), or support themselves or an ally to add 5 damage to that player's next damaging attack. Enemies cannot target ghosts. Ghosts reveal rooms as they move and revive with full health and energy when the living team descends to the next level. Leaving the room removes that player from the current roster; falling in battle does not.
 
 ## If multiplayer cannot start
 
@@ -21,7 +27,7 @@ There is no signaling server or third game-host device. This first version uses 
 
 Each device controls its own character, position, inventory, health and energy in a shared dungeon. Choose one action per team turn by tapping doors, enemies, items or your character to use its class-specific support skill. Charge modifies the next action. The host resolves actions in stable roster order, so contested loot goes to the first player in that order. Shared enemy health and doors update on all devices.
 
-Hard mode uses a host-owned timer; missing actions are skipped while enemies still attack. Easy/normal wait for each living player. All living players must gather at the stairs before one chooses to descend. Fallen players spectate and revive on the next level. The run ends when everyone falls or the shared turn budget runs out. Multiplayer uses simultaneous team turns rather than the single-player animation sequence or charged free-turn mechanic.
+Hard mode uses a host-owned timer; missing actions are skipped while enemies still attack. Easy/normal wait for every player, including ghosts. All living players must gather at the stairs before one chooses to descend. Ghosts can still move, attack, and support, then revive on the next level. The run ends when everyone falls or the shared turn budget runs out. Multiplayer uses simultaneous team turns rather than the single-player animation sequence or charged free-turn mechanic.
 
 Keep the host foregrounded. Host migration/rejoining an active run is not implemented. A closed peer is removed; leave and create a new lobby if the host disconnects. A Wi-Fi failure can take time for WebRTC to detect. Connecting or failed lobby peers can be removed and invited again.
 

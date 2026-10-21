@@ -26,19 +26,22 @@ export function canPressDoorway(
   state: DoorState,
   canUnlockDoors: boolean,
   disabled = false,
+  canPassBlockedDoorways = false,
 ) {
-  // Guarded doors and walls are informational; only open or key-unlockable doors accept input.
-  return !disabled && (state === "open" || (state === "locked" && canUnlockDoors));
+  // Ghosts can pass through locked or guarded doors while walls remain impassable.
+  return !disabled && (state === "open" || (state === "locked" && canUnlockDoors) || (canPassBlockedDoorways && (state === "locked" || state === "guarded")));
 }
 
 export function RoomWalls({
   canUnlockDoors,
+  canPassBlockedDoorways = false,
   disabled,
   doorways,
   onPress,
   reducedMotion = false,
 }: {
   canUnlockDoors: boolean;
+  canPassBlockedDoorways?: boolean;
   disabled: boolean;
   doorways: RoomDoorways;
   onPress?: (position: DoorPosition) => void;
@@ -61,7 +64,7 @@ export function RoomWalls({
     <>
       {positions.map((position) => {
         const state = doorways[position];
-        const isDisabled = !canPressDoorway(state, canUnlockDoors, disabled);
+        const isDisabled = !canPressDoorway(state, canUnlockDoors, disabled, canPassBlockedDoorways);
 
         if (state === "wall") {
           return null;

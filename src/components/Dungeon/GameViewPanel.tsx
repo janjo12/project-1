@@ -16,6 +16,7 @@ export type { RoomDoorways, RoomSceneActor, ScenePosition };
 
 type GameViewPanelProps = {
   canUnlockDoors?: boolean;
+  canPassBlockedDoorways?: boolean;
   animationFrame?: CombatAnimationFrame;
   sceneFrameStore?: SceneFrameStore;
   floorLayer?: ReactNode;
@@ -47,6 +48,7 @@ const defaultRoomDoorways: RoomDoorways = {
 
 export function GameViewPanel({
   canUnlockDoors = false,
+  canPassBlockedDoorways = false,
   floorLayer,
   animationFrame: suppliedFrame,
   sceneFrameStore = fallbackFrameStore,
@@ -104,6 +106,7 @@ export function GameViewPanel({
           playerSprite={playerSprite}
           sceneScale={sceneScale}
           canUnlockDoors={canUnlockDoors}
+          canPassBlockedDoorways={canPassBlockedDoorways}
           disabled={disabled}
           onActorPress={onActorPress}
           onDoorwayPress={onDoorwayPress}

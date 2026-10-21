@@ -159,7 +159,7 @@ function Multiplayer({ settings }: { settings: GameSettings }) {
       ) : player && map && snapshot ? (
         <>
           <StyledText>{isTestSeed(state.seed) ? "TEST · " : ""}Level {state.level} · Turn {state.turn + 1} · You: {playerId}</StyledText>
-          {state.phase === "playing" && settings.microgamesEnabled ? (
+          {state.phase === "playing" && settings.microgamesEnabled && player.health > 0 ? (
             <ActionButton
               label="Practice attack game"
               onPress={() => microgame.start(getGameClass(player.classId).microgame, settings.handedness, { istest: isTestSeed(state.seed) })}
@@ -231,19 +231,21 @@ function Multiplayer({ settings }: { settings: GameSettings }) {
           </ResourceBarGroup>
 
           <GameViewPanel
-            disabled={state.phase !== "playing" || state.ended || disconnected || player.health <= 0 || submitted === state.turn || microgame.active}
+            disabled={state.phase !== "playing" || state.ended || disconnected || submitted === state.turn || microgame.active}
             reducedMotion={settings.reducedMotion}
             playerLabel={`${getGameClass(player.classId).name} · Support`}
             playerSprite={getGameClass(player.classId).sprite}
             canUnlockDoors={player.item === "key" || player.classId === "thief"}
+            canPassBlockedDoorways={player.health <= 0}
             roomDoorways={snapshot.roomDoorways}
             roomSceneActors={snapshot.roomSceneActors}
             hardTurnCounter={state.difficulty === "easy" ? null : state.turnsLeft}
             onPlayerPress={() => submit({ type: "SUPPORT", target: playerId })}
             onDoorwayPress={position => submit({ type: "MOVE", target: getDirection(position) })}
             onActorPress={actor => {
+              if (player.health <= 0 && actor.kind !== "enemy") return;
               if (actor.kind === "enemy") {
-                if (settings.microgamesEnabled) {
+                if (player.health > 0 && settings.microgamesEnabled) {
                   pendingAttack.current = actor.id;
                   microgame.start(getGameClass(player.classId).microgame, settings.handedness, { istest: isTestSeed(state.seed) });
                 } else {
@@ -260,10 +262,10 @@ function Multiplayer({ settings }: { settings: GameSettings }) {
           />
 
           <Text style={{ color: colors.sepia }}>
-            Everyone still alive must reach the stairs before the team descends. Fallen players return next level.
+            Everyone living must reach the stairs before descending. Enemies cannot target ghosts. Ghosts can pass any doorway, attack for 5 damage (except against the Werewolf), or add 5 damage to the next attack by themselves or an ally. Ghosts return as living players on the next level.
           </Text>
           {Object.values(state.players)
-            .filter(ally => ally.id !== playerId && ally.roomId === player.roomId && ally.health > 0)
+            .filter(ally => ally.id !== playerId && ally.roomId === player.roomId)
             .map(ally => (
               <ActionButton
                 key={ally.id}
@@ -387,7 +389,7 @@ function getPlayerStatus(
   submitted: boolean,
 ) {
   if (ended) return `Run complete · ${level - 1} levels cleared`;
-  if (health <= 0) return "You fell. Spectating until your team reaches the next level.";
+  if (health <= 0) return "You are a ghost. Move through any doorway, attack for 5 damage (except the Werewolf), or support yourself or an ally for +5 damage on their next attack.";
   if (submitted) return "Action submitted. Waiting for other players…";
   return "Tap a monster to attack, an item to pick it up, a doorway to move, self or ally to support, or ladder to descend.";
 }

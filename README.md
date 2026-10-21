@@ -19,6 +19,7 @@ This repository has two app shells backed by shared game rules:
 ## Local development
 
 - Run the Next.js browser version with `npm run dev`, then open `http://localhost:3100`. Changes refresh locally without waiting for a Vercel deployment.
+- Before pushing browser changes, run `npm run web:build` and `npm run test:smoke` for a fast production-build and new-run check. `npm run test:visual` runs the full browser suite.
 - Run the Expo app with `npm start`. With an Android emulator open, press `a` in the Expo terminal to launch the app in Expo Go. Singleplayer is supported there; WebRTC is loaded only when multiplayer is selected.
 - For a native Android development build, start an emulator in Android Studio and run `npm run android`. This is required to try multiplayer because Expo Go does not include `react-native-webrtc`. Multiplayer can still fail on a device or emulator without compatible WebRTC support or when the Wi-Fi/router blocks local device traffic; the game reports recovery guidance and offers a direct singleplayer fallback.
 - Check `adb devices` if Expo cannot find the emulator. The emulator must be running and listed before the native build can be installed.

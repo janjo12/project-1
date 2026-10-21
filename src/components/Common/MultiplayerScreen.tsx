@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Text, TextInput, View } from "react-native";
+import { Platform, Text, TextInput, View } from "react-native";
 
 import { ClassBriefing } from "@/components/Common/ClassBriefing";
 import { Row, StyledText, Title } from "@/components/Common/Displays";
@@ -54,8 +54,10 @@ function Multiplayer({ settings, onLeave }: { settings: GameSettings; onLeave: (
     join,
     accept,
     cancelInvitation,
+    leave,
     toggleCharge,
   } = useRunMultiplayerGame(settings);
+  const isWeb = Platform.OS === "web";
 
   const [introPage, setIntroPage] = useState(0);
   const [storedScore, setStoredScore] = useState<number | null>(null);
@@ -73,7 +75,7 @@ function Multiplayer({ settings, onLeave }: { settings: GameSettings; onLeave: (
         accessibilityLabel="Leave multiplayer"
         accessibilityRole="button"
         label="Leave multiplayer"
-        onPress={onLeave}
+        onPress={() => { if (isWeb) leave(); onLeave(); }}
       />
       {error ? <StyledText>{error}</StyledText> : null}
       {busy ? <StyledText>Preparing connection…</StyledText> : null}
@@ -81,9 +83,9 @@ function Multiplayer({ settings, onLeave }: { settings: GameSettings; onLeave: (
 
       {!state ? (
         <>
-          <Title>Same Wi-Fi multiplayer</Title>
+          <Title>{isWeb ? "Browser multiplayer playtest" : "Same Wi-Fi multiplayer"}</Title>
           <StyledText>
-            Connect every device to the same Wi-Fi. Keep the host app open while playing. Guest networks with device isolation may block connections.
+            {isWeb ? "Temporary browser playtest rooms use this server. Open a second browser tab or device and join with the room code." : "Connect every device to the same Wi-Fi. Keep the host app open while playing. Guest networks with device isolation may block connections."}
           </StyledText>
           {!role ? (
             <>
@@ -95,7 +97,10 @@ function Multiplayer({ settings, onLeave }: { settings: GameSettings; onLeave: (
             <>
               <StyledText>Host settings: {settings.difficulty} · Seed {settings.seed}</StyledText>
               <StyledText>Connected players: {ready.length + 1} (including you)</StyledText>
-              {lobbyPlayers.map(id => (
+              {isWeb ? <><StyledText>Room code</StyledText><Text selectable accessibilityLabel="Room code" style={{ color: colors.ink, fontSize: 28, fontWeight: "800", textAlign: "center", letterSpacing: 4 }}>{outgoing}</Text></> : null}
+              {lobbyPlayers.map(id => isWeb ? (
+                <StyledText key={id}>{id}: connected</StyledText>
+              ) : (
                 <NormalButton
                   key={id}
                   accessibilityLabel={`Remove ${id}`}
@@ -104,9 +109,9 @@ function Multiplayer({ settings, onLeave }: { settings: GameSettings; onLeave: (
                   onPress={() => removePlayer(id)}
                 />
               ))}
-              {!pendingId ? (
+              {!isWeb && !pendingId ? (
                 <ActionButton label="Add player" onPress={() => void addGuest()} busy={busy} />
-              ) : (
+              ) : !isWeb ? (
                 <>
                   <StyledText>1. Long-press to copy this invitation and send it to the joining device.</StyledText>
                   <LobbyTextBox editable={false} label="Host invitation" onChangeText={setIncoming} value={outgoing} />
@@ -115,19 +120,20 @@ function Multiplayer({ settings, onLeave }: { settings: GameSettings; onLeave: (
                   <ActionButton label="Accept reply" onPress={() => void accept()} busy={busy} />
                   <ActionButton label="Cancel invitation" onPress={cancelInvitation} busy={busy} />
                 </>
-              )}
+              ) : null}
               <ActionButton label="Start together" onPress={start} busy={busy} />
             </>
           ) : null}
           {role === "guest" ? (
             <>
-              <StyledText>The host chooses the seed and difficulty for everyone.</StyledText>
-              {!outgoing ? (
+              <StyledText>{isWeb ? "Enter the host's room code. The room server supplies its seed and difficulty." : "The host chooses the seed and difficulty for everyone."}</StyledText>
+              {isWeb && connected ? <StyledText>Joined room {outgoing}. Waiting for the host to start…</StyledText> : null}
+              {(!isWeb && !outgoing) || (isWeb && !connected) ? (
                 <>
-                  <LobbyTextBox editable label="Paste host invitation" onChangeText={setIncoming} value={incoming} />
-                  <ActionButton label="Create reply" onPress={() => void join()} busy={busy} />
+                  <LobbyTextBox editable label={isWeb ? "Room code" : "Paste host invitation"} onChangeText={setIncoming} value={incoming} />
+                  <ActionButton label={isWeb ? "Join room" : "Create reply"} onPress={() => void join()} busy={busy} />
                 </>
-              ) : (
+              ) : !isWeb ? (
                 <>
                   <StyledText>Long-press to copy this reply and send it back to the host.</StyledText>
                   <LobbyTextBox editable={false} label="Reply for host" onChangeText={setIncoming} value={outgoing} />
@@ -135,14 +141,14 @@ function Multiplayer({ settings, onLeave }: { settings: GameSettings; onLeave: (
                     {connected ? "Connected. Waiting for the host to start…" : "Waiting for the host to accept your reply…"}
                   </StyledText>
                 </>
-              )}
+              ) : null}
             </>
           ) : null}
         </>
       ) : player && map && snapshot ? (
         <>
           <StyledText>{isTestSeed(state.seed) ? "TEST · " : ""}Level {state.level} · Turn {state.turn + 1} · You: {playerId}</StyledText>
-          {state.phase === "playing" && settings.microgamesEnabled ? (
+          {state.phase === "playing" && settings.microgamesEnabled && player.health > 0 ? (
             <ActionButton
               label="Practice attack game"
               onPress={() => microgame.start(getGameClass(player.classId).microgame, settings.handedness, { istest: isTestSeed(state.seed) })}
@@ -214,19 +220,21 @@ function Multiplayer({ settings, onLeave }: { settings: GameSettings; onLeave: (
           </ResourceBarGroup>
 
           <GameViewPanel
-            disabled={state.phase !== "playing" || state.ended || disconnected || player.health <= 0 || submitted === state.turn || microgame.active}
+            disabled={state.phase !== "playing" || state.ended || disconnected || submitted === state.turn || microgame.active}
             reducedMotion={settings.reducedMotion}
             playerLabel={`${getGameClass(player.classId).name} · Support`}
             playerSprite={getGameClass(player.classId).sprite}
             canUnlockDoors={player.item === "key" || player.classId === "thief"}
+            canPassBlockedDoorways={player.health <= 0}
             roomDoorways={snapshot.roomDoorways}
             roomSceneActors={snapshot.roomSceneActors}
             hardTurnCounter={state.difficulty === "easy" ? null : state.turnsLeft}
             onPlayerPress={() => submit({ type: "SUPPORT", target: playerId })}
             onDoorwayPress={position => submit({ type: "MOVE", target: getDirection(position) })}
             onActorPress={actor => {
+              if (player.health <= 0 && actor.kind !== "enemy") return;
               if (actor.kind === "enemy") {
-                if (settings.microgamesEnabled) {
+                if (player.health > 0 && settings.microgamesEnabled) {
                   pendingAttack.current = actor.id;
                   microgame.start(getGameClass(player.classId).microgame, settings.handedness, { istest: isTestSeed(state.seed) });
                 } else {
@@ -243,10 +251,10 @@ function Multiplayer({ settings, onLeave }: { settings: GameSettings; onLeave: (
           />
 
           <Text style={{ color: colors.sepia }}>
-            Everyone still alive must reach the stairs before the team descends. Fallen players return next level.
+            Everyone living must reach the stairs before descending. Enemies cannot target ghosts. Ghosts can pass any doorway, attack for 5 damage (except against the Werewolf), or add 5 damage to the next attack by themselves or an ally. Ghosts return as living players on the next level.
           </Text>
           {Object.values(state.players)
-            .filter(ally => ally.id !== playerId && ally.roomId === player.roomId && ally.health > 0)
+            .filter(ally => ally.id !== playerId && ally.roomId === player.roomId)
             .map(ally => (
               <ActionButton
                 key={ally.id}
@@ -371,7 +379,7 @@ function getPlayerStatus(
   submitted: boolean,
 ) {
   if (ended) return `Run complete · ${level - 1} levels cleared`;
-  if (health <= 0) return "You fell. Spectating until your team reaches the next level.";
+  if (health <= 0) return "You are a ghost. Move through any doorway, attack for 5 damage (except the Werewolf), or support yourself or an ally for +5 damage on their next attack.";
   if (submitted) return "Action submitted. Waiting for other players…";
   return "Tap a monster to attack, an item to pick it up, a doorway to move, self or ally to support, or ladder to descend.";
 }

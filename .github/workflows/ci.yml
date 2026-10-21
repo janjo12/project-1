@@ -18,4 +18,6 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npx playwright install --with-deps chromium
+      - run: npm run web:build
+      - run: npm run test:smoke
       - run: npm run test:visual
