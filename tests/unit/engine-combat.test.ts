@@ -25,16 +25,21 @@ describe("documented combat math", () => {
   });
   it("keeps catalog health within a survivable number of average-score turns", () => {
     const averageScore = 80;
-    const nonWarriorDamageTaken = GAME_PARAMETERS.monsters.filter(monster => !("chases" in monster && monster.chases)).map((monster) => {
+    const chargedAttackOutcomes = GAME_PARAMETERS.monsters.filter(monster => !("chases" in monster && monster.chases)).map((monster) => {
       const attackCount = Math.ceil(monster.maximumHealth / resolveAttackDamage({
-        profile: getPlayerAttackDamage({ ...enemy, chases: "chases" in monster && monster.chases }, false),
+        profile: getPlayerAttackDamage({ ...enemy, chases: "chases" in monster && monster.chases }, true),
         score: averageScore,
+        charged: true,
         target: { ...enemy, currentHealth: monster.maximumHealth, defense: monster.defense },
       }));
-      return Math.max(0, attackCount - 1) * Math.max(0, monster.damage - GAME_PARAMETERS.player.defense);
+      return {
+        damageTaken: Math.max(0, attackCount - 1) * Math.max(0, monster.damage - GAME_PARAMETERS.player.defense),
+        energySpent: attackCount * GAME_PARAMETERS.combat.chargeEnergyCost,
+      };
     });
 
-    expect(GAME_PARAMETERS.monsters.map(({ maximumHealth }) => maximumHealth)).toEqual([20, 40, 80, 60, 60]);
-    expect(nonWarriorDamageTaken.every((damage) => damage < GAME_PARAMETERS.player.maxHealth)).toBe(true);
+    expect(GAME_PARAMETERS.monsters.map(({ maximumHealth }) => maximumHealth)).toEqual([25, 45, 70, 55, 55]);
+    expect(chargedAttackOutcomes.every(({ damageTaken }) => damageTaken < GAME_PARAMETERS.player.maxHealth)).toBe(true);
+    expect(chargedAttackOutcomes.every(({ energySpent }) => energySpent <= GAME_PARAMETERS.player.maxEnergy)).toBe(true);
   });
 });
