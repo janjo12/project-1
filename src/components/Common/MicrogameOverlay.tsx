@@ -2,7 +2,6 @@ import { useState, useSyncExternalStore } from "react";
 import { Pressable, Text, View, useWindowDimensions } from "react-native";
 
 import { MicrogameCircle, MicrogameCircleOutline } from "@/components/Common/MicrogameCircle";
-import { PixelSprite } from "@/components/Common/PixelSprite";
 import { useThemeColors } from "@/components/Common/theme";
 import { MULTITAP_TARGET_TAPS } from "@/game/actions/use-microgame";
 import { CONCENTRATION_TARGET_DURATION_MS, HUMAN_REACTION_WINDOW_MS, type MicrogameKind } from "@/game/actions/use-microgame";
@@ -17,7 +16,6 @@ type MicrogameOverlayProps = {
   clicks?: number;
   leftHanded: boolean;
   isTest?: boolean;
-  playerSprite?: string;
   onTap: () => void;
 };
 
@@ -30,7 +28,6 @@ export function MicrogameOverlay({
   clicks = 0,
   leftHanded,
   isTest = false,
-  playerSprite,
   onTap,
 }: MicrogameOverlayProps) {
   const colors = useThemeColors();
@@ -54,38 +51,42 @@ export function MicrogameOverlay({
         padding: 24,
       }}
     >
-      {kind !== "multitap" ? (
-        <Pressable
-          onPress={onTap}
-          accessibilityRole="button"
-          accessibilityLabel="Tap the game screen"
-          style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0 }}
-        />
-      ) : null}
-
       {isTest ? (
         <Text accessibilityLabel="Test mode" style={{ position: "absolute", top: 8, right: 8, color: colors.fadedInk, fontSize: 10 }}>
           TEST
         </Text>
       ) : null}
 
-      <MicrogameContent
-        kind={kind}
-        elapsed={elapsed}
-        targetDelay={targetDelay}
-        targetSpot={targetSpot}
-        clicks={clicks}
-        leftHanded={leftHanded}
-        onTap={onTap}
-      />
-      {playerSprite ? (
-        <PixelSprite
-          sprite={playerSprite}
-          label="Hero practicing attack"
-          size={64}
-          style={{ position: "absolute", top: 48 }}
+      {kind === "multitap" ? (
+        <MicrogameContent
+          kind={kind}
+          elapsed={elapsed}
+          targetDelay={targetDelay}
+          targetSpot={targetSpot}
+          clicks={clicks}
+          leftHanded={leftHanded}
+          onTap={onTap}
         />
-      ) : null}
+      ) : (
+        <Pressable
+          onPress={onTap}
+          accessibilityRole="button"
+          accessibilityLabel="Tap the game screen"
+          style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0, alignItems: "center", justifyContent: "center" }}
+        >
+          <View pointerEvents="none" style={{ alignItems: "center", justifyContent: "center", width: "100%" }}>
+            <MicrogameContent
+              kind={kind}
+              elapsed={elapsed}
+              targetDelay={targetDelay}
+              targetSpot={targetSpot}
+              clicks={clicks}
+              leftHanded={leftHanded}
+              onTap={onTap}
+            />
+          </View>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -128,7 +129,6 @@ function ConcentrationMicrogame({ elapsed, targetSpot, leftHanded, onTap }: Micr
         <MicrogameCircleOutline testID="concentration-target" accessibilityLabel="Target outline" pointerEvents="none" size={40} style={{ position: "absolute", left: targetSpot * trackWidth - 20 }} />
         <MicrogameCircle testID="concentration-mover" accessibilityLabel="Moving target" accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: movingSpot * 100 }} pointerEvents="none" size={44} style={{ position: "absolute", left: movingSpot * trackWidth - 22 }} />
       </MicrogameTrack>
-      <Pressable onPress={onTap} accessibilityRole="button" accessibilityLabel="Tap when the filled circle fills the outline" style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0 }} />
     </>
   );
 }

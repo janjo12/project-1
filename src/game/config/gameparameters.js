@@ -9,6 +9,8 @@ export const GAME_PARAMETERS = Object.freeze({
     damageDurationMs: 248,
     enemyTurnDurationMs: 500,
     resourceLossDurationMs: 680,
+    roomExitDurationMs: 180,
+    roomEntryDurationMs: 180,
     roomTransitionDurationMs: 220,
   }),
   combat: Object.freeze({
@@ -17,6 +19,12 @@ export const GAME_PARAMETERS = Object.freeze({
     strongAttackDamage: 20,
     strongAttackEnergyCost: 0,
     werewolfMeleeDamage: 0,
+  }),
+  monsterScaling: Object.freeze({
+    healthIncreasePerLevel: 0.12,
+    damageIncreasePerLevel: 0.2,
+    healthIncreasePerAdditionalPlayer: 0.65,
+    damageIncreasePerAdditionalPlayer: 0.02,
   }),
   dungeon: Object.freeze({
     mapWidthRooms: 12,
@@ -36,9 +44,9 @@ export const GAME_PARAMETERS = Object.freeze({
   monsters: Object.freeze([
     Object.freeze({ attack: 22, defense: 0, damage: 22, maximumHealth: 25, name: "Pixel Golem", sprite: "pixel_golem_graphic" }),
     Object.freeze({ attack: 24, defense: 0, damage: 24, maximumHealth: 45, name: "Zombie", sprite: "zombie_graphic" }),
-    Object.freeze({ attack: 28, defense: 0, damage: 28, maximumHealth: 70, name: "Dragon", sprite: "dragon_graphic" }),
-    Object.freeze({ attack: 25, defense: 0, damage: 25, maximumHealth: 55, name: "Vampire", sprite: "vampire_graphic" }),
-    Object.freeze({ chases: true, attack: 27, defense: 0, damage: 27, maximumHealth: 55, name: "Werewolf", sprite: "werewolf_graphic" }),
+    Object.freeze({ attack: 27, defense: 0, damage: 27, maximumHealth: 50, name: "Dragon", sprite: "dragon_graphic" }),
+    Object.freeze({ attack: 24, defense: 0, damage: 24, maximumHealth: 47, name: "Vampire", sprite: "vampire_graphic" }),
+    Object.freeze({ chases: true, attack: 26, defense: 0, damage: 26, maximumHealth: 47, name: "Werewolf", sprite: "werewolf_graphic" }),
   ]),
   items: Object.freeze([
     Object.freeze({ id: "energy-meal", label: "Stamina Meal", description: "Energizes you when you run out of energy", sprite: "stamina_meal_graphic" }),

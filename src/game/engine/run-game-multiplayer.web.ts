@@ -15,6 +15,14 @@ type RoomResponse = {
   players: Array<{ id: string; health: number }>;
 };
 
+type RoomRequestError = Error & { status: number };
+
+function isRoomConnectionFailure(cause: unknown) {
+  if (cause instanceof TypeError) return true;
+  return cause instanceof Error && "status" in cause &&
+    typeof cause.status === "number" && (cause.status === 404 || cause.status >= 500);
+}
+
 async function requestRoom<T extends object>(body: Record<string, unknown>): Promise<T> {
   const response = await fetch("/api/multiplayer", {
     method: "POST",
@@ -22,7 +30,11 @@ async function requestRoom<T extends object>(body: Record<string, unknown>): Pro
     body: JSON.stringify(body),
   });
   const result = await response.json() as T | { error?: string };
-  if (!response.ok) throw new Error("error" in result && result.error ? result.error : `Multiplayer request failed (${response.status}).`);
+  if (!response.ok) {
+    const error = new Error("error" in result && result.error ? result.error : `Multiplayer request failed (${response.status}).`) as RoomRequestError;
+    error.status = response.status;
+    throw error;
+  }
   return result as T;
 }
 
@@ -159,18 +171,26 @@ export function useRunMultiplayerGame(settings: GameSettings) {
     } catch (cause) {
       setSubmitted(null);
       setError(cause instanceof Error ? cause.message : String(cause));
+      if (isRoomConnectionFailure(cause)) setDisconnected(true);
     }
   }
 
   async function leave() {
-    if (roomCode) await requestRoom({ type: "leave", code: roomCode, playerId });
-    setRoomCode("");
-    setState(null);
-    setPlayers([]);
-    setRole(null);
-    setConnected(false);
-    setSubmitted(null);
-    revision.current = -1;
+    try {
+      if (roomCode) await requestRoom({ type: "leave", code: roomCode, playerId });
+    } catch {
+      // Always clear local room state even when the server has already lost or closed the room.
+    } finally {
+      setRoomCode("");
+      setState(null);
+      setPlayers([]);
+      setRole(null);
+      setConnected(false);
+      setDisconnected(false);
+      setError("");
+      setSubmitted(null);
+      revision.current = -1;
+    }
   }
 
   const player = state?.players[playerId];

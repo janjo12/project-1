@@ -1,21 +1,33 @@
 import { createCombatAnimationFrame, type CombatAnimationFrame } from "@/game/entities";
 
-/** Only the scene subscribes to visual ticks; gameplay screens update on game events. */
+/** Share animation time while notifying only the visual layers whose values changed. */
 export function createSceneFrameStore() {
-  // Isolate high-frequency scene animation updates from the lower-frequency gameplay state.
   let frame = createCombatAnimationFrame();
-  const listeners = new Set<() => void>();
+  type AnimationKey = keyof CombatAnimationFrame;
+  const listeners = new Set<{ listener: () => void; keys: Set<AnimationKey> | null }>();
   return {
     getSnapshot: () => frame,
     subscribe: (listener: () => void) => {
-      listeners.add(listener);
-      return () => { listeners.delete(listener); };
+      const subscription = { listener, keys: null };
+      listeners.add(subscription);
+      return () => { listeners.delete(subscription); };
+    },
+    subscribeKeys: (keys: readonly AnimationKey[], listener: () => void) => {
+      const subscription = { listener, keys: new Set(keys) };
+      listeners.add(subscription);
+      return () => { listeners.delete(subscription); };
     },
     setFrame: (update: CombatAnimationFrame | ((previous: CombatAnimationFrame) => CombatAnimationFrame)) => {
-      const nextFrame = typeof update === "function" ? update(frame) : update;
+      const previousFrame = frame;
+      const nextFrame = typeof update === "function" ? update(previousFrame) : update;
       if (nextFrame === frame) return;
       frame = nextFrame;
-      listeners.forEach(listener => listener());
+      const changedKeys = (Object.keys(nextFrame) as AnimationKey[])
+        .filter(key => nextFrame[key] !== previousFrame[key]);
+      if (changedKeys.length === 0) return;
+      listeners.forEach(({ listener, keys }) => {
+        if (keys === null || changedKeys.some(key => keys.has(key))) listener();
+      });
     },
   };
 }

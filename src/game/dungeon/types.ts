@@ -28,6 +28,7 @@ export type RoomMonsterRef = {
 
 export type RoomItemRef = {
   id: string;
+  isChest?: boolean;
   type: "item";
 };
 
@@ -43,7 +44,7 @@ export type DoorwayGuard = {
   roomId: string;
 };
 
-export type RoomEquipmentRef = { id: string; type: "equipment" };
+export type RoomEquipmentRef = { id: string; isChest?: boolean; type: "equipment" };
 export type RoomContents = (RoomMonsterRef | RoomItemRef | RoomEquipmentRef | RoomStairsRef)[];
 
 export type GridPosition = {
@@ -82,6 +83,7 @@ export type DungeonGenerationContext = {
   allRoomIds: Set<string>;
   entities: DungeonMap["entities"];
   level: number;
+  playerCount: number;
   random: () => number;
   rooms: DungeonMapJson;
   startingRoomId: string;
@@ -391,7 +393,7 @@ export function placeItem(
     );
 
     map.entities.items[nextItem.id] = nextItem;
-    room.contents.push({ id: nextItem.id, type: "item" } satisfies RoomItemRef);
+    room.contents.push({ id: nextItem.id, isChest: true, type: "item" } satisfies RoomItemRef);
     return true;
   }
 

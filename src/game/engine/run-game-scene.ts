@@ -42,10 +42,15 @@ export function getRoomSceneActors({
       const item = dungeonMap.entities.items[content.id];
       if (!item || seenItemIds.has(item.id)) continue;
       seenItemIds.add(item.id);
-      sceneActors.push({ id: item.id, sprite: item.sprite ?? item.label, kind: "item", label: item.label, position: "center" });
+      const isChest = content.isChest ?? false;
+      sceneActors.push({ id: item.id, sprite: isChest ? "chest_closed_graphic" : item.sprite ?? item.label, contentSprite: item.sprite ?? item.label, isChest, kind: "item", label: isChest ? `Chest containing ${item.label}` : item.label, position: "center" });
     } else if (content.type === "equipment") {
       const item = dungeonMap.entities.equipment[content.id];
-      if (item) sceneActors.push({ id: item.id, sprite: item.sprite, kind: "equipment", label: getEquipmentGroundLabel(item.equipmentId), position: "center" });
+      if (item) {
+        const isChest = content.isChest ?? false;
+        const label = getEquipmentGroundLabel(item.equipmentId);
+        sceneActors.push({ id: item.id, sprite: isChest ? "chest_closed_graphic" : item.sprite, contentSprite: item.sprite, isChest, kind: "equipment", label: isChest ? `Chest containing ${label}` : label, position: "center" });
+      }
     } else if (content.type === "stairs") {
       sceneActors.push({ id: "stairs", sprite: "stairs_graphic", kind: "stairs", label: "Stairs", position: "center" });
     }

@@ -31,7 +31,7 @@ import {
   type WorldEquipment,
   type WorldMonster,
 } from "@/game/dungeon/types";
-export function createSeededDungeonMap(seed: string, level: number, startingPosition?: GridPosition, includeClock = false) {
+export function createSeededDungeonMap(seed: string, level: number, startingPosition?: GridPosition, includeClock = false, playerCount = 1) {
   // Deriving the stream from seed + level keeps each floor reproducible and independent of prior RNG calls.
   const normalizedSeed = seed.trim().toLowerCase();
   const testDungeonSeeds = ["test", "testwarrior", "testcleric", "testthief"];
@@ -41,11 +41,12 @@ export function createSeededDungeonMap(seed: string, level: number, startingPosi
     createSeededRandom(`${generationSeed}:level:${level}`),
     startingPosition,
     includeClock,
+    playerCount,
   );
 
   const testDungeonSeed = testDungeonSeeds.find((candidate) => candidate === normalizedSeed);
   return testDungeonSeed && level === 1
-    ? createTestDungeon(map, testDungeonSeed)
+    ? createTestDungeon(map, testDungeonSeed, playerCount)
     : map;
 }
 
@@ -65,7 +66,7 @@ function createMapFromContext({
   };
 }
 
-function createTestDungeon(map: DungeonMap, seed: string) {
+function createTestDungeon(map: DungeonMap, seed: string, playerCount: number) {
   // The test seed is a real single-path floor so UI tests can follow ordinary doorways without
   // coordinate injection, hidden state mutation, or probabilistic route planning.
   const catalogItemIds = GAME_PARAMETERS.items.map(({ id }) => id);
@@ -95,7 +96,7 @@ function createTestDungeon(map: DungeonMap, seed: string) {
       setConnectionBoundary(map.rooms, previous.id, incomingDirection, index === 2 ? "locked" : "open");
 
       if (index > itemIds.length && index <= itemIds.length + 3) {
-        const monster = createMonster((index - itemIds.length - 1) * 4, `${previous.id}:${incomingDirection}`, () => 0, map.level);
+        const monster = createMonster((index - itemIds.length - 1) * 4, `${previous.id}:${incomingDirection}`, () => 0, map.level, playerCount);
         placeDoorwayGuard(map, previous.id, incomingDirection, monster);
       }
     }
@@ -104,7 +105,7 @@ function createTestDungeon(map: DungeonMap, seed: string) {
       map.entities.items[item.id] = item;
       room.contents.push({ id: item.id, type: "item" });
     } else if (index === itemIds.length + 4) {
-      const werewolf = createWerewolf(room.id, map.level);
+      const werewolf = createWerewolf(room.id, map.level, playerCount);
       map.entities.monsters[werewolf.id] = werewolf;
       room.contents.push({ id: werewolf.id, type: "monster" });
     } else if (index === itemIds.length + 5) {
@@ -261,6 +262,7 @@ function placeDoorwayGuards(context: DungeonGenerationContext) {
         `${connection.roomId}:${connection.direction}`,
         context.random,
         context.level,
+        context.playerCount,
       );
 
       placeDoorwayGuard(
@@ -386,7 +388,7 @@ function placeWerewolfAndSilverBullet(
       context.random,
     )
   ) {
-    const werewolf = createWerewolf(werewolfRoomId, context.level);
+    const werewolf = createWerewolf(werewolfRoomId, context.level, context.playerCount);
 
     context.entities.monsters[werewolf.id] = werewolf;
     werewolfRoom.contents = [
@@ -426,7 +428,7 @@ function placeOptionalLoot(
     if (!room) continue;
     const equipment = createEquipment(equipmentKinds[Math.floor(context.random() * equipmentKinds.length)], `equipment:${room.id}:${Math.floor(context.random() * 1_000_000)}`);
     context.entities.equipment[equipment.id] = equipment;
-    room.contents.push({ id: equipment.id, type: "equipment" });
+    room.contents.push({ id: equipment.id, isChest: true, type: "equipment" });
   }
 }
 
@@ -435,6 +437,7 @@ export function createDungeonMap(
   random: () => number,
   startingPosition?: GridPosition,
   includeClock = false,
+  playerCount = 1,
 ): DungeonMap {
   // Generation order is significant: connectivity precedes guards, exits, locks, and reachable-room loot.
   const rooms = createEmptyGrid();
@@ -454,6 +457,7 @@ export function createDungeonMap(
     allRoomIds,
     entities,
     level,
+    playerCount: Math.max(1, Math.floor(playerCount)),
     random,
     rooms,
     startingRoomId,

@@ -8,9 +8,13 @@ const rogues = require("../../../assets/32rogues/rogues.png");
 const items = require("../../../assets/32rogues/items.png");
 const monster = (row: number, column: number): Tile => ({ source: monsters, width: 384, height: 416, row, column });
 const item = (row: number, column: number): Tile => ({ source: items, width: 352, height: 832, row, column });
+const tile = (row: number, column: number): Tile => ({ source: tiles, width: 544, height: 832, row, column });
+const emojiSprites: Record<string, string> = { clock_graphic: "⏰", guard_graphic: "🛡️", spyglass_graphic: "🔭" };
 // Atlas coordinates follow the pack's accompanying row / letter indexes.
 const sprites: Record<string, Tile> = {
   "stone-floor": { source: tiles, width: 544, height: 832, row: 6, column: 1 },
+  chest_closed_graphic: tile(17, 0),
+  stairs_graphic: tile(16, 7),
   warrior_graphic: { source: rogues, width: 224, height: 224, row: 1, column: 0 },
   cleric_graphic: { source: rogues, width: 224, height: 224, row: 2, column: 2 },
   thief_graphic: { source: rogues, width: 224, height: 224, row: 0, column: 3 },
@@ -19,8 +23,10 @@ const sprites: Record<string, Tile> = {
   dragon_graphic: monster(8, 2),
   vampire_graphic: monster(3, 1),
   werewolf_graphic: monster(6, 5),
+  stamina_meal_graphic: item(25, 2),
   health_potion_graphic: item(19, 1),
   key_graphic: item(22, 0),
+  silver_bullet_graphic: item(23, 2),
   good_armor_graphic: item(12, 3),
   good_weapon_graphic: item(0, 3),
   heavy_armor_graphic: item(12, 5),
@@ -33,8 +39,8 @@ export function PixelSprite({ sprite, label, size = 32, style }: { sprite: strin
   const tile = sprites[sprite];
   if (!tile) return (
     <View style={[{ minWidth: size }, style]}>
-      <Text accessibilityLabel={label} accessibilityRole="image" allowFontScaling={false} style={{ fontSize: Math.max(7, size * 0.24), lineHeight: Math.max(9, size * 0.3), textAlign: "center" }}>
-        [{sprite}]
+      <Text accessibilityLabel={label} accessibilityRole="image" allowFontScaling={false} style={{ fontSize: Math.max(12, size * 0.8), lineHeight: Math.max(14, size), textAlign: "center" }}>
+        {emojiSprites[sprite] ?? (sprite.endsWith("_graphic") ? "❔" : sprite)}
       </Text>
     </View>
   );
@@ -46,8 +52,8 @@ function SpriteImage({ sprite, label, size, style, tile }: { sprite: string; lab
   const [failed, setFailed] = useState(false);
   if (failed) return (
     <View style={[{ minWidth: size }, style]}>
-      <Text accessibilityLabel={label} accessibilityRole="image" allowFontScaling={false} style={{ fontSize: Math.max(7, size * 0.24), lineHeight: Math.max(9, size * 0.3), textAlign: "center" }}>
-        [{sprite}]
+      <Text accessibilityLabel={label} accessibilityRole="image" allowFontScaling={false} style={{ fontSize: Math.max(12, size * 0.8), lineHeight: Math.max(14, size), textAlign: "center" }}>
+        {emojiSprites[sprite] ?? (sprite.endsWith("_graphic") ? "❔" : sprite)}
       </Text>
     </View>
   );

@@ -18,7 +18,7 @@ export default function Index() {
         <PrimaryButton accessibilityLabel="Singleplayer" accessibilityRole="button" label="Singleplayer"
           onPress={() => router.push({ pathname: "/setup", params: { mode: "singleplayer" } })} />
         <PrimaryButton accessibilityLabel="Multiplayer" accessibilityRole="button" label="Multiplayer"
-          onPress={() => router.push({ pathname: "/setup", params: { mode: "multiplayer" } })} />
+          onPress={() => router.push("/multiplayer")} />
       </View>
     </View>
   </ScreenShell></ThemeProvider>;

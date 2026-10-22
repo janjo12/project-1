@@ -4,8 +4,8 @@ import type { GridPosition } from "@/game/dungeon/types";
 import type { Difficulty } from "@/utils/settings-storage";
 import { getPlayerAttackDamage } from "@/game/engine/combat";
 
-export function createLevelMap(seed: string, level: number, startingPosition?: GridPosition, includeClock = false) {
-  return createSeededDungeonMap(seed, level, startingPosition, includeClock);
+export function createLevelMap(seed: string, level: number, startingPosition?: GridPosition, includeClock = false, playerCount = 1) {
+  return createSeededDungeonMap(seed, level, startingPosition, includeClock, playerCount);
 }
 
 export { getPlayerAttackDamage };

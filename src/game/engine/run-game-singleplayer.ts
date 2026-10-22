@@ -29,9 +29,11 @@ import {
   addItemToRoom,
   damageMonsterInRoom,
   getCurrentRoom,
-  getRoomEquipment,
+  getRoomEquipmentById,
+  getRoomItemById,
   getRoomMonster,
   getTargetableMonsters,
+  revealRoomLootChest,
   removeEquipmentFromRoom
 } from "@/game/dungeon/rooms";
 import {
@@ -57,7 +59,7 @@ import { advanceAnimationFrame } from "@/game/entities";
 import { gameReducer, type GameStateAction } from "@/game/state/gameReducer";
 import { createInitialGameState } from "@/game/state/initialGameState";
 import { createNumberStore } from "@/game/state/numberStore";
-import { PLAYER_MAX_ENERGY, PLAYER_MAX_HEALTH, playerEntryPositions, type GameState, type UseGameRunOptions } from "@/game/state/types";
+import { PLAYER_MAX_ENERGY, PLAYER_MAX_HEALTH, directionScenePositions, playerEntryPositions, type GameState, type UseGameRunOptions } from "@/game/state/types";
 export {
   applyWerewolfChaseAfterAction,
   getHardTurnLimit,
@@ -159,7 +161,6 @@ export function useRunGame({
     currentRoomId,
     currentRoomItem,
     currentRoomItemLabel,
-    currentRoomItemObject,
     currentRoomItemSprite,
     disabledDirections,
     hasHardTurnCounter,
@@ -680,42 +681,64 @@ export function useRunGame({
     cancelCharge();
     finishPlayerAction({ startedRoomId: currentRoomId });
   }, [cancelCharge, currentRoomId, finishPlayerAction, hasLost, isResolving, setTurnTimeRemaining]);
-  async function pickupItem() {
-    if (isResolving || hasLost || !currentRoomItem || !currentRoomItemObject) {
+  async function pickupItem(itemInstanceId?: string) {
+    const currentRoom = getCurrentRoom(dungeonMap);
+    const selectedId = itemInstanceId ?? currentRoom.contents.find(content => content.type === "item")?.id;
+    const selected = selectedId ? getRoomItemById(dungeonMap, currentRoom, selectedId) : null;
+    const pickedItemObject = selected?.item ?? null;
+    const pickedItemId = pickedItemObject?.itemId ?? null;
+    if (isResolving || hasLost || !pickedItemId || !pickedItemObject) {
     return;
+    }
+
+    if (selected?.reference.isChest && inventoryItemRef.current) {
+      commitMap(map => revealRoomLootChest(map, currentRoomId, pickedItemObject.id, "item"));
+      return;
     }
 
     const wasCharged = chargedRef.current;
     cancelCharge(false);
     if (wasCharged) setPlayerEnergy(energy => Math.min(PLAYER_MAX_ENERGY, energy + getEquipmentStats(equipment).chargeCost));
-    const nextInventoryItem = currentRoomItem;
+    const nextInventoryItem = pickedItemId;
 
     const nextMap = commitMap((map) =>
       swapRoomItemWithInventory({
         currentRoomId,
-        currentRoomItemId: currentRoomItemObject.id,
+        currentRoomItemId: pickedItemObject.id,
         dungeonMap: map,
-        inventoryItem,
+        inventoryItem: inventoryItemRef.current,
       }),
     );
     setInventoryItem(nextInventoryItem);
     finishPlayerAction({ mapAtEnd: nextMap, startedRoomId: currentRoomId });
   }
 
-  function pickupEquipment() {
+  function pickupEquipment(equipmentInstanceId?: string) {
     if (isResolving || hasLost) return;
-    const item = getRoomEquipment(dungeonMap, getCurrentRoom(dungeonMap));
+    const currentRoom = getCurrentRoom(dungeonMap);
+    const selectedId = equipmentInstanceId ?? currentRoom.contents.find(content => content.type === "equipment")?.id;
+    const selected = selectedId ? getRoomEquipmentById(dungeonMap, currentRoom, selectedId) : null;
+    const item = selected?.equipment ?? null;
     if (!item) return;
+    if (selected?.reference.isChest && equipment) {
+      commitMap(map => revealRoomLootChest(map, currentRoomId, item.id, "equipment"));
+      return;
+    }
     const without = removeEquipmentFromRoom(dungeonMap, currentRoomId, item.id);
-    const nextMap = equipment ? addEquipmentToRoom(without, currentRoomId, equipment) : without;
+    const nextMap = equipment ? addEquipmentToRoom(without, currentRoomId, equipment, false) : without;
     commitMap(() => nextMap);
     setHeldEquipment(item.equipmentId);
     finishPlayerAction({ mapAtEnd: nextMap, startedRoomId: currentRoomId });
   }
 
+  function openLootChest(id: string, type: "item" | "equipment") {
+    if (isResolving || hasLost) return;
+    commitMap(map => revealRoomLootChest(map, currentRoomId, id, type));
+  }
+
   function dropEquipment() {
     if (isResolving || !equipment) return;
-    const nextMap = addEquipmentToRoom(dungeonMap, currentRoomId, equipment);
+    const nextMap = addEquipmentToRoom(dungeonMap, currentRoomId, equipment, false);
     commitMap(() => nextMap);
     setHeldEquipment(null);
     if (chargedRef.current) cancelCharge();
@@ -723,7 +746,7 @@ export function useRunGame({
 
   function dropItem() {
     if (isResolving || hasLost || !inventoryItem) return;
-    commitMap(map => addItemToRoom(map, currentRoomId, inventoryItem));
+    commitMap(map => addItemToRoom(map, currentRoomId, inventoryItem, false));
     setInventoryItem(null);
   }
 
@@ -755,14 +778,21 @@ export function useRunGame({
     cancelCharge(false);
     if (wasCharged) setPlayerEnergy(energy => Math.min(PLAYER_MAX_ENERGY, energy + getEquipmentStats(equipment).chargeCost));
     resetFeedback();
-    commitMap(() => movement.map);
-    if (movement.usedKey) {
-      setInventoryItem(null);
+    if (movement.roomId !== currentRoomId) {
+      setIsResolving(true);
+      setPlayerScenePosition(directionScenePositions[direction]);
+      schedule(GAME_PARAMETERS.animation.roomExitDurationMs, () => {
+        commitMap(() => movement.map);
+        if (movement.usedKey) setInventoryItem(null);
+        setPlayerScenePosition(playerEntryPositions[direction]);
+        if (movement.startingPosition) nextLevelStartingPositionRef.current = movement.startingPosition;
+        schedule(GAME_PARAMETERS.animation.roomTransitionDurationMs, finishTurn);
+      });
+      return;
     }
-    setPlayerScenePosition(playerEntryPositions[direction]);
 
-    if (movement.startingPosition) nextLevelStartingPositionRef.current = movement.startingPosition;
-
+    commitMap(() => movement.map);
+    if (movement.usedKey) setInventoryItem(null);
     finishTurn();
   }
 
@@ -799,6 +829,7 @@ export function useRunGame({
     equipmentDescription,
     equipmentSprite,
     pickupEquipment,
+    openLootChest,
     dropEquipment,
     inventoryItemLabel,
     inventoryItemActivationDescription,

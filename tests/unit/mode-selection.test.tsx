@@ -10,10 +10,12 @@ import SettingsRoute from "@/app/settings";
 // Initial React Native modal rendering can be slow on the Windows test runner.
 jest.setTimeout(30000);
 let mockMode = "singleplayer";
-jest.mock("expo-router", () => ({ router: { push: jest.fn(), replace: jest.fn() }, useLocalSearchParams: () => ({ mode: mockMode }) }));
+let mockHost = undefined as string | undefined;
+jest.mock("expo-router", () => ({ router: { push: jest.fn(), replace: jest.fn() }, useLocalSearchParams: () => ({ mode: mockMode, host: mockHost }) }));
 
 beforeEach(async () => {
   jest.clearAllMocks();
+  mockHost = undefined;
   await AsyncStorage.clear();
 });
 const renderWithSafeArea = (element: ReactElement) =>
@@ -30,7 +32,7 @@ test("choose a play mode before seeing seed and difficulty", async () => {
   fireEvent.press(screen.getByText("Singleplayer"));
   expect(router.push).toHaveBeenLastCalledWith({ pathname: "/setup", params: { mode: "singleplayer" } });
   fireEvent.press(screen.getByText("Multiplayer"));
-  expect(router.push).toHaveBeenLastCalledWith({ pathname: "/setup", params: { mode: "multiplayer" } });
+  expect(router.push).toHaveBeenLastCalledWith("/multiplayer");
 });
 test.each(["singleplayer", "multiplayer"])("settings start the selected %s flow without handedness", async mode => {
   mockMode = mode;
@@ -39,6 +41,15 @@ test.each(["singleplayer", "multiplayer"])("settings start the selected %s flow 
   expect(screen.queryByText("Handedness")).toBeNull();
   fireEvent.press(screen.getByText("Start"));
   await waitFor(() => expect(router.replace).toHaveBeenCalledWith(mode === "multiplayer" ? "/multiplayer" : "/game"));
+});
+
+test("host game options return to the host lobby flow", async () => {
+  mockMode = "multiplayer";
+  mockHost = "true";
+  const screen = renderWithSafeArea(<Setup />);
+  await screen.findByText("Difficulty");
+  fireEvent.press(screen.getByText("Start"));
+  await waitFor(() => expect(router.replace).toHaveBeenCalledWith({ pathname: "/multiplayer", params: { host: "true" } }));
 });
 
 test("setup lets players disable attack microgames and persists the choice", async () => {

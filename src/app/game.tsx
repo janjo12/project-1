@@ -73,6 +73,7 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
     vibrationEnabled: settings.vibrationEnabled,
   });
   const [microgameScore, setMicrogameScore] = useState<number | null>(null);
+  const [combatMessage, setCombatMessage] = useState("");
   const [classIntroPage, setClassIntroPage] = useState(0);
   const [isMapOpen, setIsMapOpen] = useState(false);
   const pendingAttack = useRef<string | null>(null);
@@ -106,7 +107,11 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
 
   function handleActorPress(actor: RoomSceneActor) {
     if (actor.kind === "enemy") {
-      if (settings.microgamesEnabled) {
+      const werewolfWithSilver = !!game.dungeonMap.entities.monsters[actor.id]?.chases && game.inventoryItem === "silver-bullet";
+      if (werewolfWithSilver) {
+        setCombatMessage("Silver Bullet worked! The Werewolf is defeated.");
+        game.attackMonster(actor.id);
+      } else if (settings.microgamesEnabled) {
         pendingAttack.current = actor.id;
         microgame.start(game.playerClass.microgame, settings.handedness, { istest: isTestSeed(settings.seed) });
       } else {
@@ -158,7 +163,7 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
       </Header>
 
       {!tinyLayout ? <DebugBar accessibilityLabel="Turn status" accessibilityRole="text">
-        {`${game.istest ? "TEST · " : ""}${microgameScore === null ? game.turnStatus : `${game.turnStatus} · Last microgame ${microgameScore}/100`}`}
+        {`${game.istest ? "TEST · " : ""}${combatMessage || (microgameScore === null ? game.turnStatus : `${game.turnStatus} · Last microgame ${microgameScore}/100`)}`}
       </DebugBar> : null}
       {!tinyLayout ? map : null}
       <Row>
@@ -223,10 +228,11 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
       </ResourceBarGroup>
 
       {!compactLayout ? <Text style={{ color: colors.ink, fontSize: 13, fontWeight: "700", textAlign: "center" }}>
-        Tap a monster to attack, an item to pick it up, a doorway to move, your hero to use their class support skill, or stairs to descend.
+        Tap a monster to attack, an item to pick it up, a doorway to move, your hero to use their class support skill, or the stairs to descend.
       </Text> : null}
 
       <View style={{ flex: 1, minHeight: 0, overflow: "hidden", position: "relative", zIndex: microgame.active ? 100 : undefined }}>
+      {tinyLayout && combatMessage ? <Text pointerEvents="none" style={{ position: "absolute", top: 8, left: 0, right: 0, zIndex: 20, color: colors.accent, fontWeight: "900", textAlign: "center" }}>{combatMessage}</Text> : null}
       <GameViewPanel
         sceneFrameStore={game.sceneFrameStore}
         canUnlockDoors={game.inventoryItem === "key" || game.playerClass.id === "thief"}

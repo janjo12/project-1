@@ -113,7 +113,7 @@ export function DungeonMap({
                       <View
                         accessibilityLabel={`Room ${rowLetter}${columnNumber}${isCurrentRoom ? ", your room" : ""}${hasMonster ? ", monster" : ""}${hasItem ? ", item" : ""}${hasEquipment ? ", equipment" : ""}${hasStairs ? ", stairs" : ""}`}
                         style={[styles.room, { backgroundColor: roomColor }, isCurrentRoom && styles.currentRoom]}
-                        testID={`map-room-${rowLetter}${columnNumber}`}
+                        testID={isCurrentRoom ? "current-dungeon-room" : `map-room-${rowLetter}${columnNumber}`}
                       >
                         {room.north === "open" ? (
                           <View style={[styles.door, styles.northDoor]} />
@@ -152,7 +152,7 @@ export function DungeonMap({
                           <PixelSprite sprite="guard_graphic" label="Guarded doorway" size={10} style={[styles.iconOverlay, styles.westGuard]} />
                         ) : null}
                         {hasStairs ? (
-                          <PixelSprite sprite="stairs_graphic" label="Stairs" size={12} />
+                          <PixelSprite sprite="stairs_graphic" label="Stairs" size={20} />
                         ) : null}
                         {hasWerewolf ? (
                           <PixelSprite sprite="werewolf_graphic" label="Werewolf" size={12} />

@@ -1,6 +1,8 @@
 import { applyDefense, getPlayerAttackDamage, resolveAttackDamage, resolveEnemyDamage } from "@/game/engine/combat";
 import type { WorldMonster } from "@/game/entities/enemies";
 import { GAME_PARAMETERS } from "@/game/config/gameparameters";
+import { createMultiplayerState } from "@/game/engine/multiplayer-rules";
+import { createMonster } from "@/game/entities/enemies";
 
 const enemy: WorldMonster = { id: "e", type: "monster", name: "Enemy", sprite: "e", damage: 12, currentHealth: 9, maximumHealth: 20, defense: 2 };
 
@@ -38,8 +40,33 @@ describe("documented combat math", () => {
       };
     });
 
-    expect(GAME_PARAMETERS.monsters.map(({ maximumHealth }) => maximumHealth)).toEqual([25, 45, 70, 55, 55]);
     expect(chargedAttackOutcomes.every(({ damageTaken }) => damageTaken < GAME_PARAMETERS.player.maxHealth)).toBe(true);
     expect(chargedAttackOutcomes.every(({ energySpent }) => energySpent <= GAME_PARAMETERS.player.maxEnergy)).toBe(true);
+  });
+
+  it("keeps weak monster stats at catalog values and scales all monsters with party size", () => {
+    const ordinaryCatalog = GAME_PARAMETERS.monsters.filter(monster => !("chases" in monster && monster.chases));
+    ordinaryCatalog.forEach((catalogMonster, index) => {
+      const monster = createMonster(index, "A1", () => 0);
+      expect(monster.maximumHealth).toBe(catalogMonster.maximumHealth);
+      expect(monster.damage).toBe(catalogMonster.damage);
+    });
+
+    const solo = createMultiplayerState("testwarrior", "normal", ["host"]);
+    const party = createMultiplayerState("testwarrior", "normal", ["host", "guest-1", "guest-2", "guest-3"]);
+    const additionalPlayers = Object.keys(party.players).length - Object.keys(solo.players).length;
+    const expectedHealthScale = 1 + additionalPlayers * GAME_PARAMETERS.monsterScaling.healthIncreasePerAdditionalPlayer;
+    const expectedDamageScale = 1 + additionalPlayers * GAME_PARAMETERS.monsterScaling.damageIncreasePerAdditionalPlayer;
+    const soloMonsters = Object.values(solo.map.entities.monsters);
+    const partyMonsters = Object.values(party.map.entities.monsters);
+    expect(partyMonsters.map(monster => monster.id)).toEqual(soloMonsters.map(monster => monster.id));
+    expect(soloMonsters.length).toBeGreaterThan(0);
+    soloMonsters.forEach(monster => {
+      const partyMonster = party.map.entities.monsters[monster.id];
+      expect(partyMonster.maximumHealth).toBe(Math.round(monster.maximumHealth * expectedHealthScale));
+      expect(partyMonster.currentHealth).toBe(partyMonster.maximumHealth);
+      expect(partyMonster.damage).toBe(Math.round(monster.damage * expectedDamageScale));
+      expect(partyMonster.attack).toBe(Math.round((monster.attack ?? monster.damage) * expectedDamageScale));
+    });
   });
 });

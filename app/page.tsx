@@ -18,6 +18,7 @@ export default function Home() {
   const { isLoading, settings, updateSettings, saveSettings } = useGameSettings();
   const [page, setPage] = useState<Page>("title");
   const [mode, setMode] = useState<PlayMode>("singleplayer");
+  const [hostAfterSetup, setHostAfterSetup] = useState(false);
   const [score, setScore] = useState(0);
 
   if (isLoading) {
@@ -27,7 +28,8 @@ export default function Home() {
   const goToSetup = (nextMode: PlayMode) => {
     setMode(nextMode);
     updateSettings({ seed: generateRandomSeed() });
-    setPage("setup");
+    setHostAfterSetup(false);
+    setPage(nextMode === "multiplayer" ? "multiplayer" : "setup");
   };
 
   return (
@@ -51,7 +53,10 @@ export default function Home() {
         {page === "setup" ? (
           <SetupScreen
             settings={settings}
-            onBack={() => setPage("title")}
+            onBack={() => {
+              if (mode === "multiplayer") setHostAfterSetup(false);
+              setPage(mode === "multiplayer" ? "multiplayer" : "title");
+            }}
             onSettings={() => setPage("settings")}
             onUpdate={updateSettings}
             onStart={async () => {
@@ -76,7 +81,18 @@ export default function Home() {
         ) : null}
 
         {page === "multiplayer" ? (
-          <MultiplayerScreen settings={settings} onLeave={() => setPage("title")} />
+          <MultiplayerScreen
+            settings={settings}
+            startAsHost={hostAfterSetup}
+            onHostSelect={() => {
+              setHostAfterSetup(true);
+              setPage("setup");
+            }}
+            onLeave={() => {
+              setHostAfterSetup(false);
+              setPage("title");
+            }}
+          />
         ) : null}
 
         {page === "over" ? (

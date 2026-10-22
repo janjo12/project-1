@@ -1,10 +1,11 @@
 import { PLAYER_MAX_ENERGY, useRunGame } from "@/game/engine/run-game-singleplayer";
 import { createSeededDungeonMap } from "@/game/dungeon/generateDungeon";
-import type { DungeonMap } from "@/game/dungeon/types";
+import type { DungeonMap, RoomItemRef } from "@/game/dungeon/types";
 import { getRoom } from "@/game/dungeon/rooms";
 import { placeDoorwayGuard } from "@/game/dungeon/types";
 import { applyDefense } from "@/game/engine/combat";
 import { GAME_PARAMETERS } from "@/game/config/gameparameters";
+import { createWerewolf } from "@/game/entities/enemies";
 import { act, renderHook } from "@testing-library/react-native";
 
 jest.mock("@/game/dungeon/mapStorage", () => ({
@@ -16,6 +17,12 @@ jest.mock("@/game/engine/run-game-helpers", () => ({
   ...jest.requireActual("@/game/engine/run-game-helpers"),
   createLevelMap: jest.fn(),
 }));
+
+test("Werewolf health stays at one across levels and party sizes", () => {
+  for (const [level, players] of [[1, 1], [5, 1], [1, 4], [5, 4]]) {
+    expect(createWerewolf("A1", level, players)).toMatchObject({ currentHealth: 1, maximumHealth: 1 });
+  }
+});
 
 function fixture(): DungeonMap {
   const map = createSeededDungeonMap("charge-test", 1);
@@ -54,7 +61,7 @@ async function setup(enemy = false, meal = false, enemyHealth = 20, enemyDamage 
   if (werewolf) {
     map.entities.monsters.werewolf = {
       id: "werewolf", type: "monster", name: "Werewolf", sprite: "werewolf",
-      chases: true, currentHealth: 60, maximumHealth: 60, damage: 19,
+      chases: true, currentHealth: 1, maximumHealth: 1, damage: 19,
     };
     getRoom(map, "A1")!.contents.push({ id: "werewolf", type: "monster" });
   }
@@ -62,11 +69,11 @@ async function setup(enemy = false, meal = false, enemyHealth = 20, enemyDamage 
     map.entities.items.bullet = {
       id: "bullet", itemId: "silver-bullet", label: "Silver Bullet", sprite: "bullet", type: "item",
     };
-    getRoom(map, "A1")!.contents.push({ id: "bullet", type: "item" });
+    getRoom(map, "A1")!.contents.push({ id: "bullet", isChest: true, type: "item" });
   }
   if (meal) {
     map.entities.items.meal = { id: "meal", itemId: "energy-meal", label: "Energy Meal", sprite: "🍔", type: "item" };
-    getRoom(map, "A1")!.contents.push({ id: "meal", type: "item" });
+    getRoom(map, "A1")!.contents.push({ id: "meal", isChest: true, type: "item" });
   }
   require("@/game/engine/run-game-helpers").createLevelMap.mockReturnValue(map);
   require("@/game/dungeon/mapStorage").createAndSaveSeededDungeonMap.mockResolvedValue(map);
@@ -132,7 +139,7 @@ test("singleplayer attacks damage a doorway guard and defeating it opens the doo
   expect(getRoom(result.current.dungeonMap, "A1")!.east).toBe("open");
 });
 
-test("singleplayer ordinary and charged attacks cannot hurt the Werewolf, but a Silver Bullet kills it", async () => {
+test("singleplayer Werewolf has one HP, ignores ordinary attacks, and dies to a Silver Bullet", async () => {
   const { result } = await setup(false, false, 60, 19, "easy", "charge-test", false, 1, false, true, true);
 
   await act(async () => { await result.current.pickupItem(); });
@@ -142,12 +149,12 @@ test("singleplayer ordinary and charged attacks cannot hurt the Werewolf, but a 
   act(() => result.current.dropItem());
   act(() => result.current.attackMonster("werewolf"));
   await act(async () => { jest.runAllTimers(); });
-  expect(result.current.dungeonMap.entities.monsters.werewolf.currentHealth).toBe(60);
+  expect(result.current.dungeonMap.entities.monsters.werewolf.currentHealth).toBe(1);
 
   act(() => result.current.toggleCharge());
   act(() => result.current.attackMonster("werewolf"));
   await act(async () => { jest.runAllTimers(); });
-  expect(result.current.dungeonMap.entities.monsters.werewolf.currentHealth).toBe(60);
+  expect(result.current.dungeonMap.entities.monsters.werewolf.currentHealth).toBe(1);
 
   await act(async () => { await result.current.pickupItem(); });
   await act(async () => { jest.runAllTimers(); });
@@ -164,10 +171,12 @@ test("blocked moves keep charge; valid moves cancel it and always consume a turn
   await act(async () => { await result.current.moveToRoom("north"); });
   expect(result.current.isCharged).toBe(true);
   await act(async () => { await result.current.moveToRoom("east"); });
+  act(() => jest.runAllTimers());
   expect(result.current.isCharged).toBe(false);
   expect(result.current.hardTurnCounter).toBe(turns! - 1);
   expect(result.current.playerEnergy).toBe(PLAYER_MAX_ENERGY);
   await act(async () => { await result.current.moveToRoom("west"); });
+  act(() => jest.runAllTimers());
   expect(result.current.hardTurnCounter).toBe(turns! - 2);
 });
 
@@ -181,6 +190,26 @@ test("charged pickup refunds energy and takes its normal turn", async () => {
   expect(result.current.isCharged).toBe(false);
   expect(result.current.playerEnergy).toBe(PLAYER_MAX_ENERGY);
   expect(result.current.hardTurnCounter).toBe(turns! - 1);
+});
+
+test("a full item slot opens loot onto the floor, then a second click swaps it", async () => {
+  const { result } = await setup(false, true, 20, 2, "easy", "charge-test", false, 1, false, false, true);
+
+  await act(async () => { await result.current.pickupItem("bullet"); });
+  await act(async () => { jest.runAllTimers(); });
+  expect(result.current.inventoryItem).toBe("silver-bullet");
+
+  await act(async () => { await result.current.pickupItem("meal"); });
+  const room = getRoom(result.current.dungeonMap, result.current.currentRoomId)!;
+  expect(room.contents.find((content): content is RoomItemRef => content.type === "item" && content.id === "meal")?.isChest).toBe(false);
+  expect(result.current.inventoryItem).toBe("silver-bullet");
+
+  await act(async () => { await result.current.pickupItem("meal"); });
+  await act(async () => { jest.runAllTimers(); });
+  expect(result.current.inventoryItem).toBe("energy-meal");
+  const droppedItem = getRoom(result.current.dungeonMap, result.current.currentRoomId)!.contents
+    .find((content): content is RoomItemRef => content.type === "item" && result.current.dungeonMap.entities.items[content.id]?.itemId === "silver-bullet");
+  expect(droppedItem?.isChest).toBe(false);
 });
 
 test("normal attacks are free; charged attacks hit harder without a second energy cost", async () => {
@@ -277,10 +306,12 @@ test("an uncharged thief spends a turn picking a locked door without a key", asy
   const { result } = await setup(false, false, 20, 2, "easy", "testthief", true);
   const turn = result.current.turnNumber;
   expect(result.current.inventoryItem).toBeNull();
+  expect(result.current.playerScenePosition).toBe("center");
 
   await act(async () => { await result.current.moveToRoom("east"); });
 
   expect(result.current.currentRoomId).toBe("A1");
+  expect(result.current.playerScenePosition).toBe("center");
   expect(getRoom(result.current.dungeonMap, "A1")!.east).toBe("open");
   expect(result.current.inventoryItem).toBeNull();
   expect(result.current.turnNumber).toBe(turn + 1);
@@ -290,11 +321,29 @@ test("a charged thief picks a locked door without a key and moves through it", a
   const { result } = await setup(false, false, 20, 2, "easy", "testthief", true);
   act(() => result.current.toggleCharge());
   await act(async () => { await result.current.moveToRoom("east"); });
+  act(() => jest.runAllTimers());
 
   expect(result.current.currentRoomId).toBe("A2");
   expect(getRoom(result.current.dungeonMap, "A1")!.east).toBe("open");
   expect(result.current.inventoryItem).toBeNull();
   expect(result.current.isCharged).toBe(false);
+});
+
+test("room movement reaches the doorway before changing rooms, then enters from the matching side", async () => {
+  const { result } = await setup(false, false, 20, 2, "easy", "testwarrior");
+
+  await act(async () => { await result.current.moveToRoom("east"); });
+  expect(result.current.currentRoomId).toBe("A1");
+  expect(result.current.playerScenePosition).toBe("right");
+  expect(result.current.isResolving).toBe(true);
+
+  act(() => jest.advanceTimersByTime(GAME_PARAMETERS.animation.roomExitDurationMs));
+  expect(result.current.currentRoomId).toBe("A2");
+  expect(result.current.playerScenePosition).toBe("left");
+  expect(result.current.isResolving).toBe(true);
+
+  act(() => jest.advanceTimersByTime(GAME_PARAMETERS.animation.roomTransitionDurationMs));
+  expect(result.current.isResolving).toBe(false);
 });
 
 test("thief support uses the uncharged and charged reward chances", async () => {

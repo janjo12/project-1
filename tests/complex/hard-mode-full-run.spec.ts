@@ -4,6 +4,7 @@ import { GAME_PARAMETERS } from "@/game/config/gameparameters";
 import { getTurnDuration } from "@/game/engine/resolveTurn";
 
 const ROOM_TRANSITION_MS = GAME_PARAMETERS.animation.roomTransitionDurationMs;
+const ROOM_MOVE_DURATION_MS = GAME_PARAMETERS.animation.roomExitDurationMs + ROOM_TRANSITION_MS;
 
 for (const { seed, className } of [
   { seed: "testwarrior", className: "Warrior" },
@@ -108,24 +109,39 @@ test(`plays a complete ${className} hard-mode run through Level 2`, async ({ pag
       continue;
     }
 
-    const collectible = page.getByRole("button", { name: /^(Stamina Meal|Health Potion|Key|Silver Bullet|Clock|Good Armor|Good Weapon|Heavy Armor|Heavy Weapon|Amulet|Spyglass)$/ }).first();
+    const collectible = page.getByRole("button", { name: /^(Chest containing )?(Stamina Meal|Health Potion|Key|Silver Bullet|Clock|Good Armor|Good Weapon|Heavy Armor|Heavy Weapon|Amulet|Spyglass)$/ }).first();
     if (await collectible.isVisible().catch(() => false)) {
-      const label = await collectible.getAttribute("aria-label");
-      if (label && !securedSilverBullet && !visitedItems.has(label) && !(className === "Thief" && label.startsWith("Key"))) {
+      const accessibleLabel = await collectible.getAttribute("aria-label");
+      const label = accessibleLabel?.replace(/^Chest containing /, "");
+      if (accessibleLabel && label && !securedSilverBullet && !visitedItems.has(label) && !(className === "Thief" && label.startsWith("Key"))) {
         const itemRoomId = await readRoomId(page);
         visitedItems.add(label);
+        const isEquipment = /^(Good Armor|Good Weapon|Heavy Armor|Heavy Weapon|Amulet|Spyglass)$/.test(label);
+        const heldBefore = isEquipment
+          ? await page.getByTestId("equipment-slot").getAttribute("aria-label") ?? ""
+          : await page.getByTestId("item-status").innerText();
+        const slotFull = isEquipment ? !heldBefore.includes("slot empty") : !heldBefore.includes("No Item");
+        const opensOnThisClick = accessibleLabel.startsWith("Chest containing ") && slotFull;
+        const flight = page.getByTestId("sprite-flight-animation");
+        const flightVisible = expect(flight).toBeVisible();
         await collectible.click();
-        await page.clock.runFor(ROOM_TRANSITION_MS);
+        if (opensOnThisClick) {
+          const revealedItem = page.getByRole("button", { name: label, exact: true }).first();
+          await expect(revealedItem).toBeVisible();
+          await revealedItem.click();
+        }
+        await flightVisible;
+        await page.clock.runFor(Math.max(ROOM_TRANSITION_MS, 500));
         if (await page.getByText("Game Over", { exact: true }).isVisible().catch(() => false)) break;
         const held = await page.getByTestId("item-status").innerText();
-        const itemLabel = label?.split(".")[0] ?? "";
+        const itemLabel = label.split(".")[0];
         if (held.includes("Silver Bullet")) securedSilverBullet = true;
         if (itemLabel && held.includes(itemLabel)) {
           if (itemLabel === "Key" && className !== "Thief") {
             const lockedDoor = page.getByRole("button", { name: /locked doorway/ }).first();
             await expect(lockedDoor).toBeVisible();
             await lockedDoor.click();
-            await page.clock.runFor(ROOM_TRANSITION_MS);
+            await page.clock.runFor(ROOM_MOVE_DURATION_MS);
             previousRoomId = itemRoomId;
             await expect(page.getByTestId("item-status")).toContainText("No Item");
           }
@@ -175,7 +191,7 @@ test(`plays a complete ${className} hard-mode run through Level 2`, async ({ pag
       if (!thiefChargedLockPick) {
         await page.getByRole("button", { name: "Charge Up" }).click();
         await lockedDoor.click();
-        await page.clock.runFor(ROOM_TRANSITION_MS);
+        await page.clock.runFor(ROOM_MOVE_DURATION_MS);
         expect(await readRoomId(page), "a charged lockpick should open the door and move through it").not.toBe(roomBeforeLockPick);
         await expect(page.getByTestId("item-status")).toContainText("No Item");
         thiefChargedLockPick = true;
@@ -188,7 +204,7 @@ test(`plays a complete ${className} hard-mode run through Level 2`, async ({ pag
     const currentRoomId = await readRoomId(page);
     const backDirection = previousRoomId ? directionBetween(currentRoomId, previousRoomId) : null;
     if (await clickOnwardDoor(page, backDirection, currentRoomId, visitedRoomIds)) {
-      await page.clock.runFor(ROOM_TRANSITION_MS);
+      await page.clock.runFor(ROOM_MOVE_DURATION_MS);
       previousRoomId = currentRoomId;
       visitedRoomIds.add(await readRoomId(page));
     }

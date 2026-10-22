@@ -1,6 +1,6 @@
-import { createSceneFrameStore, type SceneFrameStore } from "@/game/state/sceneFrameStore";
-import { useState, useSyncExternalStore, type ReactNode } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import type { SceneFrameStore } from "@/game/state/sceneFrameStore";
+import { useState, type ReactNode } from "react";
+import { Platform, StyleSheet, Text, View } from "react-native";
 
 import { useThemeColors, type ThemeColors } from "@/components/Common/theme";
 import {
@@ -8,11 +8,12 @@ import {
   type RoomDoorways,
   type RoomSceneActor,
   type ScenePosition,
+  type ScreenPoint,
 } from "@/components/Dungeon/Room";
 import {
   type CombatAnimationFrame,
 } from "@/game/entities";
-export type { RoomDoorways, RoomSceneActor, ScenePosition };
+export type { RoomDoorways, RoomSceneActor, ScenePosition, ScreenPoint };
 
 type GameViewPanelProps = {
   canUnlockDoors?: boolean;
@@ -25,19 +26,19 @@ type GameViewPanelProps = {
   playerPosition?: ScenePosition;
   playerLabel?: string;
   playerSprite?: string;
+  playerAuraColor?: string;
   roomDoorways?: RoomDoorways;
   roomSceneActors?: RoomSceneActor[];
   playerEnergyLossAmount?: number;
   playerHealthLossAmount?: number;
   disabled?: boolean;
-  onActorPress?: (actor: RoomSceneActor) => void;
+  onActorPress?: (actor: RoomSceneActor, source?: ScreenPoint) => void;
   onDoorwayPress?: (position: Exclude<ScenePosition, "center">) => void;
   onPlayerPress?: () => void;
   roomId?: string;
   reducedMotion?: boolean;
 };
 
-const fallbackFrameStore = createSceneFrameStore();
 const PLAYER_SPRITE = "warrior_graphic";
 const defaultRoomDoorways: RoomDoorways = {
   bottom: "wall",
@@ -51,12 +52,13 @@ export function GameViewPanel({
   canPassBlockedDoorways = false,
   floorLayer,
   animationFrame: suppliedFrame,
-  sceneFrameStore = fallbackFrameStore,
+  sceneFrameStore,
   enemyHealthLossAmount = 0,
   hardTurnCounter = null,
   playerPosition = "center",
   playerLabel = "Player",
   playerSprite = PLAYER_SPRITE,
+  playerAuraColor,
   roomDoorways = defaultRoomDoorways,
   roomSceneActors,
   playerEnergyLossAmount = 0,
@@ -68,8 +70,6 @@ export function GameViewPanel({
   roomId,
   reducedMotion,
 }: GameViewPanelProps) {
-  const storedFrame = useSyncExternalStore(sceneFrameStore.subscribe, sceneFrameStore.getSnapshot, sceneFrameStore.getSnapshot);
-  const animationFrame = suppliedFrame ?? storedFrame;
   const colors = useThemeColors();
   const styles = createStyles(colors);
   const visibleActors = roomSceneActors ?? [];
@@ -78,7 +78,7 @@ export function GameViewPanel({
 
   return (
     <View style={styles.panel}>
-      <View style={styles.sceneBox} onLayout={event => setSceneBoxHeight(event.nativeEvent.layout.height)}>
+      <View style={[styles.sceneBox, Platform.OS === "web" && styles.webSceneBox]} onLayout={event => setSceneBoxHeight(event.nativeEvent.layout.height)}>
         {hardTurnCounter !== null ? (
           <Text
             accessibilityLabel="Turns remaining"
@@ -96,7 +96,8 @@ export function GameViewPanel({
           maxHeight={sceneBoxHeight || undefined}
           reducedMotion={reducedMotion}
           floorLayer={floorLayer}
-          animationFrame={animationFrame}
+          animationFrame={suppliedFrame}
+          sceneFrameStore={sceneFrameStore}
           doorways={roomDoorways}
           enemyHealthLossAmount={enemyHealthLossAmount}
           playerEnergyLossAmount={playerEnergyLossAmount}
@@ -104,6 +105,7 @@ export function GameViewPanel({
           playerPosition={playerPosition}
           playerLabel={playerLabel}
           playerSprite={playerSprite}
+          playerAuraColor={playerAuraColor}
           sceneScale={sceneScale}
           canUnlockDoors={canUnlockDoors}
           canPassBlockedDoorways={canPassBlockedDoorways}
@@ -134,6 +136,9 @@ function createStyles(colors: ThemeColors) {
       minHeight: 0,
       flex: 1,
       padding: 4,
+    },
+    webSceneBox: {
+      paddingBottom: 24,
     },
     turnCounter: {
       color: colors.ink,

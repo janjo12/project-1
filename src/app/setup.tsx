@@ -37,7 +37,7 @@ type HelpTopic = keyof typeof helpContent;
 
 export default function Setup() {
   // Preserve the selected play mode while sharing difficulty and seed setup across both routes.
-  const { mode } = useLocalSearchParams<{ mode?: string }>();
+  const { mode, host } = useLocalSearchParams<{ mode?: string; host?: string }>();
   const { isLoading, settings, updateSettings, saveSettings } =
     useGameSettings({ refreshSeedOnLoad: true });
   const [helpTopic, setHelpTopic] = useState<HelpTopic | null>(null);
@@ -51,7 +51,9 @@ export default function Setup() {
     };
 
     await saveSettings(nextSettings);
-    router.replace(mode === "multiplayer" ? "/multiplayer" : "/game");
+    router.replace(mode === "multiplayer"
+      ? host === "true" ? { pathname: "/multiplayer", params: { host: "true" } } : "/multiplayer"
+      : "/game");
   };
 
   const handleOpenSettings = () => {
@@ -62,7 +64,7 @@ export default function Setup() {
     <ThemeProvider appearance={settings.appearance}>
       <ScreenShell>
         <Container>
-          <Header><NormalButton accessibilityLabel="Back" accessibilityRole="button" label="Back" onPress={() => router.replace("/")} />
+          <Header><NormalButton accessibilityLabel="Back" accessibilityRole="button" label="Back" onPress={() => router.replace(mode === "multiplayer" ? "/multiplayer" : "/")} />
             <NormalButton
               accessibilityLabel="Settings"
               accessibilityRole="button"

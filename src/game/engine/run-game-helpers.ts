@@ -33,5 +33,5 @@ export function swapRoomItemWithInventory({ currentRoomId, currentRoomItemId, du
 }) {
   // Picking up a new item drops the held one into the same room before updating inventory state.
   const mapWithoutPickedItem = removeItemFromRoom(dungeonMap, currentRoomId, currentRoomItemId);
-  return inventoryItem ? addItemToRoom(mapWithoutPickedItem, currentRoomId, inventoryItem) : mapWithoutPickedItem;
+  return inventoryItem ? addItemToRoom(mapWithoutPickedItem, currentRoomId, inventoryItem, false) : mapWithoutPickedItem;
 }

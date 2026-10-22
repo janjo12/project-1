@@ -10,12 +10,15 @@ import {
   getConnectedRoomId,
   getRoom,
   getRoomEquipment,
+  getRoomEquipmentById,
   getRoomItem,
+  getRoomItemById,
   getRoomMonster,
   getTargetableMonsters,
   hasRoomStairs,
   moveCurrentPosition,
   removeEquipmentFromRoom,
+  revealRoomLootChest,
   unlockDoor,
 } from "@/game/dungeon/rooms";
 import { applyDefense, getEquipmentStats, resolveEnergyLoss, resolveHealthLoss } from "@/game/actions/items";
@@ -58,7 +61,7 @@ export type MultiplayerState = GameState & {
 };
 export function createMultiplayerState(seed: string, difficulty: Difficulty, ids: string[]): MultiplayerState {
   // Multiplayer starts from one shared level and gives every roster member independent character resources.
-  const map = createLevelMap(seed, 1, undefined, difficulty !== "easy");
+  const map = createLevelMap(seed, 1, undefined, difficulty !== "easy", ids.length);
   const classId = gameClassForSeed(seed).id;
   const players = Object.fromEntries(ids.map(id => [id, {
     id,
@@ -205,7 +208,7 @@ export function resolveMultiplayerTurn(
     }
     if (action?.type === "DROP_EQUIPMENT") {
       if (player.equipment) {
-        state.map = addEquipmentToRoom(state.map, player.roomId, player.equipment);
+        state.map = addEquipmentToRoom(state.map, player.roomId, player.equipment, false);
         player.equipment = null;
       }
       if (action.charged) {
@@ -275,22 +278,38 @@ export function resolveMultiplayerTurn(
         if (silver) player.item = null;
       }
     }
-    if (action?.type === "PICKUP_EQUIPMENT" || (action?.type === "PICKUP" && getRoomEquipment(state.map, room))) {
-      const held = getRoomEquipment(state.map, getRoom(state.map, player.roomId));
-      if (held) {
-        state.map = removeEquipmentFromRoom(state.map, player.roomId, held.id);
-        if (player.equipment) state.map = addEquipmentToRoom(state.map, player.roomId, player.equipment);
-        player.equipment = held.equipmentId;
+    if (action?.type === "PICKUP_EQUIPMENT") {
+      const selected = action.target
+        ? getRoomEquipmentById(state.map, room, action.target)
+        : (() => {
+            const held = getRoomEquipment(state.map, room);
+            const reference = room.contents.find(content => content.type === "equipment");
+            return held && reference ? { equipment: held, reference } : null;
+          })();
+      if (selected?.reference.isChest && player.equipment) {
+        state.map = revealRoomLootChest(state.map, player.roomId, selected.equipment.id, "equipment");
+      } else if (selected) {
+        state.map = removeEquipmentFromRoom(state.map, player.roomId, selected.equipment.id);
+        if (player.equipment) state.map = addEquipmentToRoom(state.map, player.roomId, player.equipment, false);
+        player.equipment = selected.equipment.equipmentId;
       }
     }
     if (action?.type === "PICKUP") {
-      const item = getRoomItem(state.map, room);
-      if (item) {
+      const selected = action.target
+        ? getRoomItemById(state.map, room, action.target)
+        : (() => {
+            const item = getRoomItem(state.map, room);
+            const reference = room.contents.find(content => content.type === "item");
+            return item && reference ? { item, reference } : null;
+          })();
+      if (selected?.reference.isChest && player.item) {
+        state.map = revealRoomLootChest(state.map, player.roomId, selected.item.id, "item");
+      } else if (selected) {
         // Remove the instance ID, not the item's kind (there can be several of a kind).
         state.map = { ...state.map, rooms: state.map.rooms.map(row => row.map(r => r.id === player.roomId
-          ? { ...r, contents: r.contents.filter(c => !(c.type === "item" && c.id === item.id)) } : r)) };
-        if (player.item) state.map = addItemToRoom(state.map, player.roomId, player.item);
-        player.item = item.itemId ?? item.id;
+          ? { ...r, contents: r.contents.filter(c => !(c.type === "item" && c.id === selected.item.id)) } : r)) };
+        if (player.item) state.map = addItemToRoom(state.map, player.roomId, player.item, false);
+        player.item = selected.item.itemId ?? selected.item.id;
       }
     }
     const enemy = getRoomMonster(state.map, getRoom(state.map, player.roomId));
@@ -340,7 +359,7 @@ export function resolveMultiplayerTurn(
   if (alive.length && alive.every(p => hasRoomStairs(getRoom(state.map, p.roomId))) &&
       alive.some(p => actions.get(p.id)?.type === "DESCEND")) {
     state.level++;
-    state.map = createLevelMap(state.seed, state.level, undefined, state.difficulty !== "easy");
+    state.map = createLevelMap(state.seed, state.level, undefined, state.difficulty !== "easy", Object.keys(state.players).length);
     state.turnsLeft = getHardTurnLimit({ difficulty: state.difficulty, map: state.map });
     for (const player of Object.values(state.players)) {
       player.roomId = state.map.startingRoomId; player.health = PLAYER_MAX_HEALTH; player.energy = PLAYER_MAX_ENERGY;

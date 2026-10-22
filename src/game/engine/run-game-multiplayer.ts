@@ -105,7 +105,11 @@ export function useRunMultiplayerGame(settings: GameSettings) {
         typeof invite.playerId !== "string" || typeof invite.offer !== "string") throw new Error("Paste the complete host invitation.");
     client.current?.close();
     const connection = await networking().createClientConnection(invite.offer, {
-      configuration: { iceServers: [] }, onError: report,
+      configuration: { iceServers: [] },
+      onError: error => {
+        report(error);
+        if (mounted.current) setDisconnected(true);
+      },
       onOpen: () => { if (mounted.current) setConnected(true); },
       onClose: () => { if (mounted.current) { setDisconnected(true); setConnected(false); } },
       onMessage: message => {

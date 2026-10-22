@@ -75,13 +75,39 @@ test("pressing an enemy sends that actor to the game handler", () => {
   fireEvent.press(screen.getByRole("button", { name: "Zombie" }));
 
   expect(onActorPress).toHaveBeenCalledWith(zombie);
+  expect(screen.queryByText("Zombie")).toBeNull();
+  expect(screen.queryByText("Player")).toBeNull();
+});
+
+test("loot chests render only the chest sprite while keeping an accessible pickup name", () => {
+  const chest = {
+    id: "health-potion-room-item",
+    kind: "item" as const,
+    label: "Chest containing Health Potion",
+    sprite: "chest_closed_graphic",
+    contentSprite: "health_potion_graphic",
+    isChest: true,
+    position: "center" as const,
+  };
+  const screen = render(
+    <GameViewPanel
+      animationFrame={createCombatAnimationFrame()}
+      roomDoorways={doorways}
+      roomSceneActors={[chest]}
+    />,
+  );
+
+  expect(screen.getByRole("button", { name: "Chest containing Health Potion" })).toBeTruthy();
+  expect(screen.queryByText("Chest containing Health Potion")).toBeNull();
+  expect(screen.queryByText("Player")).toBeNull();
+  expect(screen.getAllByTestId("pixel-sprite-image").length).toBeGreaterThan(0);
 });
 
 test("a failed sprite image falls back, and switching sprites retries the new image", () => {
   const screen = render(<PixelSprite label="Warrior" size={24} sprite="warrior_graphic" />);
 
   fireEvent(screen.getByTestId("pixel-sprite-image"), "error");
-  expect(screen.getByText("[warrior_graphic]")).toBeTruthy();
+  expect(screen.getByText("❔")).toBeTruthy();
 
   screen.rerender(<PixelSprite label="Zombie" size={24} sprite="zombie_graphic" />);
   expect(screen.getByTestId("pixel-sprite-image")).toBeTruthy();

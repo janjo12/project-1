@@ -1,4 +1,5 @@
 import { PixelSprite } from "@/components/Common/PixelSprite";
+import { type Ref } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { type ThemeColors, useThemeColors } from "@/components/Common/theme";
@@ -8,6 +9,7 @@ type ItemControlProps = {
   itemLabel?: string | null;
   itemSprite?: string | null;
   onDrop?: () => void;
+  targetRef?: Ref<View>;
 };
 
 export function ItemControl({
@@ -15,6 +17,7 @@ export function ItemControl({
   itemLabel = null,
   itemSprite = null,
   onDrop,
+  targetRef,
 }: ItemControlProps) {
   const styles = createStyles(useThemeColors());
 
@@ -22,6 +25,7 @@ export function ItemControl({
     <Pressable accessibilityRole="button" accessibilityLabel={itemLabel ? `${itemLabel}. Drop item` : "No item held"}
       accessibilityHint="Tap to drop your item without using a turn" disabled={!itemLabel} onPress={onDrop} style={styles.container}>
       <View
+        ref={targetRef}
         accessibilityLabel={itemLabel ? `${itemLabel}. ${activationDescription}` : "No item held"}
         accessibilityRole="text"
       style={[styles.itemPanel, { maxWidth: 105, minWidth: 72, minHeight: 42 }]}
@@ -37,17 +41,19 @@ export function ItemControl({
   );
 }
 
-export function EquipmentControl({ label, description, sprite, onDrop, disabled = false }: {
-  label?: string | null; description?: string | null; sprite?: string | null; onDrop?: () => void; disabled?: boolean;
+export function EquipmentControl({ label, description, sprite, onDrop, disabled = false, targetRef }: {
+  label?: string | null; description?: string | null; sprite?: string | null; onDrop?: () => void; disabled?: boolean; targetRef?: Ref<View>;
 }) {
   const colors = useThemeColors();
   return <Pressable accessibilityRole="button" accessibilityLabel={label ? `${label}. Drop equipment` : "Equipment slot empty"}
     accessibilityHint="Tap to drop your equipment without using a turn" disabled={disabled || !label} onPress={onDrop}
       testID="equipment-slot" style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.paperLight,
       borderColor: colors.sepia, borderWidth: 2, borderRadius: 12, minHeight: 42, padding: 4 }}>
-    {sprite ? <PixelSprite sprite={sprite} label={label ?? "Equipment"} size={20} /> : null}
-    <Text style={{ color: colors.ink, fontSize: 12, fontWeight: "900" }}>{label ?? "Equipment"}</Text>
-    <Text style={{ color: colors.sepia, fontSize: 9, textAlign: "center" }}>{description ?? "Tap to drop"}</Text>
+    <View ref={targetRef} style={{ alignItems: "center", justifyContent: "center" }}>
+      {sprite ? <PixelSprite sprite={sprite} label={label ?? "Equipment"} size={20} /> : null}
+      <Text style={{ color: colors.ink, fontSize: 12, fontWeight: "900" }}>{label ?? "Equipment"}</Text>
+      <Text style={{ color: colors.sepia, fontSize: 9, textAlign: "center" }}>{description ?? "Tap to drop"}</Text>
+    </View>
   </Pressable>;
 }
 

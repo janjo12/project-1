@@ -34,18 +34,23 @@ export function CombatantSprite({
 
   return (
     <Animated.View
-      style={reducedMotion ? undefined : {
-        animationName: IDLE_BOB,
-        animationDuration: `${GAME_PARAMETERS.animation.bounceDurationMs / 2}ms`,
-        animationDirection: "alternate",
-        animationIterationCount: "infinite",
-        animationTimingFunction: "ease-in-out",
-      }}
+      style={[
+        { width: size, height: size, alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "visible" },
+        !reducedMotion && {
+          animationName: IDLE_BOB,
+          animationDuration: `${GAME_PARAMETERS.animation.bounceDurationMs / 2}ms`,
+          animationDirection: "alternate",
+          animationIterationCount: "infinite",
+          animationTimingFunction: "ease-in-out",
+        },
+      ]}
     >
       <View
         style={[
           styles.sprite,
           {
+            width: size,
+            height: size,
             opacity,
             transform: [
               { translateX: attackOffset },

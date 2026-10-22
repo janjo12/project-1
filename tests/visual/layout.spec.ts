@@ -70,7 +70,9 @@ async function expectScreenFits(page: Page, screenName: string) {
 
     return {
       documentWidth: document.documentElement.scrollWidth,
+      documentHeight: document.documentElement.scrollHeight,
       viewportWidth: viewport.width,
+      viewportHeight: viewport.height,
       clipped,
       preview: (() => {
         const frame = document.querySelector(".phone-preview");
@@ -90,6 +92,7 @@ async function expectScreenFits(page: Page, screenName: string) {
   });
 
   expect(measurements.documentWidth, `${screenName}: horizontal page overflow`).toBeLessThanOrEqual(measurements.viewportWidth);
+  expect(measurements.documentHeight, `${screenName}: page must fit without a vertical scrollbar`).toBeLessThanOrEqual(measurements.viewportHeight);
   expect(measurements.clipped, `${screenName}: content clipped by viewport or an overflow container; preview ${JSON.stringify(measurements.preview)}`).toEqual([]);
 }
 
@@ -127,6 +130,9 @@ for (const viewport of viewports) {
 
     await expect(page.getByRole("button", { name: "Menu" })).toBeVisible();
     await expectScreenFits(page, "gameplay");
+    const roomFrame = await page.getByTestId("dungeon-room-frame").boundingBox();
+    expect(roomFrame, "gameplay should show the dungeon room frame").not.toBeNull();
+    expect(viewport.height - (roomFrame!.y + roomFrame!.height), "leave breathing room below the lower dungeon wall").toBeGreaterThanOrEqual(16);
     if (viewport.height < 500) {
       await page.getByRole("button", { name: "Menu" }).click();
       const landscapeMenu = page.getByRole("dialog", { name: "Game menu" });

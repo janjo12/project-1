@@ -11,6 +11,7 @@ import {
   type EquipmentId,
   type ItemId,
   type RoomContents,
+  type RoomEquipmentRef,
   type RoomItemRef,
   type RoomMonsterRef,
   type WorldMonster,
@@ -174,6 +175,14 @@ export function getRoomItem(map: DungeonMap, room: DungeonRoom) {
   return getItemFromRoom(map, room);
 }
 
+export function getRoomItemById(map: DungeonMap, room: DungeonRoom, id: string) {
+  const reference = room.contents.find((content): content is RoomItemRef => content.type === "item" && content.id === id);
+  if (!reference) return null;
+  const item = map.entities.items[id];
+  if (!item) throw new Error(`Room ${room.id} references missing item ${id}`);
+  return { item, reference };
+}
+
 export function getRoomItemId(map: DungeonMap, room: DungeonRoom) {
   return getRoomItem(map, room)?.itemId ?? null;
 }
@@ -184,6 +193,26 @@ export function getRoomEquipment(map: DungeonMap, room: DungeonRoom) {
   const equipment = map.entities.equipment[ref.id];
   if (!equipment) throw new Error(`Room ${room.id} references missing equipment ${ref.id}`);
   return equipment;
+}
+
+export function getRoomEquipmentById(map: DungeonMap, room: DungeonRoom, id: string) {
+  const reference = room.contents.find((content): content is RoomEquipmentRef => content.type === "equipment" && content.id === id);
+  if (!reference) return null;
+  const equipment = map.entities.equipment[id];
+  if (!equipment) throw new Error(`Room ${room.id} references missing equipment ${id}`);
+  return { equipment, reference };
+}
+
+export function revealRoomLootChest(map: DungeonMap, roomId: string, id: string, type: "item" | "equipment") {
+  return {
+    ...map,
+    rooms: map.rooms.map(row => row.map(room => room.id !== roomId ? room : {
+      ...room,
+      contents: room.contents.map(content => content.type === type && content.id === id
+        ? { ...content, isChest: false }
+        : content),
+    })),
+  };
 }
 
 export function revealRooms(map: DungeonMap, currentRoomId: string, revealAdjacent = false): DungeonMap {
@@ -253,10 +282,10 @@ export function removeEquipmentFromRoom(map: DungeonMap, roomId: string, id: str
     ? { ...room, contents: room.contents.filter(content => !(content.type === "equipment" && content.id === id)) } : room)) };
 }
 
-export function addEquipmentToRoom(map: DungeonMap, roomId: string, equipmentId: EquipmentId) {
+export function addEquipmentToRoom(map: DungeonMap, roomId: string, equipmentId: EquipmentId, isChest = true) {
   const equipment = createEquipment(equipmentId, `${equipmentId}:${roomId}:${Date.now()}:${Math.floor(Math.random() * 1_000_000)}`);
   return { ...map, entities: { ...map.entities, equipment: { ...map.entities.equipment, [equipment.id]: equipment } },
-    rooms: map.rooms.map(row => row.map(room => room.id === roomId ? { ...room, contents: [...room.contents, { id: equipment.id, type: "equipment" as const }] } : room)) };
+    rooms: map.rooms.map(row => row.map(room => room.id === roomId ? { ...room, contents: [...room.contents, { id: equipment.id, isChest, type: "equipment" as const }] } : room)) };
 }
 
 export function damageMonsterInRoom(
@@ -355,7 +384,7 @@ export function removeItemFromRoom(map: DungeonMap, roomId: string, itemId: Item
   };
 }
 
-export function addItemToRoom(map: DungeonMap, roomId: string, itemId: ItemId) {
+export function addItemToRoom(map: DungeonMap, roomId: string, itemId: ItemId, isChest = true) {
   const nextItem = createItem(
     itemId,
     `${itemId}:${roomId}:${Date.now()}:${Math.floor(Math.random() * 1_000_000)}`,
@@ -377,7 +406,7 @@ export function addItemToRoom(map: DungeonMap, roomId: string, itemId: ItemId) {
               ...room,
               contents: [
                 ...room.contents,
-                { id: nextItem.id, type: "item" } satisfies RoomItemRef,
+                { id: nextItem.id, isChest, type: "item" } satisfies RoomItemRef,
               ],
             }
           : room,

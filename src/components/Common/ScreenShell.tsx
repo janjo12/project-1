@@ -2,6 +2,7 @@ import { PropsWithChildren } from "react";
 import { StyleSheet, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { SpriteFlightLayer } from "@/components/Common/SpriteFlight";
 import { type ThemeColors, useThemeColors } from "@/components/Common/theme";
 
 type ScreenShellProps = PropsWithChildren<{
@@ -27,6 +28,7 @@ export function ScreenShell({ children, compact = false }: ScreenShellProps) {
       >
         {children}
       </View>
+      <SpriteFlightLayer />
     </View>
   );
 }
@@ -38,6 +40,7 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
       height: "100%",
       overflow: "hidden",
+      position: "relative",
     },
     phoneFrame: {
       backgroundColor: colors.paper,
