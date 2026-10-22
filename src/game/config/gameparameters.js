@@ -34,11 +34,11 @@ export const GAME_PARAMETERS = Object.freeze({
     werewolfChance: 0.45,
   }),
   monsters: Object.freeze([
-    Object.freeze({ attack: 16, defense: 0, damage: 16, maximumHealth: 20, name: "Pixel Golem", sprite: "pixel_golem_graphic" }),
-    Object.freeze({ attack: 17, defense: 0, damage: 17, maximumHealth: 40, name: "Zombie", sprite: "zombie_graphic" }),
-    Object.freeze({ attack: 20, defense: 0, damage: 20, maximumHealth: 80, name: "Dragon", sprite: "dragon_graphic" }),
-    Object.freeze({ attack: 18, defense: 0, damage: 18, maximumHealth: 60, name: "Vampire", sprite: "vampire_graphic" }),
-    Object.freeze({ chases: true, attack: 19, defense: 0, damage: 19, maximumHealth: 60, name: "Werewolf", sprite: "werewolf_graphic" }),
+    Object.freeze({ attack: 22, defense: 0, damage: 22, maximumHealth: 25, name: "Pixel Golem", sprite: "pixel_golem_graphic" }),
+    Object.freeze({ attack: 24, defense: 0, damage: 24, maximumHealth: 45, name: "Zombie", sprite: "zombie_graphic" }),
+    Object.freeze({ attack: 28, defense: 0, damage: 28, maximumHealth: 70, name: "Dragon", sprite: "dragon_graphic" }),
+    Object.freeze({ attack: 25, defense: 0, damage: 25, maximumHealth: 55, name: "Vampire", sprite: "vampire_graphic" }),
+    Object.freeze({ chases: true, attack: 27, defense: 0, damage: 27, maximumHealth: 55, name: "Werewolf", sprite: "werewolf_graphic" }),
   ]),
   items: Object.freeze([
     Object.freeze({ id: "energy-meal", label: "Stamina Meal", description: "Energizes you when you run out of energy", sprite: "stamina_meal_graphic" }),

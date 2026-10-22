@@ -315,13 +315,13 @@ Descending increments `clearedLevels` and `level`, generates the next floor from
 
 | Enemy | Maximum HP | Damage per attack | Special behavior |
 |---|---:|---:|---|
-| Pixel Golem | 20 | 16 | Ordinary enemy. |
-| Zombie | 40 | 17 | Ordinary enemy. |
-| Dragon | 80 | 20 | Ordinary enemy. |
-| Vampire | 60 | 18 | Ordinary enemy. |
-| Werewolf | 60 | 19 | Chases after encounter; Silver Bullet instantly defeats it. |
+| Pixel Golem | 25 | 22 | Ordinary enemy. |
+| Zombie | 45 | 24 | Ordinary enemy. |
+| Dragon | 70 | 28 | Ordinary enemy. |
+| Vampire | 55 | 25 | Ordinary enemy. |
+| Werewolf | 55 | 27 | Chases after encounter; Silver Bullet instantly defeats it. |
 
-These health values keep the hardest single-enemy fights within a survivable number of responses for a player scoring around 80 on attacks, while preserving enemy damage and the 100 Health baseline. A floor transition restores full Health.
+Enemy base stats apply on Level 1. For each later level, damage and attack values increase by 20% of their Level 1 value and maximum Health increases by 12% of its Level 1 value, rounded to the nearest integer. A floor transition restores full Health, but every new floor increases the threat again.
 
 All ordinary enemies currently have zero defense. Enemies in a room attack in target order, with Werewolf sorted after ordinary targets. Multiple enemies may attack in one response. Doorway guards use ordinary monster generation and block the passage they guard. Enemies are defeated at zero HP and are no longer targetable. A defeated guard opens its passage once no other living guard remains on that same edge.
 

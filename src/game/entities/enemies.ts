@@ -16,19 +16,33 @@ export type WorldMonster = {
 export const POSSIBLE_MONSTERS: Omit<WorldMonster, "currentHealth" | "id">[] =
   GAME_PARAMETERS.monsters.map((monster) => ({ ...monster, type: "monster" as const }));
 
-export function createMonster(index: number, roomId: string, random: () => number): WorldMonster {
+function scaleMonsterForLevel<T extends Omit<WorldMonster, "currentHealth" | "id">>(monster: T, level: number) {
+  const floorsAfterFirst = Math.max(0, level - 1);
+  const damageScale = 1 + floorsAfterFirst * 0.2;
+  const healthScale = 1 + floorsAfterFirst * 0.12;
+  return {
+    ...monster,
+    attack: Math.round((monster.attack ?? monster.damage) * damageScale),
+    damage: Math.round(monster.damage * damageScale),
+    maximumHealth: Math.round(monster.maximumHealth * healthScale),
+  };
+}
+
+export function createMonster(index: number, roomId: string, random: () => number, level = 1): WorldMonster {
   // Cycle through ordinary monster types while using the seeded stream for unique stable IDs.
   const monsters = POSSIBLE_MONSTERS.filter((monster) => !monster.chases);
   const monster = monsters[index % monsters.length];
+  const scaledMonster = scaleMonsterForLevel(monster, level);
   return {
-    ...monster,
-    currentHealth: monster.maximumHealth,
+    ...scaledMonster,
+    currentHealth: scaledMonster.maximumHealth,
     id: `${roomId}:monster:${index}:${Math.floor(random() * 1_000_000)}`,
   };
 }
 
-export function createWerewolf(roomId: string): WorldMonster {
+export function createWerewolf(roomId: string, level = 1): WorldMonster {
   // The chasing monster has one deterministic identity per room for save/map references.
   const werewolf = POSSIBLE_MONSTERS.find((monster) => monster.chases)!;
-  return { ...werewolf, currentHealth: werewolf.maximumHealth, id: `${roomId}:werewolf` };
+  const scaledWerewolf = scaleMonsterForLevel(werewolf, level);
+  return { ...scaledWerewolf, currentHealth: scaledWerewolf.maximumHealth, id: `${roomId}:werewolf` };
 }

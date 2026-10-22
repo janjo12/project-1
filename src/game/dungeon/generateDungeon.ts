@@ -95,7 +95,7 @@ function createTestDungeon(map: DungeonMap, seed: string) {
       setConnectionBoundary(map.rooms, previous.id, incomingDirection, index === 2 ? "locked" : "open");
 
       if (index > itemIds.length && index <= itemIds.length + 3) {
-        const monster = createMonster((index - itemIds.length - 1) * 4, `${previous.id}:${incomingDirection}`, () => 0);
+        const monster = createMonster((index - itemIds.length - 1) * 4, `${previous.id}:${incomingDirection}`, () => 0, map.level);
         placeDoorwayGuard(map, previous.id, incomingDirection, monster);
       }
     }
@@ -104,7 +104,7 @@ function createTestDungeon(map: DungeonMap, seed: string) {
       map.entities.items[item.id] = item;
       room.contents.push({ id: item.id, type: "item" });
     } else if (index === itemIds.length + 4) {
-      const werewolf = createWerewolf(room.id);
+      const werewolf = createWerewolf(room.id, map.level);
       map.entities.monsters[werewolf.id] = werewolf;
       room.contents.push({ id: werewolf.id, type: "monster" });
     } else if (index === itemIds.length + 5) {
@@ -260,6 +260,7 @@ function placeDoorwayGuards(context: DungeonGenerationContext) {
         index,
         `${connection.roomId}:${connection.direction}`,
         context.random,
+        context.level,
       );
 
       placeDoorwayGuard(
@@ -385,7 +386,7 @@ function placeWerewolfAndSilverBullet(
       context.random,
     )
   ) {
-    const werewolf = createWerewolf(werewolfRoomId);
+    const werewolf = createWerewolf(werewolfRoomId, context.level);
 
     context.entities.monsters[werewolf.id] = werewolf;
     werewolfRoom.contents = [
