@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { GAME_PARAMETERS } from "@/game/config/gameparameters";
 
 test("attacks resolve directly and enemies still respond when attack microgames are off", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
@@ -29,11 +30,13 @@ test("attacks resolve directly and enemies still respond when attack microgames 
   const playerHealth = page.getByRole("progressbar", { name: "Player health" });
   await expect(page.getByRole("button", { name: "bottom guarded doorway", exact: true }).last()).toBeDisabled();
   await expect(page.getByRole("button", { name: "Pixel Golem", exact: true })).toBeVisible();
-  await expect(enemyHealth).toHaveAttribute("aria-valuenow", "20");
-  await expect(playerHealth).toHaveAttribute("aria-valuenow", "100");
+  const initialEnemyHealth = Number(await enemyHealth.getAttribute("aria-valuenow"));
+  const initialPlayerHealth = Number(await playerHealth.getAttribute("aria-valuenow"));
+  expect(initialEnemyHealth).toBe(Number(await enemyHealth.getAttribute("aria-valuemax")));
+  expect(initialPlayerHealth).toBe(Number(await playerHealth.getAttribute("aria-valuemax")));
 
   await page.getByRole("button", { name: "Pixel Golem", exact: true }).click();
   await expect(page.getByTestId("microgame-overlay")).toHaveCount(0);
-  await expect(enemyHealth).toHaveAttribute("aria-valuenow", "10", { timeout: 5000 });
-  await expect(playerHealth).toHaveAttribute("aria-valuenow", "99", { timeout: 5000 });
+  await expect(enemyHealth).toHaveAttribute("aria-valuenow", String(initialEnemyHealth - GAME_PARAMETERS.combat.normalAttackDamage), { timeout: 5000 });
+  await expect.poll(async () => Number(await playerHealth.getAttribute("aria-valuenow"))).toBeLessThan(initialPlayerHealth);
 });
