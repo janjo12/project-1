@@ -113,7 +113,29 @@ function createTestDungeon(map: DungeonMap, seed: string, playerCount: number) {
     }
   });
 
+  // Keep reserved test floors consistent with ordinary floors: the entrance always has two exits.
+  ensureTestStartingRoomHasSecondDoorway(map, route);
+
   return map;
+}
+
+function ensureTestStartingRoomHasSecondDoorway(map: DungeonMap, route: string[]) {
+  const startingRoom = findRoomInGrid(map.rooms, map.startingRoomId)!;
+  const openDoorways = (Object.keys(directionDeltas) as Direction[])
+    .filter(direction => startingRoom[direction] !== "wall").length;
+  if (openDoorways >= 2) return;
+
+  for (const direction of Object.keys(directionDeltas) as Direction[]) {
+    if (startingRoom[direction] !== "wall") continue;
+    const neighbor = getNeighbor(startingRoom, direction);
+    if (!neighbor) continue;
+    const neighborId = getRoomId(neighbor);
+    if (route.includes(neighborId)) continue;
+    openConnection(map.rooms, startingRoom.id, direction);
+    return;
+  }
+
+  throw new Error(`Test dungeon starting room ${startingRoom.id} cannot have a second doorway`);
 }
 
 function findTestDungeonRoute(startingRoomId: string, length: number) {
@@ -245,7 +267,10 @@ function getUniqueOpenConnections({
 
 function placeDoorwayGuards(context: DungeonGenerationContext) {
   // Guards are attached to shared door boundaries, so both sides see the same blocked passage.
-  const doorwayConnections = getUniqueOpenConnections(context);
+  const doorwayConnections = getUniqueOpenConnections(context).filter(connection => {
+    const neighborId = getConnectedRoomIdFromRooms(context.rooms, connection.roomId, connection.direction);
+    return connection.roomId !== context.startingRoomId && neighborId !== context.startingRoomId;
+  });
   const doorwayGuardCount = Math.min(
     doorwayConnections.length,
     Math.max(
@@ -272,6 +297,28 @@ function placeDoorwayGuards(context: DungeonGenerationContext) {
         monster,
       );
     });
+}
+
+function ensureStartingRoomHasTwoDoorways(context: DungeonGenerationContext) {
+  const startingRoom = findRoomInGrid(context.rooms, context.startingRoomId);
+  if (!startingRoom) throw new Error(`Starting room ${context.startingRoomId} is missing`);
+
+  let doorwayCount = (Object.keys(directionDeltas) as Direction[])
+    .filter(direction => startingRoom[direction] !== "wall").length;
+  for (const direction of Object.keys(directionDeltas) as Direction[]) {
+    if (doorwayCount >= 2) break;
+    if (startingRoom[direction] !== "wall") continue;
+    const neighbor = getNeighbor(startingRoom, direction);
+    if (!neighbor) continue;
+    const neighborId = getRoomId(neighbor);
+    openConnection(context.rooms, startingRoom.id, direction);
+    context.allRoomIds.add(neighborId);
+    doorwayCount += 1;
+  }
+
+  if (doorwayCount < 2) {
+    throw new Error(`Starting room ${startingRoom.id} cannot have two doorways`);
+  }
 }
 
 function placeStairsAndStartingRoom(context: DungeonGenerationContext) {
@@ -472,6 +519,7 @@ export function createDungeonMap(
 
   growRoomNetwork(context, totalRooms);
   addExtraRoomConnections(context);
+  ensureStartingRoomHasTwoDoorways(context);
   placeDoorwayGuards(context);
   placeStairsAndStartingRoom(context);
   lockRandomDoors(context);

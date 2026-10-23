@@ -1,6 +1,7 @@
 import { StyledText } from "@/components/Common/Displays";
 import { MicrogameCircle, MicrogameCircleOutline } from "@/components/Common/MicrogameCircle";
 import { PixelSprite } from "@/components/Common/PixelSprite";
+import { PlayerAura } from "@/components/Common/PlayerAura";
 import { useThemeColors } from "@/components/Common/theme";
 import { NormalButton, PrimaryButton } from "@/components/Controls/ActionButton";
 import { getGameClass, getSupportDescription, type GameClassId } from "@/game/config/game-classes";
@@ -11,7 +12,9 @@ type ClassBriefingProps = {
   page: number;
   damage: number;
   multiplayer: boolean;
+  auraColor?: string;
   microgamesEnabled?: boolean;
+  onExit?: () => void;
   onNext: () => void;
   onBack: () => void;
   onPractice: () => void;
@@ -23,7 +26,9 @@ export function ClassBriefing({
   page,
   damage,
   multiplayer,
+  auraColor,
   microgamesEnabled = true,
+  onExit,
   onNext,
   onBack,
   onPractice,
@@ -54,7 +59,10 @@ export function ClassBriefing({
   return (
     <View testID="class-briefing" style={panelStyle}>
       <View style={{ alignItems: "center", flexDirection: "row", gap: 10, justifyContent: "center" }}>
-        <PixelSprite sprite={gameClass.sprite} label={`${gameClass.name} class sprite`} size={compactLayout ? 32 : 40} />
+        <View style={{ alignItems: "center", height: 48, justifyContent: "center", position: "relative", width: 48 }}>
+          {auraColor ? <PlayerAura color={auraColor} size={48} /> : null}
+          <PixelSprite sprite={gameClass.sprite} label={`${gameClass.name} class sprite`} size={compactLayout ? 32 : 40} />
+        </View>
         <Text style={{ color: colors.ink, fontSize: compactLayout ? 22 : 28, textAlign: "center" }}>
           {gameClass.name}
         </Text>
@@ -67,12 +75,15 @@ export function ClassBriefing({
             Support · {getSupportDescription(classId, multiplayer)}
           </Text>
           <Text style={{ color: colors.ink, fontSize: compactLayout ? 15 : 17 }}>Special · {gameClass.special}</Text>
-          <PrimaryButton
-            accessibilityLabel={microgamesEnabled ? "Next class instructions" : "Start playing"}
-            accessibilityRole="button"
-            label={microgamesEnabled ? "Next" : "Start"}
-            onPress={microgamesEnabled ? onNext : onStart}
-          />
+          <View style={{ flexDirection: "row", justifyContent: onExit ? "space-between" : "center" }}>
+            {onExit ? <NormalButton accessibilityLabel="Back to setup" accessibilityRole="button" label="Back" onPress={onExit} /> : null}
+            <PrimaryButton
+              accessibilityLabel={microgamesEnabled ? "Next class instructions" : "Start playing"}
+              accessibilityRole="button"
+              label={microgamesEnabled ? "Next" : "Start"}
+              onPress={microgamesEnabled ? onNext : onStart}
+            />
+          </View>
         </>
       ) : (
         <>

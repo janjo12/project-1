@@ -166,7 +166,7 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
         {`${game.istest ? "TEST · " : ""}${combatMessage || (microgameScore === null ? game.turnStatus : `${game.turnStatus} · Last microgame ${microgameScore}/100`)}`}
       </DebugBar> : null}
       {!tinyLayout ? map : null}
-      <Row>
+      <Row style={{ height: 148, flexShrink: 0 }}>
         {settings.handedness === "left" ? (
           <>
             <ChargeControl
@@ -193,7 +193,7 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
         Charge: stronger attack, full block + counter, or move / pick up without using a turn.
       </Text> : null}
 
-      <ResourceBarGroup compact={compactLayout}>
+      <ResourceBarGroup compact={compactLayout} playerSprite={game.playerClass.sprite}>
         <ResourceBar
           accessibilityLabel="Player health"
           color={colors.health}
@@ -227,9 +227,11 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
         ) : null}
       </ResourceBarGroup>
 
-      {!compactLayout ? <Text style={{ color: colors.ink, fontSize: 13, fontWeight: "700", textAlign: "center" }}>
-        Tap a monster to attack, an item to pick it up, a doorway to move, your hero to use their class support skill, or the stairs to descend.
-      </Text> : null}
+      {!compactLayout ? <View pointerEvents="none">
+        <Text style={{ color: colors.ink, fontSize: 13, fontWeight: "700", textAlign: "center" }}>
+          Tap a monster to attack, an item to pick it up, a doorway to move, your hero to use their class support skill, or the stairs to descend.
+        </Text>
+      </View> : null}
 
       <View style={{ flex: 1, minHeight: 0, overflow: "hidden", position: "relative", zIndex: microgame.active ? 100 : undefined }}>
       {tinyLayout && combatMessage ? <Text pointerEvents="none" style={{ position: "absolute", top: 8, left: 0, right: 0, zIndex: 20, color: colors.accent, fontWeight: "900", textAlign: "center" }}>{combatMessage}</Text> : null}
@@ -237,6 +239,7 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
         sceneFrameStore={game.sceneFrameStore}
         canUnlockDoors={game.inventoryItem === "key" || game.playerClass.id === "thief"}
         disabled={game.isResolving || game.hasLost || microgame.active || classIntroPage >= 0}
+        pauseAnimations={microgame.active}
         enemyHealthLossAmount={game.enemyHealthLossAmount}
         hardTurnCounter={game.hardTurnCounter}
         onActorPress={handleActorPress}
@@ -272,6 +275,7 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
           damage={microgameScore === null ? game.playerAttack : Math.max(1, Math.floor(game.playerAttack * microgameScore / 100))}
           multiplayer={false}
           microgamesEnabled={settings.microgamesEnabled}
+          onExit={() => router.replace({ pathname: "/setup", params: { mode: "singleplayer" } })}
           onNext={() => setClassIntroPage(settings.microgamesEnabled ? 1 : -1)}
           onBack={() => setClassIntroPage(0)}
           onPractice={() => microgame.start(game.playerClass.microgame, settings.handedness, { istest: isTestSeed(settings.seed) })}

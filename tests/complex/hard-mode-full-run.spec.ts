@@ -50,6 +50,8 @@ test(`plays a complete ${className} hard-mode run through Level 2`, async ({ pag
 
   const supportButton = page.getByRole("button", { name: new RegExp(`${className}.*Support`) });
   const initialTurns = readTurns(await turnCounter.innerText());
+  // The Thief skips the Key; other classes keep it while prioritizing the Silver Bullet.
+  const requiredTestItems = className === "Thief" ? 3 : 4;
   const visitedItems = new Set<string>();
   let securedSilverBullet = false;
   let foughtWerewolf = false;
@@ -89,8 +91,8 @@ test(`plays a complete ${className} hard-mode run through Level 2`, async ({ pag
       await expect(page.getByTestId("item-status")).toContainText("Silver Bullet");
 
       await werewolf.click();
-      await expect(page.getByTestId("microgame-overlay")).toBeVisible();
-      await playClassMicrogame(page, className);
+      await expect(page.getByTestId("microgame-overlay")).toHaveCount(0);
+      await expect(page.getByTestId("turn-status")).toContainText("Silver Bullet worked! The Werewolf is defeated.");
       await page.clock.runFor(GAME_PARAMETERS.animation.attackDurationMs + GAME_PARAMETERS.animation.enemyTurnDurationMs + ROOM_TRANSITION_MS);
       await expect(werewolf).toHaveCount(0);
       foughtWerewolf = true;
@@ -166,7 +168,6 @@ test(`plays a complete ${className} hard-mode run through Level 2`, async ({ pag
     }
 
     const stairs = page.getByRole("button", { name: "Stairs", exact: true });
-    const requiredTestItems = className === "Thief" ? 4 : 5;
     if (await stairs.isVisible().catch(() => false) && visitedItems.size >= requiredTestItems) {
       await stairs.click();
       await expect(page.getByText(/TEST · .*Level 2/)).toBeVisible();
@@ -214,7 +215,7 @@ test(`plays a complete ${className} hard-mode run through Level 2`, async ({ pag
   expect(firstHealthyHit, "the run should include a successful, realistic attack").toBe(true);
   expect(foughtWerewolf, "the Level 1 werewolf must be defeated").toBe(true);
   expect(foughtOrdinaryEnemyRooms.size, "the run should defeat three distinct non-Werewolf enemies").toBeGreaterThanOrEqual(3);
-  expect(visitedItems.size, `collect as many distinct items/equipment as the route allows: ${[...visitedItems].join(", ")}`).toBeGreaterThanOrEqual(className === "Thief" ? 4 : 5);
+  expect(visitedItems.size, `collect the useful loadout before the Werewolf: ${[...visitedItems].join(", ")}`).toBeGreaterThanOrEqual(requiredTestItems);
   expect(levelTwoReached, "the run should reach Level 2 before the timed-out turns").toBe(true);
   expect(usedClassSupport, `${className} should use its support ability during the run`).toBe(true);
   if (className === "Thief") {
@@ -305,7 +306,7 @@ async function playClassMicrogame(page: import("@playwright/test").Page, classNa
   }
   expect(aligned, "the Cleric concentration target should cross its outline").toBe(true);
   await page.clock.runFor(HUMAN_REACTION_WINDOW_MS);
-  await page.getByRole("button", { name: "Tap when the filled circle fills the outline" }).click();
+  await page.getByRole("button", { name: "Tap the game screen" }).click();
 }
 
 async function readRoomId(page: import("@playwright/test").Page) {
@@ -335,6 +336,7 @@ async function clickOnwardDoor(
   const candidates: Array<{ doorway: typeof doorways; direction: string }> = [];
   for (let index = 0; index < await doorways.count(); index += 1) {
     const doorway = doorways.nth(index);
+    if (!(await doorway.isEnabled())) continue;
     const label = await doorway.getAttribute("aria-label") ?? "";
     const direction = label.match(/^Tap (top|right|bottom|left) doorway to move$/)?.[1];
     if (direction) candidates.push({ doorway, direction });

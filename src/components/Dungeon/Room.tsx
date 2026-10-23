@@ -3,6 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, use
 import { Platform, Pressable, View, type ViewStyle } from "react-native";
 
 import { useThemeColors } from "@/components/Common/theme";
+import { PlayerAura } from "@/components/Common/PlayerAura";
 import { RoomFloor } from "@/components/Dungeon/Floor";
 import { RoomWalls, SceneSprite } from "@/components/Dungeon/Walls";
 import { createStyles } from "@/components/Dungeon/room-scene-styles";
@@ -63,6 +64,7 @@ type RoomSceneProps = {
   onPlayerPress?: () => void;
   roomId?: string;
   reducedMotion?: boolean;
+  animationsPaused?: boolean;
   maxHeight?: number;
 };
 
@@ -92,6 +94,7 @@ export function RoomScene({
   onPlayerPress,
   roomId,
   reducedMotion = false,
+  animationsPaused = false,
   maxHeight,
 }: RoomSceneProps) {
   // Render in fixed logical coordinates, then scale once to the measured device width.
@@ -116,7 +119,7 @@ export function RoomScene({
     if (previous.roomId !== roomId) {
       // Preserve the old room at the doorway while the next room fades in.
       const isAdjacent = getAdjacentRoomTransition(previous.roomId, roomId);
-      if (!isAdjacent || reducedMotion || systemReducedMotion) {
+      if (!isAdjacent || reducedMotion || systemReducedMotion || animationsPaused) {
         setTransitionSnapshot(null);
         setTransitionKey(null);
       } else {
@@ -126,15 +129,15 @@ export function RoomScene({
       }
     }
     previousScene.current = { roomId, actors, playerPosition, playerSprite, playerAuraColor, floorLayer, doorways };
-  }, [roomId, actors, playerPosition, playerSprite, playerAuraColor, floorLayer, doorways, reducedMotion, systemReducedMotion]);
+  }, [roomId, actors, playerPosition, playerSprite, playerAuraColor, floorLayer, doorways, reducedMotion, systemReducedMotion, animationsPaused]);
   useEffect(() => {
-    if (transitionKey === null) return;
+    if (transitionKey === null || animationsPaused) return;
     const timeout = setTimeout(() => {
       setTransitionKey(null);
       setTransitionSnapshot(null);
     }, ROOM_TRANSITION_DURATION_MS);
     return () => clearTimeout(timeout);
-  }, [transitionKey]);
+  }, [transitionKey, animationsPaused]);
   const layoutActors = useMemo(() => {
     const previous = stableLayout.current;
     const entries = previous && previous.roomId === roomId ? previous.actors.slice() : [];
@@ -176,10 +179,12 @@ export function RoomScene({
         transform: [{ scale }], opacity: width > 0 ? 1 : 0 }}>
       {transitionKey !== null ? <Animated.View key={`outgoing-${transitionKey}`} pointerEvents="none" testID="room-transition-snapshot" style={{
         position: "absolute", zIndex: 5, width: SCENE_WIDTH, height: SCENE_HEIGHT,
+        pointerEvents: "none",
         animationName: ROOM_FADE_OUT,
         animationDuration: `${ROOM_TRANSITION_DURATION_MS}ms`,
         animationTimingFunction: "ease-out",
         animationFillMode: "forwards",
+        animationPlayState: animationsPaused ? "paused" : "running",
         }}><RoomSnapshot actors={transitionSnapshot?.actors ?? actors} playerPosition={transitionSnapshot?.playerPosition ?? playerPosition} playerSprite={transitionSnapshot?.playerSprite ?? playerSprite} playerAuraColor={transitionSnapshot?.playerAuraColor ?? playerAuraColor} floorLayer={transitionSnapshot?.floorLayer ?? floorLayer} doorways={transitionSnapshot?.doorways ?? doorways} /></Animated.View> : null}
       <Animated.View key={transitionKey ?? "current-room"} testID="room-incoming-snapshot" style={{ width: SCENE_WIDTH, height: SCENE_HEIGHT,
         ...(transitionKey !== null ? {
@@ -187,6 +192,7 @@ export function RoomScene({
           animationDuration: `${ROOM_TRANSITION_DURATION_MS}ms`,
           animationTimingFunction: "ease-out",
           animationFillMode: "forwards" as const,
+          animationPlayState: animationsPaused ? "paused" as const : "running" as const,
         } : {}) }}>
       <View pointerEvents="none" testID="room-floor-layer" style={{ position: "absolute", width: SCENE_WIDTH, height: SCENE_HEIGHT }}>{floorLayer ?? <RoomFloor />}</View>
       <RoomWalls
@@ -195,6 +201,7 @@ export function RoomScene({
         disabled={disabled}
         doorways={doorways}
         reducedMotion={reducedMotion || systemReducedMotion}
+        animationsPaused={animationsPaused}
         onPress={onDoorwayPress}
       />
 
@@ -207,6 +214,7 @@ export function RoomScene({
           key={`${actor.kind}:${actor.id}`}
           positionStyle={slotStyle(`${actor.kind}:${actor.id}`)}
           slotScale={slots[`${actor.kind}:${actor.id}`].size / ACTOR_ENVELOPE}
+          animationsPaused={animationsPaused}
           disabled={disabled}
           reducedMotion={reducedMotion || systemReducedMotion}
           onPress={onActorPress}
@@ -227,6 +235,7 @@ export function RoomScene({
         playerLabel={playerLabel}
         disabled={disabled}
         reducedMotion={reducedMotion || systemReducedMotion}
+        animationsPaused={animationsPaused}
         entering={transitionKey !== null}
         entryPosition={playerPosition}
         onPress={onPlayerPress}
@@ -258,6 +267,7 @@ type SceneActorProps = {
   slotScale: number;
   disabled: boolean;
   reducedMotion: boolean;
+  animationsPaused: boolean;
   onPress?: (actor: RoomSceneActor, source?: ScreenPoint) => void;
 };
 
@@ -271,6 +281,7 @@ function SceneActor({
   slotScale,
   disabled,
   reducedMotion,
+  animationsPaused,
   onPress,
 }: SceneActorProps) {
   const actorRef = useRef<View>(null);
@@ -313,10 +324,11 @@ function SceneActor({
               amount={enemyHealthLossAmount}
               animationFrame={animationFrame}
               reducedMotion={reducedMotion}
+              animationsPaused={animationsPaused}
               sceneFrameStore={sceneFrameStore}
               sprite={actor.sprite}
               scale={sceneScale}
-            /> : <CombatantSprite accessibilityLabel={actor.label} reducedMotion={reducedMotion} sprite={actor.sprite} scale={sceneScale} size={48} />}
+            /> : <CombatantSprite accessibilityLabel={actor.label} animationsPaused={animationsPaused} reducedMotion={reducedMotion} sprite={actor.sprite} scale={sceneScale} size={48} />}
             <EnemyHealthBar
               accessibilityLabel="Enemy health"
               color={colors.health}
@@ -350,6 +362,7 @@ type PlayerActorProps = {
   slotScale: number;
   disabled: boolean;
   reducedMotion: boolean;
+  animationsPaused: boolean;
   entering: boolean;
   entryPosition: ScenePosition;
   onPress?: () => void;
@@ -368,6 +381,7 @@ function PlayerActor({
   slotScale,
   disabled,
   reducedMotion,
+  animationsPaused,
   entering,
   entryPosition,
   onPress,
@@ -417,6 +431,7 @@ function PlayerActor({
             animationDuration: `${PLAYER_ENTRY_DURATION_MS}ms`,
             animationTimingFunction: "ease-out",
             animationFillMode: "both",
+            animationPlayState: animationsPaused ? "paused" : "running",
           } : {}),
         }}
       >
@@ -427,6 +442,7 @@ function PlayerActor({
         energyLossAmount={energyLossAmount}
         healthLossAmount={healthLossAmount}
         reducedMotion={reducedMotion}
+        animationsPaused={animationsPaused}
         sceneFrameStore={sceneFrameStore}
         scale={sceneScale}
         sprite={sprite}
@@ -437,22 +453,6 @@ function PlayerActor({
   );
 }
 
-function PlayerAura({ color }: { color: string }) {
-  return <View pointerEvents="none" style={{
-    position: "absolute",
-    left: "50%",
-    top: "50%",
-    width: 62,
-    height: 62,
-    borderRadius: 31,
-    borderWidth: 3,
-    borderColor: color,
-    backgroundColor: color,
-    opacity: 0.28,
-    transform: [{ translateX: -31 }, { translateY: -31 }],
-  }} />;
-}
-
 const NOOP_SUBSCRIBE = () => () => undefined;
 const ENEMY_ANIMATION_KEYS = ["enemyAttackElapsed", "enemyDamageElapsed", "enemyHealthLossElapsed"] as const;
 const PLAYER_ANIMATION_KEYS = ["playerAttackElapsed", "playerDamageElapsed", "playerEnergyLossElapsed", "playerHealthLossElapsed"] as const;
@@ -461,42 +461,52 @@ function useAnimationFrame(
   sceneFrameStore: SceneFrameStore | undefined,
   fallbackFrame: CombatAnimationFrame | undefined,
   keys: readonly (keyof CombatAnimationFrame)[],
+  animationsPaused: boolean,
 ) {
   const subscribe = useCallback((listener: () => void) => sceneFrameStore
     ? sceneFrameStore.subscribeKeys(keys, listener)
     : NOOP_SUBSCRIBE(), [keys, sceneFrameStore]);
-  const getSnapshot = useCallback(() => sceneFrameStore?.getSnapshot() ?? fallbackFrame ?? EMPTY_ANIMATION_FRAME, [fallbackFrame, sceneFrameStore]);
-  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  const lastFrame = useRef(sceneFrameStore?.getSnapshot() ?? fallbackFrame ?? EMPTY_ANIMATION_FRAME);
+  const getSnapshot = useCallback(() => {
+    if (animationsPaused) return lastFrame.current;
+    const frame = sceneFrameStore?.getSnapshot() ?? fallbackFrame ?? EMPTY_ANIMATION_FRAME;
+    lastFrame.current = frame;
+    return frame;
+  }, [animationsPaused, fallbackFrame, sceneFrameStore]);
+  const pausedSubscribe = useCallback((listener: () => void) => animationsPaused
+    ? NOOP_SUBSCRIBE()
+    : subscribe(listener), [animationsPaused, subscribe]);
+  return useSyncExternalStore(pausedSubscribe, getSnapshot, getSnapshot);
 }
 
 const EMPTY_ANIMATION_FRAME = createCombatAnimationFrame();
 
 function EnemyAnimationLayer({
-  accessibilityLabel, amount, animationFrame: fallbackFrame, reducedMotion, sceneFrameStore, sprite, scale,
+  accessibilityLabel, amount, animationFrame: fallbackFrame, reducedMotion, animationsPaused, sceneFrameStore, sprite, scale,
 }: {
-  accessibilityLabel: string; amount: number; animationFrame?: CombatAnimationFrame; reducedMotion: boolean;
+  accessibilityLabel: string; amount: number; animationFrame?: CombatAnimationFrame; reducedMotion: boolean; animationsPaused: boolean;
   sceneFrameStore?: SceneFrameStore; sprite: string; scale: number;
 }) {
-  const animationFrame = useAnimationFrame(sceneFrameStore, fallbackFrame, ENEMY_ANIMATION_KEYS);
+  const animationFrame = useAnimationFrame(sceneFrameStore, fallbackFrame, ENEMY_ANIMATION_KEYS, animationsPaused);
   const colors = useThemeColors();
   return <View style={{ alignItems: "center", justifyContent: "center", width: 48, height: 48, flexShrink: 0 }}>
     <FloatingResourceLoss amount={amount} color={colors.health} icon="heart" progress={getProgress(animationFrame.enemyHealthLossElapsed, COMBAT_ANIMATION.resourceLossDuration)} testID="enemy-health-loss" />
-    <CombatantSprite accessibilityLabel={accessibilityLabel} attackDirection="right" attackProgress={getProgress(animationFrame.enemyAttackElapsed, COMBAT_ANIMATION.attackDuration)} damageProgress={getProgress(animationFrame.enemyDamageElapsed, COMBAT_ANIMATION.damageDuration)} reducedMotion={reducedMotion} sprite={sprite} scale={scale} size={48} />
+    <CombatantSprite accessibilityLabel={accessibilityLabel} animationsPaused={animationsPaused} attackDirection="right" attackProgress={getProgress(animationFrame.enemyAttackElapsed, COMBAT_ANIMATION.attackDuration)} damageProgress={getProgress(animationFrame.enemyDamageElapsed, COMBAT_ANIMATION.damageDuration)} reducedMotion={reducedMotion} sprite={sprite} scale={scale} size={48} />
   </View>;
 }
 
 function PlayerAnimationLayer({
-  accessibilityLabel, animationFrame: fallbackFrame, energyLossAmount, healthLossAmount, reducedMotion, sceneFrameStore, scale, sprite,
+  accessibilityLabel, animationFrame: fallbackFrame, energyLossAmount, healthLossAmount, reducedMotion, animationsPaused, sceneFrameStore, scale, sprite,
 }: {
   accessibilityLabel: string; animationFrame?: CombatAnimationFrame; energyLossAmount: number; healthLossAmount: number;
-  reducedMotion: boolean; sceneFrameStore?: SceneFrameStore; scale: number; sprite: string;
+  reducedMotion: boolean; animationsPaused: boolean; sceneFrameStore?: SceneFrameStore; scale: number; sprite: string;
 }) {
-  const animationFrame = useAnimationFrame(sceneFrameStore, fallbackFrame, PLAYER_ANIMATION_KEYS);
+  const animationFrame = useAnimationFrame(sceneFrameStore, fallbackFrame, PLAYER_ANIMATION_KEYS, animationsPaused);
   const colors = useThemeColors();
   return <View style={{ alignItems: "center", justifyContent: "center", width: 48, height: 48, flexShrink: 0 }}>
     <FloatingResourceLoss amount={healthLossAmount} color={colors.health} icon="heart" progress={getProgress(animationFrame.playerHealthLossElapsed, COMBAT_ANIMATION.resourceLossDuration)} testID="player-health-loss" />
     <FloatingResourceLoss amount={energyLossAmount} color={colors.energy} icon="bolt" progress={getProgress(animationFrame.playerEnergyLossElapsed, COMBAT_ANIMATION.resourceLossDuration)} testID="player-energy-loss" />
-    <CombatantSprite accessibilityLabel={accessibilityLabel} attackDirection="left" attackProgress={getProgress(animationFrame.playerAttackElapsed, COMBAT_ANIMATION.attackDuration)} damageProgress={getProgress(animationFrame.playerDamageElapsed, COMBAT_ANIMATION.damageDuration)} reducedMotion={reducedMotion} sprite={sprite} scale={scale} size={48} />
+    <CombatantSprite accessibilityLabel={accessibilityLabel} animationsPaused={animationsPaused} attackDirection="left" attackProgress={getProgress(animationFrame.playerAttackElapsed, COMBAT_ANIMATION.attackDuration)} damageProgress={getProgress(animationFrame.playerDamageElapsed, COMBAT_ANIMATION.damageDuration)} reducedMotion={reducedMotion} sprite={sprite} scale={scale} size={48} />
   </View>;
 }
 

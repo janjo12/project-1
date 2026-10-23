@@ -2,8 +2,8 @@
 
 ## Play
 
-1. On each device choose **Multiplayer**, then continue through difficulty/seed selection.
-2. Choose **Host game** on one device and **Join game** on the others. The host's settings apply to everyone.
+1. On each browser choose **Multiplayer**. The host chooses **Host game** to create a room; everyone else chooses **Join game** and enters its room code.
+2. After at least one other player joins, the host opens **Game options** and presses **Start**. The host's difficulty and seed apply to everyone; joining players do not choose a seed.
 3. Host: select **Add player**, long-press the invitation text to copy it, and transfer it to the guest.
 4. Guest: paste the invitation and choose **Create reply**. Copy the reply back to the host.
 5. Host: paste it and select **Accept reply**. Wait until the player is connected. Repeat for more devices, then **Start together**.
@@ -12,7 +12,7 @@ Mobile same-Wi-Fi multiplayer uses copy/paste signaling; QR scanning and automat
 
 ## Browser playtest
 
-The Next.js browser app uses a temporary in-memory room service at `/api/multiplayer`. Start the web app with `npm run dev`, host a room in one browser tab, then join it from another tab with the displayed room code. The server runs the shared `resolveMultiplayerTurn` rules and sends room snapshots to each browser every 400 ms. Restarting the Next.js process clears all rooms; this service is for local multiplayer logic playtests and is not a persistent or production-ready game service. Mobile continues to use the same turn rules over its WebRTC connection.
+The Next.js browser app uses a temporary in-memory room service at `/api/multiplayer`. Start the web app with `npm run dev`, host a room in one browser tab, then join it from another tab with the displayed room code. One server process can host up to 1,000 active rooms by default, with up to eight players per room; set `MULTIPLAYER_MAX_ACTIVE_ROOMS` to raise or lower the room limit (capped at 10,000). Expired rooms are swept at most once a minute, with idle rooms expiring after two hours. Restarting the Next.js process clears all rooms. This service supports larger single-process logic playtests, but it is not a shared or persistent store for multi-instance deployments. Mobile continues to use the same turn rules over its WebRTC connection.
 
 Fallen characters stay in the shared roster as ghosts. Each turn they can move through any doorway except a wall, attack for 5 damage (but cannot damage the Werewolf), or support themselves or an ally to add 5 damage to that player's next damaging attack. Enemies cannot target ghosts. Ghosts reveal rooms as they move and revive with full health and energy when the living team descends to the next level. Leaving the room removes that player from the current roster; falling in battle does not.
 

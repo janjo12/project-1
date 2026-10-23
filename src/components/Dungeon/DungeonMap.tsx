@@ -9,11 +9,13 @@ type DungeonMapProps = {
   currentRoomId: string;
   map: DungeonMapType;
   compact?: boolean;
+  players?: Array<{ id: string; roomId: string; color: string }>;
 };
 
 export function DungeonMap({
   currentRoomId,
   map,
+  players = [],
   compact: forceCompact = false,
 }: DungeonMapProps) {
   const colors = useThemeColors();
@@ -97,6 +99,7 @@ export function DungeonMap({
                 const hasMonster = Boolean(getRoomMonster(map, room));
                 const hasItem = room.contents.some(content => content.type === "item");
                 const hasEquipment = room.contents.some(content => content.type === "equipment");
+                const roomPlayers = players.filter(player => player.roomId === roomId);
                 const roomColor = isCurrentRoom
                   ? colors.mapCurrentRoom
                   : hasStairs
@@ -115,6 +118,21 @@ export function DungeonMap({
                         style={[styles.room, { backgroundColor: roomColor }, isCurrentRoom && styles.currentRoom]}
                         testID={isCurrentRoom ? "current-dungeon-room" : `map-room-${rowLetter}${columnNumber}`}
                       >
+                        {roomPlayers.length ? (
+                          <View
+                            accessibilityLabel={roomPlayers.map(player => `${player.id} position`).join(", ")}
+                            style={styles.playerMarkers}
+                          >
+                            {roomPlayers.map(player => (
+                              <View
+                                key={player.id}
+                                accessibilityLabel={`${player.id} position`}
+                                style={[styles.playerMarker, { backgroundColor: player.color }]}
+                                testID={`map-player-${player.id}-${roomId}`}
+                              />
+                            ))}
+                          </View>
+                        ) : null}
                         {room.north === "open" ? (
                           <View style={[styles.door, styles.northDoor]} />
                         ) : null}
@@ -265,6 +283,22 @@ function createStyles(colors: ThemeColors, compact: boolean, veryCompact: boolea
       justifyContent: "center",
       position: "relative",
       width: "60%",
+    },
+    playerMarkers: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: 1,
+      position: "absolute",
+      right: 1,
+      top: 1,
+      zIndex: 2,
+    },
+    playerMarker: {
+      borderColor: "#ffffff",
+      borderRadius: 999,
+      borderWidth: 1,
+      height: 9,
+      width: 9,
     },
     currentRoom: {
       borderColor: colors.accent,

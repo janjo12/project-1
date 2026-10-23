@@ -21,20 +21,25 @@ import { PLAYER_MAX_ENERGY, PLAYER_MAX_HEALTH } from "@/game/state/types";
 import type { GameSettings } from "@/utils/settings-storage";
 import { isTestSeed } from "@/utils/seed";
 
-export function MultiplayerScreen({ settings, onLeave, onHostSelect, startAsHost = false }: {
+export function MultiplayerScreen({ settings, onLeave, onHostSelect, onOptionsSelect, startAsHost = false, startRequest = 0, hidden = false }: {
   settings: GameSettings;
   onLeave: () => void;
   onHostSelect: () => void;
+  onOptionsSelect?: () => void;
   startAsHost?: boolean;
+  startRequest?: number;
+  hidden?: boolean;
 }) {
-  return <Multiplayer settings={settings} onLeave={onLeave} onHostSelect={onHostSelect} startAsHost={startAsHost} />;
+  return <View style={hidden ? { display: "none" } : undefined}><Multiplayer settings={settings} onLeave={onLeave} onHostSelect={onHostSelect} onOptionsSelect={onOptionsSelect} startAsHost={startAsHost} startRequest={startRequest} /></View>;
 }
 
-function Multiplayer({ settings, onLeave, onHostSelect, startAsHost }: {
+function Multiplayer({ settings, onLeave, onHostSelect, onOptionsSelect, startAsHost, startRequest }: {
   settings: GameSettings;
   onLeave: () => void;
   onHostSelect: () => void;
+  onOptionsSelect?: () => void;
   startAsHost: boolean;
+  startRequest: number;
 }) {
   const { height } = useWindowDimensions();
   const compactLayout = height < 800;
@@ -87,6 +92,12 @@ function Multiplayer({ settings, onLeave, onHostSelect, startAsHost }: {
       hostGame();
     }
   }, [hostGame, startAsHost]);
+  const previousStartRequest = useRef(startRequest);
+  useEffect(() => {
+    if (startRequest === previousStartRequest.current) return;
+    previousStartRequest.current = startRequest;
+    start();
+  }, [startRequest, start]);
   const microgame = useMicrogame(score => {
     setStoredScore(score);
     const target = pendingAttack.current;
@@ -131,7 +142,6 @@ function Multiplayer({ settings, onLeave, onHostSelect, startAsHost }: {
           ) : null}
           {role === "host" ? (
             <>
-              <StyledText>Host settings: {settings.difficulty} · Seed {settings.seed}</StyledText>
               <StyledText>Connected players: {ready.length + 1} (including you)</StyledText>
               {isWeb ? <><StyledText>Room code</StyledText><Text selectable accessibilityLabel="Room code" style={{ color: colors.ink, fontSize: 28, fontWeight: "800", textAlign: "center", letterSpacing: 4 }}>{outgoing}</Text></> : null}
               {lobbyPlayers.map(id => isWeb ? (
@@ -157,7 +167,7 @@ function Multiplayer({ settings, onLeave, onHostSelect, startAsHost }: {
                   <ActionButton label="Cancel invitation" onPress={cancelInvitation} busy={busy} />
                 </>
               ) : null}
-              <ActionButton label="Start together" onPress={start} busy={busy} />
+              {ready.length > 0 ? <ActionButton label="Game options" onPress={() => onOptionsSelect?.()} busy={busy} /> : <StyledText>Join this room from another browser to continue to game options.</StyledText>}
             </>
           ) : null}
           {role === "guest" ? (
@@ -201,11 +211,20 @@ function Multiplayer({ settings, onLeave, onHostSelect, startAsHost }: {
           ) : null}
           {!tinyLayout ? (
             <View style={{ flexShrink: 1, maxHeight: compactLayout ? 116 : undefined, minHeight: 0 }}>
-              <DungeonMap map={map} currentRoomId={player.roomId} compact={compactLayout} />
+              <DungeonMap
+                map={map}
+                currentRoomId={player.roomId}
+                compact={compactLayout}
+                players={Object.values(state.players).map(otherPlayer => ({
+                  id: otherPlayer.id,
+                  roomId: otherPlayer.roomId,
+                  color: getMultiplayerPlayerAuraColor(Object.keys(state.players), otherPlayer.id),
+                }))}
+              />
             </View>
           ) : null}
 
-          <Row>
+          <Row style={{ height: 148, flexShrink: 0 }}>
             {settings.handedness === "left" ? (
               <>
                 <ChargeControl
@@ -241,7 +260,11 @@ function Multiplayer({ settings, onLeave, onHostSelect, startAsHost }: {
             )}
           </Row>
 
-          <ResourceBarGroup compact={compactLayout}>
+          <ResourceBarGroup
+            compact={compactLayout}
+            playerSprite={getGameClass(player.classId).sprite}
+            playerAuraColor={getMultiplayerPlayerAuraColor(Object.keys(state.players), playerId)}
+          >
             <ResourceBar
               testID="multiplayer-health"
               accessibilityLabel="Player health"
@@ -268,6 +291,7 @@ function Multiplayer({ settings, onLeave, onHostSelect, startAsHost }: {
           {tinyLayout && combatMessage ? <Text pointerEvents="none" style={{ position: "absolute", top: 8, left: 0, right: 0, zIndex: 20, color: colors.accent, fontWeight: "900", textAlign: "center" }}>{combatMessage}</Text> : null}
           <GameViewPanel
             disabled={state.phase !== "playing" || state.ended || disconnected || submitted === state.turn || microgame.active}
+            pauseAnimations={microgame.active}
             reducedMotion={settings.reducedMotion}
             playerLabel={`${getGameClass(player.classId).name} · ${playerId} · Support`}
             playerSprite={getGameClass(player.classId).sprite}
@@ -334,6 +358,7 @@ function Multiplayer({ settings, onLeave, onHostSelect, startAsHost }: {
               classId={player.classId}
               damage={10 + getEquipmentStats(player.equipment).attack}
               multiplayer
+              auraColor={getMultiplayerPlayerAuraColor(Object.keys(state.players), playerId)}
               microgamesEnabled={settings.microgamesEnabled}
               onNext={() => setIntroPage(1)}
               onBack={() => setIntroPage(0)}

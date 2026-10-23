@@ -1,6 +1,6 @@
 import type { SceneFrameStore } from "@/game/state/sceneFrameStore";
-import { useState, type ReactNode } from "react";
-import { Platform, StyleSheet, Text, View } from "react-native";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Animated, Platform, StyleSheet, Text, View } from "react-native";
 
 import { useThemeColors, type ThemeColors } from "@/components/Common/theme";
 import {
@@ -37,6 +37,7 @@ type GameViewPanelProps = {
   onPlayerPress?: () => void;
   roomId?: string;
   reducedMotion?: boolean;
+  pauseAnimations?: boolean;
 };
 
 const PLAYER_SPRITE = "warrior_graphic";
@@ -69,15 +70,27 @@ export function GameViewPanel({
   onPlayerPress,
   roomId,
   reducedMotion,
+  pauseAnimations = false,
 }: GameViewPanelProps) {
   const colors = useThemeColors();
   const styles = createStyles(colors);
   const visibleActors = roomSceneActors ?? [];
   const [sceneBoxHeight, setSceneBoxHeight] = useState(0);
   const sceneScale = 1;
+  const panelOpacity = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    const animation = Animated.timing(panelOpacity, {
+      toValue: pauseAnimations ? 0.16 : 1,
+      duration: 180,
+      useNativeDriver: Platform.OS !== "web",
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [panelOpacity, pauseAnimations]);
 
   return (
-    <View style={styles.panel}>
+    <Animated.View style={[styles.panel, { opacity: panelOpacity }]}>
       <View style={[styles.sceneBox, Platform.OS === "web" && styles.webSceneBox]} onLayout={event => setSceneBoxHeight(event.nativeEvent.layout.height)}>
         {hardTurnCounter !== null ? (
           <Text
@@ -95,6 +108,7 @@ export function GameViewPanel({
           roomId={roomId}
           maxHeight={sceneBoxHeight || undefined}
           reducedMotion={reducedMotion}
+          animationsPaused={pauseAnimations}
           floorLayer={floorLayer}
           animationFrame={suppliedFrame}
           sceneFrameStore={sceneFrameStore}
@@ -115,7 +129,7 @@ export function GameViewPanel({
           onPlayerPress={onPlayerPress}
         />
       </View>
-    </View>
+    </Animated.View>
   );
 }
 

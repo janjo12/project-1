@@ -60,7 +60,7 @@ test("Concentration places the target in the moving circle's path and awards a r
   expect(alignedAt).toBeGreaterThanOrEqual(800);
   expect(alignedAt).toBeLessThanOrEqual(1000);
   await page.clock.runFor(HUMAN_REACTION_WINDOW_MS);
-  await page.getByRole("button", { name: "Tap when the filled circle fills the outline" }).click();
+  await page.getByRole("button", { name: "Tap the game screen" }).click();
   await expect(overlay).toHaveCount(0);
   await expect(page.getByText(/Last microgame (9\d|100)\/100/)).toBeVisible();
 });

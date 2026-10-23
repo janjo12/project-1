@@ -47,7 +47,7 @@ export function MicrogameOverlay({
         bottom: 0,
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: colors.paper,
+        backgroundColor: "transparent",
         padding: 24,
       }}
     >

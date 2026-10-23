@@ -2,6 +2,8 @@ import { FontAwesome } from "@expo/vector-icons";
 import { StyleSheet, Text, View } from "react-native";
 
 import { type ThemeColors, useThemeColors } from "@/components/Common/theme";
+import { PixelSprite } from "@/components/Common/PixelSprite";
+import { PlayerAura } from "@/components/Common/PlayerAura";
 
 type ResourceBarProps = {
   accessibilityLabel: string;
@@ -17,6 +19,8 @@ type ResourceBarProps = {
 type ResourceBarGroupProps = {
   children: React.ReactNode;
   compact?: boolean;
+  playerSprite?: string;
+  playerAuraColor?: string;
 };
 
 type DebugBarProps = {
@@ -82,13 +86,21 @@ export function ResourceBar({
   );
 }
 
-export function ResourceBarGroup({ children, compact = false }: ResourceBarGroupProps) {
+export function ResourceBarGroup({ children, compact = false, playerSprite, playerAuraColor }: ResourceBarGroupProps) {
   const colors = useThemeColors();
   const styles = createStyles(colors);
 
   return (
-    <View style={[styles.playerBars, compact && styles.compactPlayerBars]}>
-      {children}
+    <View style={styles.group}>
+      {playerSprite ? (
+        <View accessibilityLabel="Player character" style={styles.playerSpriteSlot}>
+          {playerAuraColor ? <PlayerAura color={playerAuraColor} size={48} /> : null}
+          <PixelSprite sprite={playerSprite} label="Player character" size={36} />
+        </View>
+      ) : null}
+      <View style={[styles.playerBars, compact && styles.compactPlayerBars]}>
+        {children}
+      </View>
     </View>
   );
 }
@@ -117,6 +129,12 @@ function createStyles(colors: ThemeColors) {
     compactPlayerBars: {
       flexDirection: "row",
     },
+    group: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: 8,
+      width: "100%",
+    },
     compactRow: {
       borderRadius: 8,
       flex: 1,
@@ -140,7 +158,17 @@ function createStyles(colors: ThemeColors) {
       marginTop: -2,
     },
     playerBars: {
+      flex: 1,
       gap: 6,
+      minWidth: 0,
+    },
+    playerSpriteSlot: {
+      alignItems: "center",
+      flexShrink: 0,
+      height: 44,
+      justifyContent: "center",
+      position: "relative",
+      width: 44,
     },
     row: {
       alignItems: "center",

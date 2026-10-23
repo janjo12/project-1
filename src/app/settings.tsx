@@ -42,13 +42,6 @@ export default function SettingsRoute() {
               }}
             />
             <ToggleButton
-              label="Left-handed controls"
-              value={settings.handedness === "left"}
-              onValueChange={(value) => {
-                updateSettings({ handedness: value ? "left" : "right" });
-              }}
-            />
-            <ToggleButton
               label="Reduce motion"
               value={settings.reducedMotion}
               onValueChange={(value) => updateSettings({ reducedMotion: value })}

@@ -19,6 +19,7 @@ export default function Home() {
   const [page, setPage] = useState<Page>("title");
   const [mode, setMode] = useState<PlayMode>("singleplayer");
   const [hostAfterSetup, setHostAfterSetup] = useState(false);
+  const [startHostedGame, setStartHostedGame] = useState(0);
   const [score, setScore] = useState(0);
 
   if (isLoading) {
@@ -59,10 +60,16 @@ export default function Home() {
             }}
             onSettings={() => setPage("settings")}
             onUpdate={updateSettings}
+            showSeed={mode === "singleplayer" || hostAfterSetup}
             onStart={async () => {
               const next = { ...settings, seed: settings.seed.trim() || generateRandomSeed() };
               await saveSettings(next);
-              setPage(mode === "multiplayer" ? "multiplayer" : "game");
+              if (mode === "multiplayer") {
+                setPage("multiplayer");
+                setStartHostedGame(value => value + 1);
+              } else {
+                setPage("game");
+              }
             }}
           />
         ) : null}
@@ -77,14 +84,19 @@ export default function Home() {
             onSettingsChange={updateSettings}
             onGameOver={value => { setScore(value); setPage("over"); }}
             onExit={() => setPage("title")}
+            onBackToSetup={() => setPage("setup")}
           />
         ) : null}
 
-        {page === "multiplayer" ? (
+        {page === "multiplayer" || (mode === "multiplayer" && hostAfterSetup && (page === "setup" || page === "settings")) ? (
           <MultiplayerScreen
             settings={settings}
             startAsHost={hostAfterSetup}
+            startRequest={startHostedGame}
             onHostSelect={() => {
+              setHostAfterSetup(true);
+            }}
+            onOptionsSelect={() => {
               setHostAfterSetup(true);
               setPage("setup");
             }}
@@ -92,6 +104,7 @@ export default function Home() {
               setHostAfterSetup(false);
               setPage("title");
             }}
+            hidden={page !== "multiplayer"}
           />
         ) : null}
 

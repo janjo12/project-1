@@ -13,6 +13,7 @@ type CombatantSpriteProps = {
   attackDirection?: "left" | "right";
   attackProgress?: number | null;
   damageProgress?: number | null;
+  animationsPaused?: boolean;
   reducedMotion?: boolean;
   sprite: string;
   scale?: number;
@@ -24,6 +25,7 @@ export function CombatantSprite({
   attackDirection = "right",
   attackProgress = null,
   damageProgress = null,
+  animationsPaused = false,
   reducedMotion = false,
   sprite,
   scale = 1,
@@ -42,6 +44,7 @@ export function CombatantSprite({
           animationDirection: "alternate",
           animationIterationCount: "infinite",
           animationTimingFunction: "ease-in-out",
+          animationPlayState: animationsPaused ? "paused" : "running",
         },
       ]}
     >

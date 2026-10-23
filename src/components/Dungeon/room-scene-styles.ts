@@ -40,7 +40,7 @@ export function createStyles(colors: ThemeColors) {
       textAlign: "center",
     },
     bottomDoorwayGap: {
-      bottom: -7,
+      bottom: 0,
     },
     enemyHealthBarFill: {
       height: "100%",
@@ -73,13 +73,13 @@ export function createStyles(colors: ThemeColors) {
       width: "16%",
     },
     leftDoorwayGap: {
-      left: -7,
+      left: 0,
     },
     lockedDoorwayIcon: {
       color: colors.ink,
     },
     rightDoorwayGap: {
-      right: -7,
+      right: 0,
     },
     sceneArea: {
       borderColor: colors.ink,
@@ -94,7 +94,7 @@ export function createStyles(colors: ThemeColors) {
       lineHeight: 54,
     },
     topDoorwayGap: {
-      top: -7,
+      top: 0,
     },
     verticalDoorwayGap: {
       height: "20%",

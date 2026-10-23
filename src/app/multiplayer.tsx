@@ -201,7 +201,16 @@ function Multiplayer({ settings, startAsHost }: { settings: GameSettings; startA
           ) : null}
           {!tinyLayout ? (
             <View style={{ flexShrink: 1, maxHeight: compactLayout ? 116 : undefined, minHeight: 0 }}>
-              <DungeonMap map={map} currentRoomId={player.roomId} compact={compactLayout} />
+              <DungeonMap
+                map={map}
+                currentRoomId={player.roomId}
+                compact={compactLayout}
+                players={Object.values(state.players).map(otherPlayer => ({
+                  id: otherPlayer.id,
+                  roomId: otherPlayer.roomId,
+                  color: getMultiplayerPlayerAuraColor(Object.keys(state.players), otherPlayer.id),
+                }))}
+              />
             </View>
           ) : null}
 
@@ -237,7 +246,11 @@ function Multiplayer({ settings, startAsHost }: { settings: GameSettings; startA
             )}
           </Row>
 
-          <ResourceBarGroup compact={compactLayout}>
+          <ResourceBarGroup
+            compact={compactLayout}
+            playerSprite={getGameClass(player.classId).sprite}
+            playerAuraColor={getMultiplayerPlayerAuraColor(Object.keys(state.players), playerId)}
+          >
             <ResourceBar
               testID="multiplayer-health"
               accessibilityLabel="Player health"
@@ -264,6 +277,7 @@ function Multiplayer({ settings, startAsHost }: { settings: GameSettings; startA
           {tinyLayout && combatMessage ? <Text pointerEvents="none" style={{ position: "absolute", top: 8, left: 0, right: 0, zIndex: 20, color: colors.accent, fontWeight: "900", textAlign: "center" }}>{combatMessage}</Text> : null}
           <GameViewPanel
             disabled={state.phase !== "playing" || state.ended || disconnected || submitted === state.turn || microgame.active}
+            pauseAnimations={microgame.active}
             reducedMotion={settings.reducedMotion}
             playerLabel={`${getGameClass(player.classId).name} · ${playerId} · Support`}
             playerSprite={getGameClass(player.classId).sprite}
@@ -321,6 +335,7 @@ function Multiplayer({ settings, startAsHost }: { settings: GameSettings; startA
               classId={player.classId}
               damage={10 + getEquipmentStats(player.equipment).attack}
               multiplayer
+              auraColor={getMultiplayerPlayerAuraColor(Object.keys(state.players), playerId)}
               microgamesEnabled={settings.microgamesEnabled}
               onNext={() => setIntroPage(1)}
               onBack={() => setIntroPage(0)}

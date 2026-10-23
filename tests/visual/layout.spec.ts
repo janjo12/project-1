@@ -152,9 +152,28 @@ for (const viewport of viewports) {
 
     await page.reload();
     await page.getByRole("button", { name: "Multiplayer" }).click();
+    await expect(page.getByRole("button", { name: "Host game", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Join game", exact: true })).toBeVisible();
+    await expectScreenFits(page, "multiplayer host or join");
+    await page.getByRole("button", { name: "Host game", exact: true }).click();
+    await expect(page.getByText("Room code", { exact: true })).toBeVisible();
+    await expect(page.getByText("Join this room from another browser to continue to game options.")).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Seed" })).toHaveCount(0);
+    const guestPage = await page.context().newPage();
+    await guestPage.goto("/");
+    await guestPage.getByRole("button", { name: "Multiplayer" }).click();
+    await guestPage.getByRole("button", { name: "Join game", exact: true }).click();
+    const roomCode = await page.locator('[aria-label="Room code"]').textContent();
+    expect(roomCode).toBeTruthy();
+    await guestPage.getByRole("textbox", { name: "Room code" }).fill(roomCode!.trim());
+    await guestPage.getByRole("button", { name: "Join room", exact: true }).click();
+    await expect(guestPage.getByText(new RegExp(`Joined room ${roomCode!.trim()}`))).toBeVisible();
+    await expect(guestPage.getByRole("textbox", { name: "Seed" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Game options", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Game options", exact: true }).click();
     await page.getByRole("textbox", { name: "Seed" }).fill("testwarrior");
-    await page.getByRole("button", { name: "Start" }).click();
-    await expect(page.getByText("Multiplayer", { exact: true })).toBeVisible();
-    await expectScreenFits(page, "multiplayer lobby");
+    await expect(page.getByRole("button", { name: "Start", exact: true })).toBeVisible();
+    await expectScreenFits(page, "multiplayer options");
+    await guestPage.close();
   });
 }

@@ -31,11 +31,11 @@ type StyledTextProps = ChildrenProps & {
   style?: StyleProp<TextStyle>;
 };
 
-export function Container({ children }: ViewProps) {
+export function Container({ children, style }: ViewProps) {
   const colors = useThemeColors();
   const styles = createStyles(colors);
 
-  return <View style={styles.container}>{children}</View>;
+  return <View style={[styles.container, style]}>{children}</View>;
 }
 
 export function Row({ children, style }: ViewProps) {

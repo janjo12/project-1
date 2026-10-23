@@ -28,12 +28,12 @@ export function ItemControl({
         ref={targetRef}
         accessibilityLabel={itemLabel ? `${itemLabel}. ${activationDescription}` : "No item held"}
         accessibilityRole="text"
-      style={[styles.itemPanel, { maxWidth: 105, minWidth: 72, minHeight: 42 }]}
+      style={styles.itemPanel}
         testID="item-status"
       >
         {itemSprite ? <PixelSprite sprite={itemSprite} label={itemLabel ?? "Item"} size={18} /> : null}
-        <Text style={styles.label}>{itemLabel ?? "No Item"}</Text>
-        <Text style={[styles.description, { fontSize: 9, lineHeight: 11 }]}>
+        <Text numberOfLines={1} style={styles.label}>{itemLabel ?? "No Item"}</Text>
+        <Text numberOfLines={1} style={[styles.description, { fontSize: 9, lineHeight: 11 }]}>
           {activationDescription ?? "Pick up an item to hold it."}
         </Text>
       </View>
@@ -48,11 +48,11 @@ export function EquipmentControl({ label, description, sprite, onDrop, disabled 
   return <Pressable accessibilityRole="button" accessibilityLabel={label ? `${label}. Drop equipment` : "Equipment slot empty"}
     accessibilityHint="Tap to drop your equipment without using a turn" disabled={disabled || !label} onPress={onDrop}
       testID="equipment-slot" style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.paperLight,
-      borderColor: colors.sepia, borderWidth: 2, borderRadius: 12, minHeight: 42, padding: 4 }}>
+      borderColor: colors.sepia, borderWidth: 2, borderRadius: 12, height: 72, minHeight: 72, maxHeight: 72, padding: 4, overflow: "hidden" }}>
     <View ref={targetRef} style={{ alignItems: "center", justifyContent: "center" }}>
       {sprite ? <PixelSprite sprite={sprite} label={label ?? "Equipment"} size={20} /> : null}
-      <Text style={{ color: colors.ink, fontSize: 12, fontWeight: "900" }}>{label ?? "Equipment"}</Text>
-      <Text style={{ color: colors.sepia, fontSize: 9, textAlign: "center" }}>{description ?? "Tap to drop"}</Text>
+      <Text numberOfLines={1} style={{ color: colors.ink, fontSize: 12, fontWeight: "900", textAlign: "center" }}>{label ?? "Equipment"}</Text>
+      <Text numberOfLines={1} style={{ color: colors.sepia, fontSize: 9, textAlign: "center" }}>{description ?? "Tap to drop"}</Text>
     </View>
   </Pressable>;
 }
@@ -103,12 +103,16 @@ function createStyles(colors: ThemeColors) {
       borderRadius: 999,
       borderWidth: 2,
       gap: 2,
+      height: 72,
       justifyContent: "center",
-      minHeight: 64,
-      maxWidth: 150,
-      minWidth: 120,
+      maxHeight: 72,
+      maxWidth: 105,
+      minHeight: 72,
+      minWidth: 105,
+      overflow: "hidden",
       paddingHorizontal: 12,
-      paddingVertical: 8,
+      paddingVertical: 4,
+      width: 105,
     },
     description: { color: colors.sepia, fontSize: 11, lineHeight: 14, textAlign: "center" },
     label: {

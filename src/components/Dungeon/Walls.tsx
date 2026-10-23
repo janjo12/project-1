@@ -39,6 +39,7 @@ export function RoomWalls({
   doorways,
   onPress,
   reducedMotion = false,
+  animationsPaused = false,
 }: {
   canUnlockDoors: boolean;
   canPassBlockedDoorways?: boolean;
@@ -46,6 +47,7 @@ export function RoomWalls({
   doorways: RoomDoorways;
   onPress?: (position: DoorPosition) => void;
   reducedMotion?: boolean;
+  animationsPaused?: boolean;
 }) {
   const styles = createStyles(useThemeColors());
   const positions: DoorPosition[] = ["top", "right", "bottom", "left"];
@@ -68,6 +70,7 @@ export function RoomWalls({
             disabled={isDisabled}
             key={position}
             onPress={() => onPress?.(position)}
+            pointerEvents={isDisabled ? "none" : "auto"}
             style={({ pressed }) => [
               styles.doorwayGap,
               position === "top" || position === "bottom"
@@ -97,6 +100,7 @@ export function RoomWalls({
                     animationDirection: "alternate",
                     animationIterationCount: "infinite",
                     animationTimingFunction: "ease-in-out",
+                    animationPlayState: animationsPaused ? "paused" : "running",
                   },
                 ]}
               >

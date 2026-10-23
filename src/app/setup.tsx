@@ -1,5 +1,6 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
+import { useWindowDimensions } from "react-native";
 
 import {
   Container,
@@ -38,6 +39,7 @@ type HelpTopic = keyof typeof helpContent;
 export default function Setup() {
   // Preserve the selected play mode while sharing difficulty and seed setup across both routes.
   const { mode, host } = useLocalSearchParams<{ mode?: string; host?: string }>();
+  const compactLayout = useWindowDimensions().height < 500;
   const { isLoading, settings, updateSettings, saveSettings } =
     useGameSettings({ refreshSeedOnLoad: true });
   const [helpTopic, setHelpTopic] = useState<HelpTopic | null>(null);
@@ -62,8 +64,8 @@ export default function Setup() {
 
   return (
     <ThemeProvider appearance={settings.appearance}>
-      <ScreenShell>
-        <Container>
+      <ScreenShell compact={compactLayout}>
+        <Container style={compactLayout ? { gap: 4, paddingBottom: 0, paddingTop: 0 } : undefined}>
           <Header><NormalButton accessibilityLabel="Back" accessibilityRole="button" label="Back" onPress={() => router.replace(mode === "multiplayer" ? "/multiplayer" : "/")} />
             <NormalButton
               accessibilityLabel="Settings"
@@ -74,7 +76,7 @@ export default function Setup() {
             />
           </Header>
           <Title>[Project 1]</Title>
-          <Container>
+          <Container style={compactLayout ? { gap: 4, paddingBottom: 0, paddingTop: 0 } : undefined}>
             <Row>
               <StyledText>Difficulty</StyledText>
               <SegmentedButton
@@ -98,6 +100,15 @@ export default function Setup() {
               />
             </Row>
             <StyledText>Turn off for direct attacks without a timing game.</StyledText>
+
+            <Row>
+              <StyledText>Handedness</StyledText>
+              <SegmentedButton
+                onChange={(choice) => updateSettings({ handedness: choice === "Left" ? "left" : "right" })}
+                options={["Right", "Left"] as const}
+                value={settings.handedness === "left" ? "Left" : "Right"}
+              />
+            </Row>
 
             <Row>
               <StyledText>Seed</StyledText>

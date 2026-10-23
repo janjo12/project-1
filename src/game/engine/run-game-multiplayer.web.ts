@@ -145,6 +145,8 @@ export function useRunMultiplayerGame(settings: GameSettings) {
   async function start() {
     if (!roomCode) return;
     await run(async () => {
+      const configured = await requestRoom<RoomResponse>({ type: "configure", code: roomCode, playerId, seed: settings.seed, difficulty: settings.difficulty });
+      revision.current = configured.revision;
       const result = await requestRoom<RoomResponse>({ type: "start", code: roomCode, playerId });
       revision.current = result.revision;
       if (result.state) setState(result.state);

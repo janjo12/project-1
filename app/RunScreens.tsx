@@ -21,27 +21,29 @@ import { PLAYER_MAX_ENERGY, PLAYER_MAX_HEALTH, useRunGame } from "@/game/engine/
 import { useGameLoopDriver } from "@/game/engine/use-game-loop-driver";
 import { isTestSeed } from "@/utils/seed";
 import type { GameSettings } from "@/utils/settings-storage";
-export function SetupScreen({ settings, onBack, onSettings, onUpdate, onStart }: {
+export function SetupScreen({ settings, onBack, onSettings, onUpdate, onStart, showSeed = true }: {
   settings: GameSettings;
   onBack: () => void;
   onSettings: () => void;
   onUpdate: (settings: Partial<GameSettings>) => void;
   onStart: () => void;
+  showSeed?: boolean;
 }) {
   const [helpTopic, setHelpTopic] = useState<"difficulty" | "seed" | null>(null);
+  const compactLayout = useWindowDimensions().height < 500;
   const helpContent = helpTopic === "difficulty"
     ? { title: "Difficulty", body: "Choose Easy for a casual experience. Normal requires you to beat each level in a limited number of turns. Hard keeps that turn limit and adds a timer for every turn." }
     : helpTopic === "seed" ? { title: "Seed", body: "Used for determining the random layout of each level." } : null;
 
   return (
-    <ScreenShell>
-      <Container>
+    <ScreenShell compact={compactLayout}>
+      <Container style={compactLayout ? { gap: 4, paddingBottom: 0, paddingTop: 0 } : undefined}>
         <Header>
           <NormalButton accessibilityLabel="Back" accessibilityRole="button" label="Back" onPress={onBack} />
           <NormalButton accessibilityLabel="Settings" accessibilityRole="button" icon="cog" onPress={onSettings} />
         </Header>
         <Title>[Project 1]</Title>
-        <Container>
+        <Container style={compactLayout ? { gap: 4, paddingBottom: 0, paddingTop: 0 } : undefined}>
           <Row>
             <StyledText>Difficulty</StyledText>
             <SegmentedButton onChange={difficulty => onUpdate({ difficulty })} options={["easy", "normal", "hard"] as const} value={settings.difficulty} />
@@ -49,11 +51,14 @@ export function SetupScreen({ settings, onBack, onSettings, onUpdate, onStart }:
           </Row>
           <ToggleButton label="Attack microgames" value={settings.microgamesEnabled} onValueChange={microgamesEnabled => onUpdate({ microgamesEnabled })} />
           <StyledText>Turn off for direct attacks without a timing game.</StyledText>
-          <Row>
-            <StyledText>Seed</StyledText>
-            <TextEntry accessibilityLabel="Seed" accessibilityRole="textbox" onChangeText={seed => onUpdate({ seed })} placeholder="Random" value={settings.seed} />
-            <HelpButton accessibilityLabel="Seed help" accessibilityRole="button" onPress={() => setHelpTopic("seed")} />
-          </Row>
+          <ToggleButton label="Left-handed controls" value={settings.handedness === "left"} onValueChange={value => onUpdate({ handedness: value ? "left" : "right" })} />
+          {showSeed ? (
+            <Row>
+              <StyledText>Seed</StyledText>
+              <TextEntry accessibilityLabel="Seed" accessibilityRole="textbox" onChangeText={seed => onUpdate({ seed })} placeholder="Random" value={settings.seed} />
+              <HelpButton accessibilityLabel="Seed help" accessibilityRole="button" onPress={() => setHelpTopic("seed")} />
+            </Row>
+          ) : null}
         </Container>
         <Footer>
           <PrimaryButton accessibilityLabel="Start" accessibilityRole="button" label="Start" onPress={onStart} />
@@ -86,7 +91,6 @@ export function SettingsScreen({ settings, onBack, onUpdate }: {
             />
           </Row>
           <ToggleButton label="Vibration" value={settings.vibrationEnabled} onValueChange={value => onUpdate({ vibrationEnabled: value })} />
-          <ToggleButton label="Left-handed controls" value={settings.handedness === "left"} onValueChange={value => onUpdate({ handedness: value ? "left" : "right" })} />
           <ToggleButton label="Reduce motion" value={settings.reducedMotion} onValueChange={value => onUpdate({ reducedMotion: value })} />
           <StyledText>Skips room slides, doorway pulsing, and idle enemy bobbing.</StyledText>
         </Container>
@@ -95,11 +99,12 @@ export function SettingsScreen({ settings, onBack, onUpdate }: {
   );
 }
 
-export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onExit }: {
+export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onExit, onBackToSetup }: {
   settings: GameSettings;
   onSettingsChange: (settings: Partial<GameSettings>) => void;
   onGameOver: (score: number) => void;
   onExit: () => void;
+  onBackToSetup: () => void;
 }) {
   const { height } = useWindowDimensions();
   const compactLayout = height < 800;
@@ -149,22 +154,23 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
       <GameHeader onMenu={() => setIsMenuOpen(true)} />
       {!tinyLayout ? <DebugBar accessibilityLabel="Turn status" accessibilityRole="text" testID="turn-status">{`${game.istest ? "TEST · " : ""}${combatMessage || (microgameScore === null ? game.turnStatus : `${game.turnStatus} · Last microgame ${microgameScore}/100`)}`}</DebugBar> : null}
       {!tinyLayout ? <View style={{ flexShrink: 1, maxHeight: compactLayout ? 116 : undefined, minHeight: 0 }}><DungeonMap currentRoomId={game.currentRoomId} map={game.visibleDungeonMap} compact={compactLayout} /></View> : null}
-      <Row>
+      <Row style={{ height: 148, flexShrink: 0 }}>
         {settings.handedness === "left" ? <><ChargeControl charged={game.isCharged} chargeCost={chargeCost} disabled={game.isResolving || game.hasLost || (!game.isCharged && game.playerEnergy < chargeCost)} onPress={game.toggleCharge} />{controls}</> : <>{controls}<ChargeControl charged={game.isCharged} chargeCost={chargeCost} disabled={game.isResolving || game.hasLost || (!game.isCharged && game.playerEnergy < chargeCost)} onPress={game.toggleCharge} /></>}
       </Row>
       {!compactLayout ? <Text style={{ color: colors.sepia, fontSize: 12, textAlign: "center" }}>Charge: stronger attack, full block + counter, or move / pick up without using a turn.</Text> : null}
-      <ResourceBarGroup compact={compactLayout}>
+      <ResourceBarGroup compact={compactLayout} playerSprite={game.playerClass.sprite}>
         <ResourceBar compact={compactLayout} accessibilityLabel="Player health" color={colors.health} current={game.playerHealth} icon="heart" max={PLAYER_MAX_HEALTH} panelPosition="first" testID="player-health-bar" />
         <ResourceBar compact={compactLayout} accessibilityLabel="Player energy" color={colors.energy} current={game.playerEnergy} icon="bolt" max={PLAYER_MAX_ENERGY} panelPosition={game.hasTurnTimer ? "middle" : "last"} testID="player-energy-bar" />
         {game.hasTurnTimer ? <TurnTimerBar compact={compactLayout} accessibilityLabel="Turn timer" color={colors.timer} max={game.turnDuration} panelPosition="last" store={game.turnClockStore} testID="turn-timer" /> : null}
       </ResourceBarGroup>
-      {!compactLayout ? <Text style={{ color: colors.ink, fontSize: 13, fontWeight: "700", textAlign: "center" }}>Tap a monster to attack, an item to pick it up, a doorway to move, your hero to use their class support skill, or the stairs to descend.</Text> : null}
+      {!compactLayout ? <View pointerEvents="none"><Text style={{ color: colors.ink, fontSize: 13, fontWeight: "700", textAlign: "center" }}>Tap a monster to attack, an item to pick it up, a doorway to move, your hero to use their class support skill, or the stairs to descend.</Text></View> : null}
       <View style={{ flex: 1, minHeight: 0, overflow: "hidden", position: "relative", zIndex: microgame.active ? 100 : undefined }}>
       {tinyLayout && combatMessage ? <Text pointerEvents="none" style={{ position: "absolute", top: 8, left: 0, right: 0, zIndex: 20, color: colors.accent, fontWeight: "900", textAlign: "center" }}>{combatMessage}</Text> : null}
       <GameViewPanel
         sceneFrameStore={game.sceneFrameStore}
         canUnlockDoors={game.inventoryItem === "key" || game.playerClass.id === "thief"}
         disabled={game.isResolving || game.hasLost || microgame.active || classIntroPage >= 0}
+        pauseAnimations={microgame.active}
         enemyHealthLossAmount={game.enemyHealthLossAmount}
         hardTurnCounter={game.hardTurnCounter}
         onActorPress={async (actor, source) => {
@@ -210,7 +216,7 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
       />
       <MicrogameOverlay visible={microgame.active} kind={microgame.kind} elapsedStore={microgame.elapsedStore} targetDelay={microgame.targetDelay} targetSpot={microgame.targetSpot} clicks={microgame.clicks} leftHanded={settings.handedness === "left"} isTest={microgame.istest} onTap={microgame.tap} />
       </View>
-      {classIntroPage >= 0 ? <ClassBriefing page={classIntroPage} classId={game.playerClass.id} damage={microgameScore === null ? game.playerAttack : Math.max(1, Math.floor(game.playerAttack * microgameScore / 100))} multiplayer={false} microgamesEnabled={settings.microgamesEnabled} onNext={() => setClassIntroPage(1)} onBack={() => setClassIntroPage(0)} onPractice={startMicrogame} onStart={() => setClassIntroPage(-1)} /> : null}
+      {classIntroPage >= 0 ? <ClassBriefing page={classIntroPage} classId={game.playerClass.id} damage={microgameScore === null ? game.playerAttack : Math.max(1, Math.floor(game.playerAttack * microgameScore / 100))} multiplayer={false} microgamesEnabled={settings.microgamesEnabled} onExit={onBackToSetup} onNext={() => setClassIntroPage(1)} onBack={() => setClassIntroPage(0)} onPractice={startMicrogame} onStart={() => setClassIntroPage(-1)} /> : null}
       <StyledModal accessibilityLabel="Game menu" accessibilityRole="dialog" animationType="fade" onRequestClose={() => setIsMenuOpen(false)} visible={isMenuOpen}>
         <Title>Menu</Title>
         <Container>

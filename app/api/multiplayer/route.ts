@@ -12,6 +12,7 @@ type Session = {
   seed: string;
   difficulty: Difficulty;
   playerIds: string[];
+  nextPlayerNumber: number;
   state: MultiplayerState | null;
   actions: Map<string, PlayerAction>;
   revision: number;
@@ -20,9 +21,19 @@ type Session = {
   touchedAt: number;
 };
 
+const SESSION_TTL_MS = 2 * 60 * 60 * 1000;
+const CLEANUP_INTERVAL_MS = 60 * 1000;
+const MAX_ACTIVE_ROOMS = readPositiveInteger(process.env.MULTIPLAYER_MAX_ACTIVE_ROOMS, 1_000, 10_000);
+const MAX_PLAYERS_PER_ROOM = 8;
 const globalSessions = globalThis as typeof globalThis & { __project1MultiplayerSessions?: Map<string, Session> };
 const sessions = globalSessions.__project1MultiplayerSessions ??= new Map<string, Session>();
+const globalCleanupClock = globalThis as typeof globalThis & { __project1MultiplayerLastCleanupAt?: number };
 const roomAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+function readPositiveInteger(value: string | undefined, fallback: number, maximum: number) {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? Math.min(parsed, maximum) : fallback;
+}
 
 function json(body: unknown, status = 200) {
   return Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
@@ -32,22 +43,28 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function cleanExpiredSessions() {
+function cleanExpiredSessions(force = false) {
   const now = Date.now();
+  if (!force && now - (globalCleanupClock.__project1MultiplayerLastCleanupAt ?? 0) < CLEANUP_INTERVAL_MS) return;
+  globalCleanupClock.__project1MultiplayerLastCleanupAt = now;
   for (const [code, session] of sessions) {
-    if (now - session.touchedAt <= 2 * 60 * 60 * 1000) continue;
+    if (now - session.touchedAt <= SESSION_TTL_MS) continue;
     if (session.timer) clearTimeout(session.timer);
     sessions.delete(code);
   }
 }
 
 function newCode() {
-  let code = "";
-  do {
-    const bytes = randomBytes(6);
-    code = Array.from(bytes, byte => roomAlphabet[byte % roomAlphabet.length]).join("");
-  } while (sessions.has(code));
-  return code;
+  const maxUnbiasedByte = Math.floor(256 / roomAlphabet.length) * roomAlphabet.length;
+  while (true) {
+    let code = "";
+    for (const byte of randomBytes(12)) {
+      if (byte >= maxUnbiasedByte) continue;
+      code += roomAlphabet[byte % roomAlphabet.length];
+      if (code.length === 6) break;
+    }
+    if (code.length === 6 && !sessions.has(code)) return code;
+  }
 }
 
 function publicSession(session: Session, playerId: string) {
@@ -94,7 +111,13 @@ function validAction(value: unknown): value is PlayerAction {
 }
 
 function getSession(code: string) {
-  const session = sessions.get(code.trim().toUpperCase());
+  const normalizedCode = code.trim().toUpperCase();
+  const session = sessions.get(normalizedCode);
+  if (session && Date.now() - session.touchedAt > SESSION_TTL_MS) {
+    if (session.timer) clearTimeout(session.timer);
+    sessions.delete(normalizedCode);
+    return undefined;
+  }
   if (session) session.touchedAt = Date.now();
   return session;
 }
@@ -120,8 +143,12 @@ export async function POST(request: Request) {
     if (typeof body.seed !== "string" || !(difficulty === "easy" || difficulty === "normal" || difficulty === "hard")) {
       return json({ error: "Choose a valid seed and difficulty before hosting." }, 400);
     }
+    if (sessions.size >= MAX_ACTIVE_ROOMS) {
+      cleanExpiredSessions(true);
+      if (sessions.size >= MAX_ACTIVE_ROOMS) return json({ error: "The multiplayer server is at room capacity. Try again shortly." }, 503);
+    }
     const code = newCode();
-    const session: Session = { code, seed: body.seed.trim() || "web-playtest", difficulty, playerIds: ["host"], state: null, actions: new Map(), revision: 0, timer: null, deadlineAt: null, touchedAt: Date.now() };
+    const session: Session = { code, seed: body.seed.trim() || "web-playtest", difficulty, playerIds: ["host"], nextPlayerNumber: 2, state: null, actions: new Map(), revision: 0, timer: null, deadlineAt: null, touchedAt: Date.now() };
     sessions.set(code, session);
     return json(publicSession(session, "host"), 201);
   }
@@ -132,7 +159,8 @@ export async function POST(request: Request) {
 
   if (body.type === "join") {
     if (session.state) return json({ error: "This game has already started." }, 409);
-    const playerId = `player-${session.playerIds.length + 1}`;
+    if (session.playerIds.length >= MAX_PLAYERS_PER_ROOM) return json({ error: "This room is full." }, 409);
+    const playerId = `player-${session.nextPlayerNumber++}`;
     session.playerIds.push(playerId);
     session.revision += 1;
     return json(publicSession(session, playerId), 201);
@@ -140,6 +168,19 @@ export async function POST(request: Request) {
 
   const playerId = typeof body.playerId === "string" ? body.playerId : "";
   if (!session.playerIds.includes(playerId)) return json({ error: "This player is no longer in the room." }, 404);
+
+  if (body.type === "configure") {
+    if (playerId !== "host") return json({ error: "Only the host can choose game options." }, 403);
+    if (session.state) return json({ error: "This game has already started." }, 409);
+    const difficulty = body.difficulty;
+    if (typeof body.seed !== "string" || !(difficulty === "easy" || difficulty === "normal" || difficulty === "hard")) {
+      return json({ error: "Choose a valid seed and difficulty before starting." }, 400);
+    }
+    session.seed = body.seed.trim() || "web-playtest";
+    session.difficulty = difficulty;
+    session.revision += 1;
+    return json(publicSession(session, playerId));
+  }
 
   if (body.type === "start") {
     if (playerId !== "host") return json({ error: "Only the host can start the game." }, 403);
