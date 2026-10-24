@@ -1,10 +1,13 @@
 import config from "../../playwright.config";
+import scenarioConfig from "../../playwright.scenarios.config";
 
 describe("browser test configuration", () => {
-  it("discovers visual and complex end-to-end specs from the shared tests folder", () => {
-    expect(config.testDir).toBe("./tests");
+  it("keeps the default browser gate focused and scenarios separately selectable", () => {
+    expect(config.testDir).toBe("./tests/browser");
     expect(config.testMatch).toContain("**/*.spec.ts");
-    expect(config.testIgnore).toBe("**/emulator/**");
+    expect(config.workers).toBe(1);
+    expect(scenarioConfig.testDir).toBe("./tests/scenarios");
+    expect(scenarioConfig.testMatch).toBe("**/*.spec.ts");
   });
 
   it("uses Playwright-managed Chromium by default instead of requiring installed Edge", () => {

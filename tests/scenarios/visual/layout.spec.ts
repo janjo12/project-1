@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { openScenarioApp } from "../helpers";
 
 const viewports = [
   { name: "small-phone-portrait", width: 320, height: 568 },
@@ -18,7 +19,7 @@ async function expectScreenFits(page: Page, screenName: string) {
         const style = getComputedStyle(element);
         return /(hidden|clip|auto|scroll)/.test(`${style.overflow} ${style.overflowX} ${style.overflowY}`);
       });
-    const candidates = Array.from(document.querySelectorAll("[role='dialog'], [data-testid='class-briefing'], [data-testid='microgame-overlay']"))
+    const candidates = Array.from(document.querySelectorAll("[role='dialog'], [data-testid='microgame-overlay']"))
       .filter(element => {
         const style = getComputedStyle(element);
         return style.display !== "none" && style.visibility !== "hidden" && element.getClientRects().length > 0;
@@ -99,9 +100,7 @@ async function expectScreenFits(page: Page, screenName: string) {
 for (const viewport of viewports) {
   test(`${viewport.name}: key screens and overlays fit without clipping`, async ({ page }) => {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
-    await page.goto("/");
-    await page.evaluate(() => localStorage.clear());
-    await page.reload();
+    await openScenarioApp(page, true);
 
     await expect(page.getByRole("button", { name: "Singleplayer" })).toBeVisible();
     await expectScreenFits(page, "title");
@@ -122,13 +121,12 @@ for (const viewport of viewports) {
 
     await page.getByRole("textbox", { name: "Seed" }).fill("testwarrior");
     await page.getByRole("button", { name: "Start" }).click();
-    await expect(page.getByRole("button", { name: "Next class instructions", exact: true })).toBeVisible();
-    await expectScreenFits(page, "class briefing");
-    await page.getByRole("button", { name: "Next class instructions", exact: true }).click();
-    await expectScreenFits(page, "class instructions");
-    await page.getByRole("button", { name: "Start playing", exact: true }).click();
-
     await expect(page.getByRole("button", { name: "Menu" })).toBeVisible();
+    if (viewport.height >= 500) await expect(page.getByTestId("dungeon-map")).toBeVisible();
+    await expect(page.getByTestId("turn-status")).toHaveCount(0);
+    await expect(page.getByText("Charge: stronger attack, full block + counter, or move / pick up without using a turn.", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Tap a monster to attack, an item to pick it up, a doorway to move, your hero to use their class support skill, or the stairs to descend.", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("group", { name: "Map color key" })).toHaveCount(0);
     await expectScreenFits(page, "gameplay");
     const roomFrame = await page.getByTestId("dungeon-room-frame").boundingBox();
     expect(roomFrame, "gameplay should show the dungeon room frame").not.toBeNull();
@@ -150,7 +148,7 @@ for (const viewport of viewports) {
     await expect(page.getByTestId("microgame-overlay")).toBeVisible();
     await expectScreenFits(page, "microgame overlay");
 
-    await page.reload();
+    await page.reload({ waitUntil: "domcontentloaded" });
     await page.getByRole("button", { name: "Multiplayer" }).click();
     await expect(page.getByRole("button", { name: "Host game", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Join game", exact: true })).toBeVisible();
@@ -160,7 +158,7 @@ for (const viewport of viewports) {
     await expect(page.getByText("Join this room from another browser to continue to game options.")).toBeVisible();
     await expect(page.getByRole("textbox", { name: "Seed" })).toHaveCount(0);
     const guestPage = await page.context().newPage();
-    await guestPage.goto("/");
+    await guestPage.goto("/", { waitUntil: "domcontentloaded" });
     await guestPage.getByRole("button", { name: "Multiplayer" }).click();
     await guestPage.getByRole("button", { name: "Join game", exact: true }).click();
     const roomCode = await page.locator('[aria-label="Room code"]').textContent();

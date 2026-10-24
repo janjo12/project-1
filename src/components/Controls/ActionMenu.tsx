@@ -21,6 +21,8 @@ export function ItemControl({
 }: ItemControlProps) {
   const styles = createStyles(useThemeColors());
 
+  if (!itemLabel) return null;
+
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={itemLabel ? `${itemLabel}. Drop item` : "No item held"}
       accessibilityHint="Tap to drop your item without using a turn" disabled={!itemLabel} onPress={onDrop} style={styles.container}>
@@ -45,6 +47,7 @@ export function EquipmentControl({ label, description, sprite, onDrop, disabled 
   label?: string | null; description?: string | null; sprite?: string | null; onDrop?: () => void; disabled?: boolean; targetRef?: Ref<View>;
 }) {
   const colors = useThemeColors();
+  if (!label) return null;
   return <Pressable accessibilityRole="button" accessibilityLabel={label ? `${label}. Drop equipment` : "Equipment slot empty"}
     accessibilityHint="Tap to drop your equipment without using a turn" disabled={disabled || !label} onPress={onDrop}
       testID="equipment-slot" style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.paperLight,

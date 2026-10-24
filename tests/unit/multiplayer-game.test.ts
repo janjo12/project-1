@@ -5,6 +5,7 @@ import { addEquipmentToRoom, getConnectedRoomId, getRoom } from "@/game/dungeon/
 import type { Direction, RoomEquipmentRef } from "@/game/dungeon/types";
 import { getMultiplayerPlayerAuraColor, getMultiplayerRoomActors } from "@/game/engine/multiplayer-presentation";
 import { getGameClass } from "@/game/config/game-classes";
+import { GAME_PARAMETERS } from "@/game/config/gameparameters";
 
 const initial = () => { const state = createMultiplayerState("lan-test", "easy", ["host", "guest"]); state.phase = "playing"; return state; };
 test("same-class allies appear as tappable room actors with distinct stable auras", () => {
@@ -183,18 +184,19 @@ test("warrior support redirects an ally's hit and resolves before player order",
   expect(resolveMultiplayerTurn(state, reversedActions)).toEqual(next);
 });
 
-test("charged Warrior support adds five defense and counters the enemy in multiplayer", () => {
+test("charged Warrior support adds five defense and deals only a small riposte in multiplayer", () => {
   const state = initial();
   state.players.host.classId = "warrior";
   const room = getRoom(state.map, state.players.host.roomId)!;
   room.contents = [{ type: "monster", id: "guard" }];
-  state.map.entities.monsters.guard = { id: "guard", type: "monster", name: "Guard", sprite: "g", damage: 20, currentHealth: 100, maximumHealth: 100 };
+  state.map.entities.monsters.guard = { id: "guard", type: "monster", name: "Guard", sprite: "g", damage: 24, currentHealth: 100, maximumHealth: 100 };
 
   const next = resolveMultiplayerTurn(state, new Map([["host", { type: "SUPPORT", charged: true }]]));
 
-  expect(next.players.host.health).toBe(PLAYER_MAX_HEALTH);
+  expect(next.players.host.health).toBe(PLAYER_MAX_HEALTH - 4);
   expect(next.players.host.defenseBuff).toBe(0);
-  expect(next.map.entities.monsters.guard.currentHealth).toBe(80);
+  expect(next.map.entities.monsters.guard.currentHealth).toBe(100 - GAME_PARAMETERS.combat.warriorRiposteDamage);
+  expect(GAME_PARAMETERS.combat.warriorRiposteDamage).toBeLessThan(GAME_PARAMETERS.combat.normalAttackDamage);
   expect(next.players.host.energy).toBe(PLAYER_MAX_ENERGY - 10);
 });
 

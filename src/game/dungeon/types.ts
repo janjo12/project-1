@@ -81,11 +81,14 @@ export type DungeonMap = {
 
 export type DungeonGenerationContext = {
   allRoomIds: Set<string>;
+  columns: string[];
   entities: DungeonMap["entities"];
   level: number;
+  roomLimit: number;
   playerCount: number;
   random: () => number;
   rooms: DungeonMapJson;
+  rows: number[];
   startingRoomId: string;
 };
 
@@ -191,9 +194,9 @@ export function createSeededRandom(seed: string) {
   };
 }
 
-export function createEmptyGrid(): DungeonMapJson {
-  return mapRows.map((row) =>
-    mapColumns.map((column) => ({
+export function createEmptyGrid(columns: string[] = mapColumns, rows: number[] = mapRows): DungeonMapJson {
+  return rows.map((row) =>
+    columns.map((column) => ({
       column,
       contents: [],
       east: "wall",
@@ -212,12 +215,17 @@ export function findRoomInGrid(rooms: DungeonMapJson, roomId: string) {
   return rooms.flat().find((room) => room.id === roomId);
 }
 
+export function getNeighborInGrid(rooms: DungeonMapJson, position: GridPosition, direction: Direction) {
+  const neighbor = getNeighbor(position, direction);
+  return neighbor && findRoomInGrid(rooms, getRoomId(neighbor)) ? neighbor : null;
+}
+
 export function openConnection(rooms: DungeonMapJson, roomId: string, direction: Direction) {
   const room = findRoomInGrid(rooms, roomId);
 
   if (!room) throw new Error(`Cannot open connection from missing room ${roomId}`);
 
-  const neighbor = getNeighbor(room, direction);
+  const neighbor = getNeighborInGrid(rooms, room, direction);
   const neighborRoom = neighbor ? findRoomInGrid(rooms, getRoomId(neighbor)) : null;
 
   if (!neighborRoom) throw new Error(`Cannot open ${direction} connection from edge room ${roomId}`);
@@ -235,7 +243,7 @@ export function setConnectionBoundary(
   // Store a doorway boundary on both adjacent rooms to keep the map symmetric.
   const room = findRoomInGrid(rooms, roomId);
   if (!room) throw new Error(`Cannot set connection boundary from missing room ${roomId}`);
-  const neighbor = getNeighbor(room, direction);
+  const neighbor = getNeighborInGrid(rooms, room, direction);
   const neighborRoom = neighbor ? findRoomInGrid(rooms, getRoomId(neighbor)) : null;
 
   if (!neighborRoom) throw new Error(`Cannot set ${direction} boundary from edge room ${roomId}`);
@@ -306,7 +314,7 @@ export function getConnectedRoomIdFromRooms(
     return null;
   }
 
-  const neighbor = getNeighbor(room, direction);
+  const neighbor = getNeighborInGrid(rooms, room, direction);
 
   if (!neighbor) {
     throw new Error(`Open ${direction} doorway from edge room ${roomId} has no neighbor`);
@@ -320,7 +328,7 @@ export function getConnectedRoomIdFromRooms(
 export function getNeighborRoom(rooms: DungeonMapJson, roomId: string, direction: Direction) {
   const room = findRoomInGrid(rooms, roomId);
   if (!room) throw new Error(`Room ${roomId} is missing from dungeon grid`);
-  const neighbor = getNeighbor(room, direction);
+  const neighbor = getNeighborInGrid(rooms, room, direction);
 
   if (!neighbor) return null;
   const neighborRoom = findRoomInGrid(rooms, getRoomId(neighbor));

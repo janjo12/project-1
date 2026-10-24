@@ -9,9 +9,10 @@ export const GAME_PARAMETERS = Object.freeze({
     damageDurationMs: 248,
     enemyTurnDurationMs: 500,
     resourceLossDurationMs: 680,
-    roomExitDurationMs: 180,
+    roomExitDurationMs: 250,
+    spriteFlightDurationMs: 650,
     roomEntryDurationMs: 180,
-    roomTransitionDurationMs: 220,
+    roomTransitionDurationMs: 360,
   }),
   combat: Object.freeze({
     chargeEnergyCost: 10,
@@ -19,6 +20,12 @@ export const GAME_PARAMETERS = Object.freeze({
     strongAttackDamage: 20,
     strongAttackEnergyCost: 0,
     werewolfMeleeDamage: 0,
+    warriorRiposteDamage: 3,
+  }),
+  microgame: Object.freeze({
+    multitapBaseTaps: 4,
+    multitapDifficultyBonus: Object.freeze({ easy: 0, normal: 1, hard: 2 }),
+    multitapTapsPerLevel: 2,
   }),
   monsterScaling: Object.freeze({
     healthIncreasePerLevel: 0.12,

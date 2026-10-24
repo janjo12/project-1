@@ -5,6 +5,7 @@ import { PixelSprite } from "@/components/Common/PixelSprite";
 import { RoomScene, type RoomDoorways } from "@/components/Dungeon/Room";
 import { GameViewPanel } from "@/components/Dungeon/GameViewPanel";
 import { createCombatAnimationFrame } from "@/game/entities";
+import { GAME_PARAMETERS } from "@/game/config/gameparameters";
 
 const doorways: RoomDoorways = {
   bottom: "open",
@@ -13,7 +14,7 @@ const doorways: RoomDoorways = {
   top: "wall",
 };
 
-function scene(roomId: string) {
+function scene(roomId: string, playerPosition: "top" | "right" | "bottom" | "left" | "center" = "center") {
   return (
     <RoomScene
       actors={[]}
@@ -22,13 +23,25 @@ function scene(roomId: string) {
       enemyHealthLossAmount={0}
       playerEnergyLossAmount={0}
       playerHealthLossAmount={0}
-      playerPosition="center"
+      playerPosition={playerPosition}
       playerSprite="🛡️"
       roomId={roomId}
       sceneScale={1}
     />
   );
 }
+
+test("moving from an already aligned position still animates the player toward the doorway", async () => {
+  const screen = render(scene("A1", "center"));
+
+  await act(async () => {
+    screen.rerender(scene("A1", "bottom"));
+  });
+
+  const exitAnimation = screen.getByTestId("player-room-exit-animation");
+  expect(exitAnimation.props.style.animationDuration).toBe(`${GAME_PARAMETERS.animation.roomExitDurationMs}ms`);
+  expect(exitAnimation.props.style.animationName.to).toEqual({ transform: [{ translateY: 34 }] });
+});
 
 test("crossfades adjacent rooms with UI-side opacity keyframes", async () => {
   jest.useFakeTimers();
@@ -46,7 +59,7 @@ test("crossfades adjacent rooms with UI-side opacity keyframes", async () => {
     expect(screen.getByTestId("room-incoming-snapshot").props.style.transform).toBeUndefined();
 
     await act(async () => {
-      jest.advanceTimersByTime(250);
+      jest.advanceTimersByTime(GAME_PARAMETERS.animation.roomTransitionDurationMs);
     });
     expect(screen.queryByTestId("room-transition-snapshot")).toBeNull();
   } finally {

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { openScenarioApp } from "../helpers";
 
 /**
  * Runs on the connected Android emulator through Android's UI test driver.
@@ -13,7 +14,7 @@ test("phone: setup, settings, game menu, and seeded run reach level 2 without re
     if (message.type() === "error") runtimeErrors.push(message.text());
   });
 
-  await page.goto("/");
+  await openScenarioApp(page);
   await expect(page.getByRole("button", { name: "Singleplayer" })).toBeVisible();
   await page.getByRole("button", { name: "Singleplayer" }).click();
   await expect(page.getByText("Difficulty", { exact: true })).toBeVisible();
@@ -40,14 +41,14 @@ test("phone: setup, settings, game menu, and seeded run reach level 2 without re
   // Follow visible doorways and clear only enemies blocking the route.
   let reachedLevelTwo = false;
   for (let step = 0; step < 80; step += 1) {
-    if (await page.getByText(/TEST · .*Level 2/).isVisible().catch(() => false)) {
+    if (await page.getByText("Level 2 Map", { exact: true }).isVisible().catch(() => false)) {
       reachedLevelTwo = true;
       break;
     }
     const stairs = page.getByRole("button", { name: "Stairs", exact: true });
     if (await stairs.isVisible().catch(() => false)) {
       await stairs.click();
-      await expect(page.getByText(/TEST · .*Level 2/)).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByText("Level 2 Map", { exact: true })).toBeVisible({ timeout: 10_000 });
       reachedLevelTwo = true;
       break;
     }

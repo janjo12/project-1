@@ -94,12 +94,6 @@ export function RoomWalls({
               pressed && styles.pressedActor,
             ]}
           >
-            {state === "guarded" ? (
-              <PixelSprite sprite="guard_graphic" label="" size={16} />
-            ) : null}
-            {state === "locked" ? (
-              <Text accessible={false} style={{ fontSize: 16, lineHeight: 18 }}>🔒</Text>
-            ) : null}
             {state === "open" ? (
               <Text
                 accessible={false}

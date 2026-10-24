@@ -71,7 +71,7 @@ export const GAME_CLASSES: Record<GameClassId, GameClass> = {
       "Charge Up first to pick it and move through it this turn.",
     ].join(" "),
     microgame: "timed-attack",
-    microgameText: "Wait for NOW!, then tap 250 milliseconds after it appears.",
+    microgameText: "Tap...",
   },
 };
 

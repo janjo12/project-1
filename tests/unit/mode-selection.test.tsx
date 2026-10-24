@@ -34,11 +34,11 @@ test("choose a play mode before seeing seed and difficulty", async () => {
   fireEvent.press(screen.getByText("Multiplayer"));
   expect(router.push).toHaveBeenLastCalledWith("/multiplayer");
 });
-test.each(["singleplayer", "multiplayer"])("settings start the selected %s flow without handedness", async mode => {
+test.each(["singleplayer", "multiplayer"])("settings start the selected %s flow", async mode => {
   mockMode = mode;
   const screen = renderWithSafeArea(<Setup />);
   await screen.findByText("Difficulty");
-  expect(screen.queryByText("Handedness")).toBeNull();
+  expect(screen.getByText("Handedness")).toBeTruthy();
   fireEvent.press(screen.getByText("Start"));
   await waitFor(() => expect(router.replace).toHaveBeenCalledWith(mode === "multiplayer" ? "/multiplayer" : "/game"));
 });

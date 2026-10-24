@@ -51,6 +51,11 @@ export function getInventoryItemActivationDescription(itemId: ItemId | null) {
   return itemId ? descriptions[itemId] ?? "Activates automatically when needed." : null;
 }
 
+export function getInventoryItemDescription(itemId: ItemId | null) {
+  if (!itemId) return null;
+  return POSSIBLE_ITEMS.find(item => item.id === itemId)?.description ?? "A useful item that activates automatically when needed.";
+}
+
 export function getInventoryItemSprite(itemId: ItemId | null) {
   return itemId ? (POSSIBLE_ITEMS.find((item) => item.id === itemId)?.sprite ?? null) : null;
 }

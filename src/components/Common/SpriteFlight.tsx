@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { Animated, Easing, View } from "react-native";
+import { Animated, Easing, Platform, View } from "react-native";
 
 import { PixelSprite } from "@/components/Common/PixelSprite";
+import { GAME_PARAMETERS } from "@/game/config/gameparameters";
 
 export type ScreenPoint = { x: number; y: number };
 export type SpriteFlightRequest = { start: ScreenPoint; end: ScreenPoint; sprite: string; label: string };
@@ -14,6 +15,15 @@ const flightListeners = new Set<() => void>();
 export function animateSpriteFlight(request: SpriteFlightRequest) {
   activeFlight = { ...request, id: ++nextFlightId };
   flightListeners.forEach(listener => listener());
+}
+
+export function measureViewCenterNow(view: View | null): ScreenPoint | null {
+  if (!view) return null;
+  const element = view as unknown as { getBoundingClientRect?: () => DOMRect };
+  if (typeof element.getBoundingClientRect !== "function") return null;
+  const rect = element.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return null;
+  return { x: rect.left + rect.width / 2 + window.scrollX, y: rect.top + rect.height / 2 + window.scrollY };
 }
 
 export function measureViewCenter(view: View | null): Promise<ScreenPoint | null> {
@@ -33,13 +43,14 @@ export function measureViewCenter(view: View | null): Promise<ScreenPoint | null
 
     // React Native Web host refs are DOM elements; use their box directly so a
     // missing native measurement callback cannot stall the pickup action.
-    const element = view as unknown as { getBoundingClientRect?: () => DOMRect };
-    if (typeof element.getBoundingClientRect === "function") {
-      const rect = element.getBoundingClientRect();
-      if (rect.width > 0 && rect.height > 0) {
-        finish({ x: rect.left + rect.width / 2 + window.scrollX, y: rect.top + rect.height / 2 + window.scrollY });
-        return;
-      }
+    const center = measureViewCenterNow(view);
+    if (center) {
+      finish(center);
+      return;
+    }
+    if (Platform.OS === "web") {
+      finish(null);
+      return;
     }
     view.measureInWindow((x, y, width, height) => {
       finish(width > 0 && height > 0 ? { x: x + width / 2, y: y + height / 2 } : null);
@@ -74,7 +85,7 @@ export function SpriteFlightLayer() {
       translation.setValue({ x: 0, y: 0 });
       animation = Animated.timing(translation, {
         toValue: { x: flight.end.x - flight.start.x, y: flight.end.y - flight.start.y },
-        duration: 460,
+        duration: GAME_PARAMETERS.animation.spriteFlightDurationMs,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: false,
       });

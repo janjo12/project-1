@@ -1,10 +1,11 @@
 import { expect, test } from "@playwright/test";
+import { openScenarioApp } from "../helpers";
 
 test("web setup controls and help remain reachable", async ({ page }) => {
   const pageErrors: string[] = [];
   page.on("pageerror", error => pageErrors.push(error.message));
 
-  await page.goto("/");
+  await openScenarioApp(page);
   await expect(page.getByRole("button", { name: "Singleplayer" })).toBeVisible();
   await page.getByRole("button", { name: "Singleplayer" }).click();
   await expect(page.getByRole("button", { name: "Start", exact: true })).toBeVisible();
@@ -19,7 +20,7 @@ test("web setup controls and help remain reachable", async ({ page }) => {
 test("a new singleplayer run reaches gameplay with default microgame settings", async ({ page }) => {
   await page.addInitScript(() => localStorage.clear());
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.goto("/");
+  await openScenarioApp(page);
 
   await expect(page.getByRole("button", { name: "Singleplayer" })).toBeVisible();
   await page.getByRole("button", { name: "Singleplayer" }).click();
@@ -27,12 +28,6 @@ test("a new singleplayer run reaches gameplay with default microgame settings", 
   await page.getByRole("textbox", { name: "Seed" }).fill("testwarrior");
   await page.getByRole("button", { name: "Start", exact: true }).click();
 
-  const briefing = page.getByTestId("class-briefing");
-  await expect(briefing).toBeVisible();
-  await expect(page.getByRole("button", { name: "Next class instructions", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Next class instructions", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Start playing", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Start playing", exact: true }).click();
   await expect(page.getByRole("button", { name: "Menu" })).toBeVisible();
-  await expect(briefing).toHaveCount(0);
+  await expect(page.getByText("Level 1 Map", { exact: true })).toBeVisible();
 });

@@ -14,13 +14,22 @@ import {
     runGameLoop,
     TURN_DURATION,
 } from "@/game/engine/run-game-singleplayer";
-import { createSeededDungeonMap } from "@/game/dungeon/generateDungeon";
+import { createDungeonMap, createSeededDungeonMap } from "@/game/dungeon/generateDungeon";
+import { createSeededRandom } from "@/game/dungeon/types";
+import { getRoomSceneActors } from "@/game/engine/run-game-scene";
+import { GAME_PARAMETERS } from "@/game/config/gameparameters";
 import {
+    directionDeltas,
+    getNeighborInGrid,
+    getReachableRoomIds,
+    getRoomId,
+    oppositeDirections,
+    type Direction,
     type DungeonMap,
     type DungeonRoom,
     type WorldMonster,
 } from "@/game/dungeon/types";
-import { getRoom, getRoomMonster, moveWerewolfToRoom } from "@/game/dungeon/rooms";
+import { getActiveRooms, getRoom, getRoomMonster, moveWerewolfToRoom } from "@/game/dungeon/rooms";
 
 function createRoom(
   id: string,
@@ -41,6 +50,26 @@ function createRoom(
     west: "wall",
     ...overrides,
   };
+}
+
+function getRoomDistances(map: DungeonMap) {
+  const distances = new Map<string, number>([[map.startingRoomId, 0]]);
+  const queue = [map.startingRoomId];
+  for (let index = 0; index < queue.length; index += 1) {
+    const room = getRoom(map, queue[index]);
+    for (const direction of Object.keys(directionDeltas) as Direction[]) {
+      if (room[direction] === "wall") continue;
+      const neighborPosition = getNeighborInGrid(map.rooms, room, direction);
+      if (!neighborPosition) continue;
+      const neighborId = getRoomId(neighborPosition);
+      const neighbor = getRoom(map, neighborId);
+      if (neighbor[oppositeDirections[direction]] === "wall") continue;
+      if (distances.has(neighborId)) continue;
+      distances.set(neighborId, distances.get(room.id)! + 1);
+      queue.push(neighborId);
+    }
+  }
+  return distances;
 }
 
 function createTestMap(): DungeonMap {
@@ -119,8 +148,58 @@ describe("run-game policies", () => {
     expect(canPressDoorway("guarded", true)).toBe(false);
   });
 
+  it.each([1, 2, 5, 10])("keeps stairs rooms enemy-free on level %i", level => {
+    for (let seedIndex = 0; seedIndex < 12; seedIndex += 1) {
+      const map = createSeededDungeonMap(`stairs-room-${level}-${seedIndex}`, level);
+      const stairsRoom = map.rooms.flat().find(room => room.contents.some(content => content.type === "stairs"));
+      const roomDistances = getRoomDistances(map);
+
+      expect(stairsRoom).toBeDefined();
+      expect(roomDistances.get(stairsRoom!.id)).toBe(Math.max(...roomDistances.values()));
+      expect(stairsRoom!.contents.some(content => content.type === "monster")).toBe(false);
+      expect(getRoomSceneActors({ currentMonsterId: null, dungeonMap: map, room: stairsRoom! }).filter(actor => actor.kind === "enemy")).toEqual([]);
+
+      const entranceDirections = (Object.keys(directionDeltas) as Direction[]).filter(direction => stairsRoom![direction] !== "wall");
+      expect(entranceDirections.length).toBeGreaterThan(0);
+      for (const direction of entranceDirections) {
+        const boundary = stairsRoom![direction];
+        expect(["locked", "guarded"]).toContain(boundary);
+        const neighborPosition = getNeighborInGrid(map.rooms, stairsRoom!, direction)!;
+        const neighbor = getRoom(map, getRoomId(neighborPosition));
+        expect(neighbor[oppositeDirections[direction]]).toBe(boundary);
+        if (boundary === "guarded") {
+          expect(Object.values(map.entities.doorwayGuards)).toEqual(expect.arrayContaining([
+            expect.objectContaining({ roomId: neighbor.id, direction: oppositeDirections[direction] }),
+          ]));
+        }
+      }
+    }
+  });
+
+  it.each([1, 2, 5, 10])("places a chest or stairs in every dead end on level %i without increasing loot totals", level => {
+    for (let seedIndex = 0; seedIndex < 24; seedIndex += 1) {
+      const map = createSeededDungeonMap(`dead-end-loot-${level}-${seedIndex}`, level);
+      const baselineMap = createDungeonMap(level, createSeededRandom(`dead-end-loot-${level}-${seedIndex}:level:${level}`));
+      const rooms = getActiveRooms(map);
+      const chestCount = rooms.reduce((count, room) => count + room.contents.filter(content =>
+        (content.type === "item" || content.type === "equipment") && content.isChest,
+      ).length, 0);
+      const baselineChestCount = getActiveRooms(baselineMap).reduce((count, room) => count + room.contents.filter(content =>
+        (content.type === "item" || content.type === "equipment") && content.isChest,
+      ).length, 0);
+      const deadEnds = rooms.filter(room => [room.north, room.east, room.south, room.west].filter(state => state !== "wall").length === 1);
+      const stairsDeadEndCount = deadEnds.filter(room => room.contents.some(content => content.type === "stairs")).length;
+      expect(chestCount).toBe(baselineChestCount);
+      expect(deadEnds.length).toBeLessThanOrEqual(chestCount + stairsDeadEndCount);
+      for (const room of deadEnds) {
+        expect({ hasChestOrStairs: room.contents.some(content => content.type === "stairs" || ((content.type === "item" || content.type === "equipment") && content.isChest)), roomId: room.id, level, seedIndex }).toEqual({ hasChestOrStairs: true, roomId: room.id, level, seedIndex });
+      }
+    }
+  });
+
   it("creates the complete first-level test dungeon only for the exact test seed", () => {
     const map = createSeededDungeonMap("test", 1, undefined, true);
+    const stairsRoom = map.rooms.flat().find(room => room.contents.some(content => content.type === "stairs"))!;
     const itemRooms = map.rooms.flat().flatMap((room) =>
       room.contents
         .filter((content) => content.type === "item")
@@ -149,7 +228,7 @@ describe("run-game policies", () => {
     expect(new Set(itemRooms.map(({ roomId }) => roomId)).size).toBe(itemRooms.length);
     expect(itemRooms.some(({ roomId }) => roomId === werewolfRoom?.id)).toBe(false);
     expect(werewolfRoom).toBeDefined();
-    expect(Object.values(map.entities.monsters).filter((monster) => !monster.chases)).toHaveLength(3);
+    expect(Object.values(map.entities.monsters).filter((monster) => !monster.chases)).toHaveLength(4);
     const keyRoom = itemRooms.find(({ item }) => item === "key");
     expect(keyRoom).toBeDefined();
     const keyDoor = ["north", "east", "south", "west"].find((direction) =>
@@ -158,7 +237,17 @@ describe("run-game policies", () => {
     expect(keyDoor).toBeDefined();
     expect(itemRooms).toHaveLength(5);
     expect(lockedBoundaries).toHaveLength(2);
-    expect(getHardTurnLimit({ difficulty: "hard", map })).toBe(44);
+    expect(getHardTurnLimit({ difficulty: "hard", map })).toBe(
+      getActiveRooms(map).length * GAME_PARAMETERS.dungeon.hardTurnsPerRoom,
+    );
+    expect(getRoomSceneActors({ currentMonsterId: null, dungeonMap: map, room: stairsRoom }).filter(actor => actor.kind === "enemy")).toEqual([]);
+    const stairsEntry = (Object.keys(directionDeltas) as Direction[]).find(direction => stairsRoom[direction] !== "wall");
+    expect(stairsEntry).toBeDefined();
+    expect(stairsRoom[stairsEntry!]).toBe("guarded");
+    const stairsNeighbor = getRoom(map, getRoomId(getNeighborInGrid(map.rooms, stairsRoom, stairsEntry!)!));
+    expect(Object.values(map.entities.doorwayGuards)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ roomId: stairsNeighbor.id, direction: oppositeDirections[stairsEntry!] }),
+    ]));
 
     const secondLevel = createSeededDungeonMap("test", 2, undefined, true);
     expect(Object.keys(secondLevel.entities.items)).not.toEqual(
@@ -171,6 +260,11 @@ describe("run-game policies", () => {
     (seed) => {
       const reference = createSeededDungeonMap("test", 1, undefined, true);
       const actual = createSeededDungeonMap(seed, 1, undefined, true);
+      expect(actual.startingRoomId).toBe("B5");
+      expect(actual.columns.length * actual.rows.length).toBeLessThan(
+        GAME_PARAMETERS.dungeon.mapWidthRooms * GAME_PARAMETERS.dungeon.mapHeightRooms,
+      );
+      expect(actual.rooms.flat()).toHaveLength(actual.columns.length * actual.rows.length);
       const layout = (map: DungeonMap) => ({
         startingRoomId: map.startingRoomId,
         rooms: map.rooms.flat().map(({ id, north, east, south, west, contents }) => ({

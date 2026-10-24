@@ -1,4 +1,4 @@
-import { getNeighbor, getRoomId, getGridPosition, type Direction, type DungeonMap, type GridPosition } from "@/game/dungeon/types";
+import { getNeighborInGrid, getRoomId, getGridPosition, type Direction, type DungeonMap, type GridPosition } from "@/game/dungeon/types";
 import { getRoom, hasRoomStairs, moveCurrentPosition, revealRooms, unlockDoor } from "@/game/dungeon/rooms";
 
 export type RoomMovement = { map: DungeonMap; roomId: string; nextRoomId: string; openedLock: boolean; usedKey: boolean; startingPosition: GridPosition | null };
@@ -25,7 +25,7 @@ export function resolveRoomMovement({
   const boundary = room[direction];
   if (boundary === "wall" || boundary === "guarded") return null;
 
-  const neighbor = getNeighbor(room, direction);
+  const neighbor = getNeighborInGrid(map.rooms, room, direction);
   if (!neighbor) return null;
   const nextRoomId = getRoomId(neighbor);
   getRoom(map, nextRoomId);

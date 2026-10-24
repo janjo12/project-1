@@ -3,6 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, use
 import { Platform, Pressable, View, type ViewStyle } from "react-native";
 
 import { useThemeColors } from "@/components/Common/theme";
+import { measureViewCenterNow } from "@/components/Common/SpriteFlight";
 import { PlayerAura } from "@/components/Common/PlayerAura";
 import { RoomFloor } from "@/components/Dungeon/Floor";
 import { RoomWalls, SceneSprite } from "@/components/Dungeon/Walls";
@@ -21,6 +22,12 @@ const ROOM_FADE_OUT = { from: { opacity: 1 }, to: { opacity: 0 } };
 const ROOM_TRANSITION_DURATION_MS = GAME_PARAMETERS.animation.roomTransitionDurationMs;
 const PLAYER_EXIT_DURATION_MS = GAME_PARAMETERS.animation.roomExitDurationMs;
 const PLAYER_ENTRY_DURATION_MS = GAME_PARAMETERS.animation.roomEntryDurationMs;
+const PLAYER_EXIT_MOTION: Record<DoorPosition, { from: { transform: { translateX?: number; translateY?: number }[] }; to: { transform: { translateX?: number; translateY?: number }[] } }> = {
+  top: { from: { transform: [{ translateY: 0 }] }, to: { transform: [{ translateY: -34 }] } },
+  right: { from: { transform: [{ translateX: 0 }] }, to: { transform: [{ translateX: 34 }] } },
+  bottom: { from: { transform: [{ translateY: 0 }] }, to: { transform: [{ translateY: 34 }] } },
+  left: { from: { transform: [{ translateX: 0 }] }, to: { transform: [{ translateX: -34 }] } },
+};
 
 export type ScenePosition = "top" | "bottom" | "left" | "right" | "center";
 export type ScreenPoint = { x: number; y: number };
@@ -68,7 +75,7 @@ type RoomSceneProps = {
   maxHeight?: number;
 };
 
-type RoomTransitionSnapshot = Pick<RoomSceneProps, "roomId" | "actors" | "playerPosition" | "playerSprite" | "playerAuraColor" | "floorLayer" | "doorways">;
+type RoomTransitionSnapshot = Pick<RoomSceneProps, "roomId" | "actors" | "floorLayer" | "doorways">;
 
 
 
@@ -105,7 +112,7 @@ export function RoomScene({
   const [systemReducedMotion, setSystemReducedMotion] = useState(false);
   const [transitionKey, setTransitionKey] = useState<number | null>(null);
   const [transitionSnapshot, setTransitionSnapshot] = useState<RoomTransitionSnapshot | null>(null);
-  const previousScene = useRef<RoomTransitionSnapshot>({ roomId, actors, playerPosition, playerSprite, playerAuraColor, floorLayer, doorways });
+  const previousScene = useRef<RoomTransitionSnapshot>({ roomId, actors, floorLayer, doorways });
   const nextTransitionKey = useRef(0);
   const stableLayout = useRef<{ roomId?: string; actors: { id: string; position?: ScenePosition }[] } | null>(null);
   useEffect(() => {
@@ -128,8 +135,8 @@ export function RoomScene({
         setTransitionKey(nextTransitionKey.current);
       }
     }
-    previousScene.current = { roomId, actors, playerPosition, playerSprite, playerAuraColor, floorLayer, doorways };
-  }, [roomId, actors, playerPosition, playerSprite, playerAuraColor, floorLayer, doorways, reducedMotion, systemReducedMotion, animationsPaused]);
+    previousScene.current = { roomId, actors, floorLayer, doorways };
+  }, [roomId, actors, floorLayer, doorways, reducedMotion, systemReducedMotion, animationsPaused]);
   useEffect(() => {
     if (transitionKey === null || animationsPaused) return;
     const timeout = setTimeout(() => {
@@ -185,7 +192,7 @@ export function RoomScene({
         animationTimingFunction: "ease-out",
         animationFillMode: "forwards",
         animationPlayState: animationsPaused ? "paused" : "running",
-        }}><RoomSnapshot actors={transitionSnapshot?.actors ?? actors} playerPosition={transitionSnapshot?.playerPosition ?? playerPosition} playerSprite={transitionSnapshot?.playerSprite ?? playerSprite} playerAuraColor={transitionSnapshot?.playerAuraColor ?? playerAuraColor} floorLayer={transitionSnapshot?.floorLayer ?? floorLayer} doorways={transitionSnapshot?.doorways ?? doorways} /></Animated.View> : null}
+        }}><RoomSnapshot actors={transitionSnapshot?.actors ?? actors} floorLayer={transitionSnapshot?.floorLayer ?? floorLayer} doorways={transitionSnapshot?.doorways ?? doorways} /></Animated.View> : null}
       <Animated.View key={transitionKey ?? "current-room"} testID="room-incoming-snapshot" style={{ width: SCENE_WIDTH, height: SCENE_HEIGHT,
         ...(transitionKey !== null ? {
           animationName: ROOM_FADE_IN,
@@ -247,13 +254,12 @@ export function RoomScene({
   );
 }
 
-function RoomSnapshot({ actors, playerPosition, playerSprite, playerAuraColor, floorLayer, doorways }: Pick<RoomSceneProps, "actors" | "playerPosition" | "playerSprite" | "playerAuraColor" | "floorLayer" | "doorways">) {
-  const slots = layoutRoomActors([...actors.map(actor => ({ id: `${actor.kind}:${actor.id}`, position: actor.position })), { id: "local-player", position: playerPosition }]);
+function RoomSnapshot({ actors, floorLayer, doorways }: Pick<RoomSceneProps, "actors" | "floorLayer" | "doorways">) {
+  const slots = layoutRoomActors(actors.map(actor => ({ id: `${actor.kind}:${actor.id}`, position: actor.position })));
   return <View style={{ width: SCENE_WIDTH, height: SCENE_HEIGHT }}>
     <View pointerEvents="none" style={{ position: "absolute" }}>{floorLayer ?? <RoomFloor />}</View>
     <RoomWalls canUnlockDoors={false} disabled doorways={doorways} reducedMotion />
     {actors.map(actor => <View key={`${actor.kind}:${actor.id}`} style={{ position: "absolute", left: slots[`${actor.kind}:${actor.id}`].x, top: slots[`${actor.kind}:${actor.id}`].y, width: slots[`${actor.kind}:${actor.id}`].size, height: slots[`${actor.kind}:${actor.id}`].size, alignItems: "center", justifyContent: "center" }}>{actor.kind === "player" && actor.auraColor ? <PlayerAura color={actor.auraColor} /> : null}<SceneSprite accessibilityLabel="" sprite={actor.sprite} scale={1} size={48} /></View>)}
-    <View style={{ position: "absolute", left: slots["local-player"].x, top: slots["local-player"].y, width: slots["local-player"].size, height: slots["local-player"].size, alignItems: "center", justifyContent: "center" }}>{playerAuraColor ? <PlayerAura color={playerAuraColor} /> : null}<SceneSprite accessibilityLabel="" sprite={playerSprite} scale={1} /></View>
   </View>;
 }
 
@@ -302,12 +308,12 @@ function SceneActor({
           onPress?.(actor);
           return;
         }
-        // Dispatch the interaction immediately; React Native Web doesn't consistently
-        // invoke measureInWindow on Pressable refs, so measurement cannot gate pickup.
+        // Resolve the browser coordinates synchronously so frozen test clocks never delay pickup.
         const { pageX, pageY } = event.nativeEvent;
-        onPress?.(actor, Number.isFinite(pageX) && Number.isFinite(pageY)
+        const source = Number.isFinite(pageX) && Number.isFinite(pageY) && (pageX !== 0 || pageY !== 0)
           ? { x: pageX, y: pageY }
-          : undefined);
+          : measureViewCenterNow(actorRef.current);
+        onPress?.(actor, source ?? undefined);
       }}
       style={({ pressed }) => [
         styles.actorPosition,
@@ -388,7 +394,20 @@ function PlayerActor({
 }: PlayerActorProps) {
   const colors = useThemeColors();
   const styles = createStyles(colors);
-  const positionTransition = Platform.OS === "web" && !reducedMotion
+  const previousPosition = useRef(entryPosition);
+  const [exitDirection, setExitDirection] = useState<DoorPosition | null>(null);
+  useLayoutEffect(() => {
+    if (entering) {
+      previousPosition.current = entryPosition;
+      setExitDirection(null);
+      return;
+    }
+    if (previousPosition.current !== entryPosition && entryPosition !== "center") {
+      setExitDirection(entryPosition);
+    }
+    previousPosition.current = entryPosition;
+  }, [entering, entryPosition]);
+  const positionTransition = Platform.OS === "web" && !reducedMotion && !entering
     ? ({
       transitionProperty: "left, top",
       transitionDuration: `${PLAYER_EXIT_DURATION_MS}ms`,
@@ -414,13 +433,14 @@ function PlayerActor({
         styles.actorPosition,
         positionStyle,
         positionTransition,
+        { zIndex: 4 },
         pressed && styles.pressedActor,
       ]}
     >
       <View pointerEvents="none" style={{ width: ACTOR_ENVELOPE, height: ACTOR_ENVELOPE, alignItems: "center", justifyContent: "center", transform: [{ scale: slotScale }] }}>
       <Animated.View
-        key={entering ? `player-room-entry-${entryPosition}` : "player-room-static"}
-        testID={entering && !reducedMotion ? "player-room-entry-animation" : undefined}
+        key={entering ? `player-room-entry-${entryPosition}` : exitDirection ? `player-room-exit-${exitDirection}` : "player-room-static"}
+        testID={entering && !reducedMotion ? "player-room-entry-animation" : exitDirection && !entering && !reducedMotion ? "player-room-exit-animation" : undefined}
         style={{
           width: ACTOR_ENVELOPE,
           height: ACTOR_ENVELOPE,
@@ -431,6 +451,13 @@ function PlayerActor({
             animationDuration: `${PLAYER_ENTRY_DURATION_MS}ms`,
             animationTimingFunction: "ease-out",
             animationFillMode: "both",
+            animationPlayState: animationsPaused ? "paused" : "running",
+          } : {}),
+          ...(exitDirection && !entering && !reducedMotion ? {
+            animationName: PLAYER_EXIT_MOTION[exitDirection],
+            animationDuration: `${PLAYER_EXIT_DURATION_MS}ms`,
+            animationTimingFunction: "ease-in",
+            animationFillMode: "forwards",
             animationPlayState: animationsPaused ? "paused" : "running",
           } : {}),
         }}

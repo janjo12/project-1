@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { openScenarioApp } from "../helpers";
 
 test("production browser runtime starts without Node globals or uncaught errors", async ({ page }) => {
   const pageErrors: string[] = [];
@@ -13,7 +14,7 @@ test("production browser runtime starts without Node globals or uncaught errors"
     });
   });
 
-  await page.goto("/");
+  await openScenarioApp(page);
 
   await expect(page.getByRole("button", { name: "Singleplayer" })).toBeVisible();
   expect(pageErrors).toEqual([]);

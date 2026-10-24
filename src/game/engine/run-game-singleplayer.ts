@@ -168,6 +168,7 @@ export function useRunGame({
     hasRoomEnemy,
     hasTurnTimer,
     inventoryItemLabel,
+    inventoryItemDescription,
     inventoryItemActivationDescription,
     inventoryItemSprite,
     roomDoorways,
@@ -430,7 +431,7 @@ export function useRunGame({
         if (reflects) {
           const reflectedDamage = Math.min(
             monster.currentHealth,
-            applyDefense(monster.damage, monster.defense ?? 0),
+            GAME_PARAMETERS.combat.warriorRiposteDamage,
           );
           console.info(`[combat] Player reflected ${reflectedDamage} damage to ${monster.name}.`);
           setEnemyHealthLossAmount(reflectedDamage);
@@ -832,6 +833,7 @@ export function useRunGame({
     openLootChest,
     dropEquipment,
     inventoryItemLabel,
+    inventoryItemDescription,
     inventoryItemActivationDescription,
     inventoryItemSprite,
     isResolving,

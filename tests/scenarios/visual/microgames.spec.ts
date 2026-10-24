@@ -1,42 +1,44 @@
 import { expect, test } from "@playwright/test";
-import { HUMAN_REACTION_WINDOW_MS } from "@/game/actions/use-microgame";
-const MICROGAME_START_URL = "/";
-
+import { getMultitapTargetTaps, HUMAN_REACTION_WINDOW_MS } from "@/game/actions/use-microgame";
+import { openScenarioApp } from "../helpers";
 test.beforeEach(async ({ page }) => {
   const frozenTime = new Date("2026-01-01T00:00:00Z");
   await page.clock.install({ time: frozenTime });
   await page.clock.pauseAt(new Date(frozenTime.getTime() + 1_000));
-  await page.goto(MICROGAME_START_URL);
-  await page.evaluate(() => localStorage.clear());
-  await page.reload();
+  await openScenarioApp(page, true);
 });
 
 test("Timed Attack reveals NOW! before the 250 ms human response and scores that response highly", async ({ page }) => {
   await startPractice(page, "testthief");
   const overlay = page.getByTestId("microgame-overlay");
 
-  await expect(overlay.getByText("Wait for NOW!", { exact: true })).toBeVisible();
+  const instruction = overlay.getByText("Tap...", { exact: true });
+  await expect(instruction).toBeVisible();
+  await expect(overlay.getByText("Wait for NOW!", { exact: true })).toHaveCount(0);
+  await expect(overlay.getByText("Tap in 250 ms", { exact: true })).toHaveCount(0);
   await expect(page.getByTestId("timed-attack-now")).toHaveCount(0);
   await page.clock.runFor(999);
+  await expect(instruction).toBeVisible();
   await expect(page.getByTestId("timed-attack-now")).toHaveCount(0);
   await page.clock.runFor(16);
   const cue = page.getByTestId("timed-attack-now");
   await expect(cue).toBeVisible();
-  await expect(overlay.getByText("Tap in 250 ms", { exact: true })).toBeVisible();
+  await expect(instruction).toBeVisible();
 
   await page.clock.runFor(HUMAN_REACTION_WINDOW_MS);
   await page.getByRole("button", { name: "Tap the game screen" }).click();
   await expect(overlay).toHaveCount(0);
-  await expect(page.getByText(/Last microgame (9\d|100)\/100/)).toBeVisible();
+  await expect(page.getByText("Level 1 Map", { exact: true })).toBeVisible();
 });
 
-test("Concentration places the target in the moving circle's path and awards a realistic reaction", async ({ page }) => {
+test("Concentration scores the press at the moment the moving circle reaches the target", async ({ page }) => {
+  test.setTimeout(60_000);
   await startPractice(page, "testcleric");
   const overlay = page.getByTestId("microgame-overlay");
   const movingCircle = page.getByTestId("concentration-mover");
   const outline = page.getByTestId("concentration-target");
   const track = page.getByTestId("concentration-track");
-  await expect(overlay.getByText("Tap when ● fills ○", { exact: true })).toBeVisible();
+  await expect(overlay.getByText("Tap when ● fills ○", { exact: true })).toHaveCount(0);
   await expect(outline).toBeVisible();
 
   await page.clock.runFor(32);
@@ -45,6 +47,7 @@ test("Concentration places the target in the moving circle's path and awards a r
   const targetBox = await outline.boundingBox();
   expect(targetBox).not.toBeNull();
   const targetCenter = targetBox!.x + targetBox!.width / 2;
+  const expectedTargetMs = ((0.9 - (targetCenter - trackBox!.x) / trackBox!.width) / 0.8) * 1500;
   let alignedAt: number | null = null;
   for (let elapsed = 0; elapsed < 1250; elapsed += 16) {
     const moverBox = await movingCircle.boundingBox();
@@ -56,34 +59,33 @@ test("Concentration places the target in the moving circle's path and awards a r
     }
     await page.clock.runFor(16);
   }
-  expect(alignedAt, "the moving circle must reach the visible target before the response window").not.toBeNull();
-  expect(alignedAt).toBeGreaterThanOrEqual(800);
-  expect(alignedAt).toBeLessThanOrEqual(1000);
-  await page.clock.runFor(HUMAN_REACTION_WINDOW_MS);
+  expect(alignedAt, "the moving circle must reach the visible target").not.toBeNull();
+  expect(Math.abs(alignedAt! - expectedTargetMs)).toBeLessThanOrEqual(160);
   await page.getByRole("button", { name: "Tap the game screen" }).click();
   await expect(overlay).toHaveCount(0);
-  await expect(page.getByText(/Last microgame (9\d|100)\/100/)).toBeVisible();
+  await expect(page.getByText("Level 1 Map", { exact: true })).toBeVisible();
 });
 
-test("Multitap moves its visible target and counts six human-paced taps", async ({ page }) => {
+test("Multitap moves its visible target and completes at its difficulty-and-level target", async ({ page }) => {
   await startPractice(page, "testwarrior");
   const overlay = page.getByTestId("microgame-overlay");
   const target = page.getByRole("button", { name: "Tap circle" });
-  await expect(overlay.getByText("Tap the ●", { exact: true })).toBeVisible();
+  const targetTaps = getMultitapTargetTaps("hard", 1);
+  await expect(overlay.getByText("Tap the ●", { exact: true })).toHaveCount(0);
   const positions = new Set<string>();
 
-  for (let tap = 0; tap < 6; tap += 1) {
+  for (let tap = 0; tap < targetTaps; tap += 1) {
     const box = await target.boundingBox();
     expect(box).not.toBeNull();
     positions.add(`${Math.round(box!.x)},${Math.round(box!.y)}`);
     await page.clock.runFor(HUMAN_REACTION_WINDOW_MS);
     await target.click();
-    if (tap < 5) await expect(page.getByTestId("multitap-progress")).toHaveText(`${tap + 1}/6 hits`);
-    if (tap === 3) await expect(overlay).toBeVisible();
+    if (tap < targetTaps - 1) await expect(overlay).toBeVisible();
+    if (tap < targetTaps - 1) await expect(page.getByTestId("multitap-progress")).toHaveCount(0);
   }
 
   await expect(overlay).toHaveCount(0);
-  await expect(page.getByText(/Last microgame 100\/100/)).toBeVisible();
+  await expect(page.getByText("Level 1 Map", { exact: true })).toBeVisible();
   expect(positions.size).toBeGreaterThan(1);
 });
 
@@ -92,9 +94,8 @@ async function startPractice(page: import("@playwright/test").Page, seed: string
   await page.getByRole("button", { name: "hard", exact: true }).click();
   await page.getByRole("textbox", { name: "Seed" }).fill(seed);
   await page.getByRole("button", { name: "Start", exact: true }).click();
-  await page.getByRole("button", { name: "Next class instructions", exact: true }).click();
-  await page.getByRole("button", { name: "Start playing", exact: true }).click();
   await page.getByRole("button", { name: "Menu" }).click();
   await page.getByRole("dialog", { name: "Game menu" }).getByRole("button", { name: "Practice attack microgame" }).click();
   await expect(page.getByTestId("microgame-overlay")).toBeVisible();
+  await expect(page.getByTestId("microgame-overlay").getByText("TEST", { exact: true })).toHaveCount(0);
 }

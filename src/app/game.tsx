@@ -2,15 +2,18 @@ import { router } from "expo-router";
 import { useRef, useState } from "react";
 import { Alert, Text, View, useWindowDimensions } from "react-native";
 
-import { Container, Header, Row, StyledModal, StyledText, Title } from "@/components/Common/Displays";
+import { Header, Row, StyledModal, Title } from "@/components/Common/Displays";
+import { PauseMenu } from "@/components/Common/PauseMenu";
 import { DungeonMap } from "@/components/Dungeon/DungeonMap";
 import { ChargeControl, EquipmentControl, ItemControl } from "@/components/Controls/ActionMenu";
-import { GameViewPanel, type RoomSceneActor, type ScenePosition } from "@/components/Dungeon/GameViewPanel";
+import { EquipmentDetailsMenu, ItemDetailsMenu } from "@/components/Controls/InventoryDetailsMenu";
+import { GameViewPanel, type RoomSceneActor, type ScenePosition, type ScreenPoint } from "@/components/Dungeon/GameViewPanel";
 import { ClassBriefing } from "@/components/Common/ClassBriefing";
-import { DestructiveButton, NormalButton, PrimaryButton, SegmentedButton, ToggleButton } from "@/components/Controls/ActionButton";
-import { DebugBar, ResourceBar, ResourceBarGroup } from "@/components/Player/PlayerHUD";
+import { NormalButton, PrimaryButton } from "@/components/Controls/ActionButton";
+import { ResourceBar, ResourceBarGroup } from "@/components/Player/PlayerHUD";
 import { TurnTimerBar } from "@/components/Player/TurnTimerBar";
 import { ScreenShell } from "@/components/Common/ScreenShell";
+import { animateSpriteFlight, measureViewCenterNow } from "@/components/Common/SpriteFlight";
 import { ThemeProvider, useThemeColors } from "@/components/Common/theme";
 
 import { getEquipmentStats } from "@/game/actions/items";
@@ -20,22 +23,13 @@ import {
     useRunGame,
 } from "@/game/engine/run-game-singleplayer";
 import { useGameLoopDriver } from "@/game/engine/use-game-loop-driver";
+import { isRunGameLoopEnabled } from "@/game/engine/game-loop-policy";
+import { requestPickupSpriteFlight } from "@/game/actions/pickup-flight";
 import { useGameSettings } from "@/hooks/use-game-settings";
 import { MicrogameOverlay } from "@/components/Common/MicrogameOverlay";
 import { useMicrogame } from "@/game/actions/use-microgame";
 import type { GameSettings } from "@/utils/settings-storage";
 import { isTestSeed } from "@/utils/seed";
-type PauseMenuProps = {
-  onBackToGame: () => void;
-  onQuitToTitle: () => void;
-  onPractice: () => void;
-  onOpenMap?: () => void;
-  onSettingsChange: (settings: Partial<GameSettings>) => void;
-  microgamesEnabled: boolean;
-  settings: GameSettings;
-  visible: boolean;
-};
-
 type GameContentProps = {
   onSettingsChange: (settings: Partial<GameSettings>) => void;
   settings: GameSettings;
@@ -60,6 +54,8 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
   const compactLayout = height < 800;
   const tinyLayout = height < 500;
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [itemMenuOpen, setItemMenuOpen] = useState(false);
+  const [equipmentMenuOpen, setEquipmentMenuOpen] = useState(false);
   const colors = useThemeColors();
   const game = useRunGame({
     difficulty: settings.difficulty,
@@ -73,18 +69,30 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
     vibrationEnabled: settings.vibrationEnabled,
   });
   const [microgameScore, setMicrogameScore] = useState<number | null>(null);
+  const [microgameScoreTotal, setMicrogameScoreTotal] = useState(0);
+  const [microgameCount, setMicrogameCount] = useState(0);
   const [combatMessage, setCombatMessage] = useState("");
   const [classIntroPage, setClassIntroPage] = useState(0);
   const [isMapOpen, setIsMapOpen] = useState(false);
   const pendingAttack = useRef<string | null>(null);
+  const controlsRef = useRef<View>(null);
+  const itemTargetRef = useRef<View>(null);
+  const equipmentTargetRef = useRef<View>(null);
+  const actorTargetRef = useRef<View>(null);
   const microgame = useMicrogame(score => {
     setMicrogameScore(score);
+    setMicrogameScoreTotal(total => total + score);
+    setMicrogameCount(count => count + 1);
     const target = pendingAttack.current;
     pendingAttack.current = null;
     if (target) game.attackMonster(target, score);
   });
   useGameLoopDriver({
-    enabled: game.isGameLoopRunning() && !isMenuOpen && !microgame.active && classIntroPage < 0,
+    enabled: isRunGameLoopEnabled({
+      running: game.isGameLoopRunning(), pauseMenuOpen: isMenuOpen, itemMenuOpen,
+      equipmentMenuOpen, mapOpen: isMapOpen, microgameActive: microgame.active,
+      classIntroOpen: classIntroPage >= 0,
+    }),
     isTurnClockActive: game.isTurnClockActive,
     onExpire: game.expireTurn,
     onFrame: game.updateGameFrame,
@@ -98,14 +106,16 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
     </View>
   );
   const controls = (
-    <View style={{ flex: 1, gap: 4 }}>
-      <EquipmentControl label={game.equipmentLabel} description={game.equipmentDescription} sprite={game.equipmentSprite} onDrop={game.dropEquipment} />
-      <ItemControl activationDescription={game.inventoryItemActivationDescription} itemLabel={game.inventoryItemLabel} itemSprite={game.inventoryItemSprite} />
+    <View ref={controlsRef} style={{ flex: 1, gap: 4, position: "relative" }}>
+      <EquipmentControl label={game.equipmentLabel} description={game.equipmentDescription} sprite={game.equipmentSprite} targetRef={equipmentTargetRef} onDrop={() => setEquipmentMenuOpen(true)} />
+      <ItemControl activationDescription={game.inventoryItemActivationDescription} itemLabel={game.inventoryItemLabel} itemSprite={game.inventoryItemSprite} targetRef={itemTargetRef} onDrop={() => setItemMenuOpen(true)} />
+      {!game.equipmentLabel ? <View ref={equipmentTargetRef} pointerEvents="none" style={{ position: "absolute", top: 0, right: 0, width: 72, height: 72, opacity: 0 }} testID="equipment-flight-target" /> : null}
+      {!game.inventoryItemLabel ? <View ref={itemTargetRef} pointerEvents="none" style={{ position: "absolute", bottom: 0, right: 0, width: "100%", height: 72, opacity: 0 }} testID="item-flight-target" /> : null}
     </View>
   );
   const chargeCost = getEquipmentStats(game.equipment).chargeCost;
 
-  function handleActorPress(actor: RoomSceneActor) {
+  async function handleActorPress(actor: RoomSceneActor, source?: ScreenPoint) {
     if (actor.kind === "enemy") {
       const werewolfWithSilver = !!game.dungeonMap.entities.monsters[actor.id]?.chases && game.inventoryItem === "silver-bullet";
       if (werewolfWithSilver) {
@@ -113,13 +123,19 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
         game.attackMonster(actor.id);
       } else if (settings.microgamesEnabled) {
         pendingAttack.current = actor.id;
-        microgame.start(game.playerClass.microgame, settings.handedness, { istest: isTestSeed(settings.seed) });
+        microgame.start(game.playerClass.microgame, settings.handedness, { difficulty: settings.difficulty, level: game.level });
       } else {
         game.attackMonster(actor.id);
       }
     } else if (actor.kind === "item") {
+      const start = source ?? measureViewCenterNow(controlsRef.current) ?? { x: 0, y: 0 };
+      const end = measureViewCenterNow(itemTargetRef.current) ?? measureViewCenterNow(controlsRef.current) ?? { x: start.x + 48, y: start.y + 48 };
+      requestPickupSpriteFlight(actor, start, end, animateSpriteFlight);
       void game.pickupItem();
     } else if (actor.kind === "equipment") {
+      const start = source ?? measureViewCenterNow(controlsRef.current) ?? { x: 0, y: 0 };
+      const end = measureViewCenterNow(equipmentTargetRef.current) ?? measureViewCenterNow(controlsRef.current) ?? { x: start.x + 48, y: start.y + 48 };
+      requestPickupSpriteFlight(actor, start, end, animateSpriteFlight);
       game.pickupEquipment();
     } else {
       game.descend();
@@ -162,9 +178,6 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
         />
       </Header>
 
-      {!tinyLayout ? <DebugBar accessibilityLabel="Turn status" accessibilityRole="text">
-        {`${game.istest ? "TEST · " : ""}${combatMessage || (microgameScore === null ? game.turnStatus : `${game.turnStatus} · Last microgame ${microgameScore}/100`)}`}
-      </DebugBar> : null}
       {!tinyLayout ? map : null}
       <Row style={{ height: 148, flexShrink: 0 }}>
         {settings.handedness === "left" ? (
@@ -189,9 +202,6 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
           </>
         )}
       </Row>
-      {!compactLayout ? <Text style={{ color: colors.sepia, fontSize: 12, textAlign: "center" }}>
-        Charge: stronger attack, full block + counter, or move / pick up without using a turn.
-      </Text> : null}
 
       <ResourceBarGroup compact={compactLayout} playerSprite={game.playerClass.sprite}>
         <ResourceBar
@@ -227,11 +237,6 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
         ) : null}
       </ResourceBarGroup>
 
-      {!compactLayout ? <View pointerEvents="none">
-        <Text style={{ color: colors.ink, fontSize: 13, fontWeight: "700", textAlign: "center" }}>
-          Tap a monster to attack, an item to pick it up, a doorway to move, your hero to use their class support skill, or the stairs to descend.
-        </Text>
-      </View> : null}
 
       <View style={{ flex: 1, minHeight: 0, overflow: "hidden", position: "relative", zIndex: microgame.active ? 100 : undefined }}>
       {tinyLayout && combatMessage ? <Text pointerEvents="none" style={{ position: "absolute", top: 8, left: 0, right: 0, zIndex: 20, color: colors.accent, fontWeight: "900", textAlign: "center" }}>{combatMessage}</Text> : null}
@@ -262,9 +267,7 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
         elapsedStore={microgame.elapsedStore}
         targetDelay={microgame.targetDelay}
         targetSpot={microgame.targetSpot}
-        clicks={microgame.clicks}
         leftHanded={settings.handedness === "left"}
-        isTest={microgame.istest}
         onTap={microgame.tap}
       />
       </View>
@@ -278,7 +281,7 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
           onExit={() => router.replace({ pathname: "/setup", params: { mode: "singleplayer" } })}
           onNext={() => setClassIntroPage(settings.microgamesEnabled ? 1 : -1)}
           onBack={() => setClassIntroPage(0)}
-          onPractice={() => microgame.start(game.playerClass.microgame, settings.handedness, { istest: isTestSeed(settings.seed) })}
+          onPractice={() => microgame.start(game.playerClass.microgame, settings.handedness, { difficulty: settings.difficulty, level: game.level })}
           onStart={() => setClassIntroPage(-1)}
         />
       ) : null}
@@ -286,86 +289,27 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
       <PauseMenu
         onBackToGame={() => setIsMenuOpen(false)}
         onQuitToTitle={confirmQuitToTitle}
-        onPractice={() => { setIsMenuOpen(false); microgame.start(game.playerClass.microgame, settings.handedness, { istest: isTestSeed(settings.seed) }); }}
+        onPractice={() => { setIsMenuOpen(false); microgame.start(game.playerClass.microgame, settings.handedness, { difficulty: settings.difficulty, level: game.level }); }}
+        level={game.level}
+        microgameAverage={microgameCount ? microgameScoreTotal / microgameCount : null}
         microgamesEnabled={settings.microgamesEnabled}
         onOpenMap={tinyLayout ? () => { setIsMenuOpen(false); setIsMapOpen(true); } : undefined}
         onSettingsChange={onSettingsChange}
         settings={settings}
         visible={isMenuOpen}
       />
+      <ItemDetailsMenu visible={itemMenuOpen} label={game.inventoryItemLabel ?? "Item"}
+        description={game.inventoryItemDescription ?? "A useful item."}
+        activationDescription={game.inventoryItemActivationDescription ?? "This item activates automatically when its condition is met."}
+        onClose={() => setItemMenuOpen(false)} />
+      <EquipmentDetailsMenu visible={equipmentMenuOpen} label={game.equipmentLabel ?? "Equipment"}
+        description={game.equipmentDescription ?? "Equipment provides its listed effects while carried."}
+        onDrop={() => { game.dropEquipment(); setEquipmentMenuOpen(false); }} onClose={() => setEquipmentMenuOpen(false)} />
       <StyledModal accessibilityLabel="Dungeon map" accessibilityRole="dialog" animationType="fade" onRequestClose={() => setIsMapOpen(false)} visible={isMapOpen}>
         <Title>Dungeon Map</Title>
         <DungeonMap currentRoomId={game.currentRoomId} map={game.visibleDungeonMap} />
         <PrimaryButton accessibilityLabel="Close map" accessibilityRole="button" label="Close map" onPress={() => setIsMapOpen(false)} />
       </StyledModal>
     </ScreenShell>
-  );
-}
-
-export function PauseMenu({
-  onBackToGame,
-  onQuitToTitle,
-  onPractice,
-  onOpenMap,
-  onSettingsChange,
-  microgamesEnabled,
-  settings,
-  visible,
-}: PauseMenuProps) {
-  return (
-    <StyledModal
-      accessibilityLabel="Game menu"
-      accessibilityRole="dialog"
-      animationType="fade"
-      onRequestClose={onBackToGame}
-      visible={visible}
-    >
-      <Title>Menu</Title>
-
-      <Container>
-        <Row>
-          <StyledText>Appearance</StyledText>
-          <SegmentedButton
-            onChange={(appearance) => onSettingsChange({ appearance: appearance.toLowerCase() as typeof settings.appearance })}
-            options={["System", "Light", "Dark"] as const}
-            value={settings.appearance[0].toUpperCase() + settings.appearance.slice(1)}
-          />
-        </Row>
-        <ToggleButton
-          label="Vibration"
-          value={settings.vibrationEnabled}
-          onValueChange={(value) => {
-            onSettingsChange({ vibrationEnabled: value });
-          }}
-        />
-        <ToggleButton
-          label="Reduce motion"
-          value={settings.reducedMotion}
-          onValueChange={(value) => onSettingsChange({ reducedMotion: value })}
-        />
-      </Container>
-
-      {onOpenMap ? <NormalButton accessibilityLabel="Open dungeon map" accessibilityRole="button" label="Dungeon Map" onPress={onOpenMap} /> : null}
-      {microgamesEnabled ? <NormalButton
-        accessibilityLabel="Practice attack microgame"
-        accessibilityRole="button"
-        label="Practice Attack"
-        onPress={onPractice}
-      /> : null}
-
-      <PrimaryButton 
-        accessibilityLabel="Back to Game"
-        accessibilityRole="button"
-        label="Back to Game"
-        onPress={onBackToGame}
-      />
-
-      <DestructiveButton
-        accessibilityLabel="Quit to Title"
-        accessibilityRole="button"
-        label="Quit to Title"
-        onPress={onQuitToTitle}
-      />
-    </StyledModal>
   );
 }

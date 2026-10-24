@@ -2,7 +2,7 @@ import { createEquipment, createItem } from "@/game/entities/items";
 import {
   getDoorwayGuardPlacements,
   getGridPosition,
-  getNeighbor,
+  getNeighborInGrid,
   getRoomId,
   oppositeDirections,
   type Direction,
@@ -67,7 +67,7 @@ export function getConnectedRoomId(
     return null;
   }
 
-  const neighbor = getNeighbor(room, direction);
+  const neighbor = getNeighborInGrid(map.rooms, room, direction);
 
   if (!neighbor) {
     return null;
@@ -220,7 +220,7 @@ export function revealRooms(map: DungeonMap, currentRoomId: string, revealAdjace
   const current = getRoom(map, currentRoomId);
   const adjacentIds = new Set<string>();
   if (revealAdjacent) DIRECTIONS.forEach(direction => {
-    const neighbor = getNeighbor(current, direction);
+    const neighbor = getNeighborInGrid(map.rooms, current, direction);
     if (neighbor) adjacentIds.add(getRoomId(neighbor));
   });
   return { ...map, rooms: map.rooms.map(row => row.map(room => ({
@@ -251,7 +251,7 @@ export function unlockDoor(
   direction: Direction,
 ): DungeonMap {
   const sourceLocation = findRoomLocation(map, roomId);
-  const neighbor = getNeighbor(sourceLocation.room, direction);
+  const neighbor = getNeighborInGrid(map.rooms, sourceLocation.room, direction);
   const neighborId = neighbor ? getRoomId(neighbor) : null;
 
   return {
@@ -332,7 +332,7 @@ export function damageMonsterInRoom(
   }
 
   const sourceRoom = getRoom(nextMap, doorwayGuard.roomId);
-  const neighbor = getNeighbor(sourceRoom, doorwayGuard.direction);
+  const neighbor = getNeighborInGrid(nextMap.rooms, sourceRoom, doorwayGuard.direction);
 
   const nextRooms = nextMap.rooms.map((row) =>
     row.map((room) => {

@@ -9,12 +9,13 @@ import {
   getGridPosition,
   getConnectedRoomIdFromRooms,
   getDoorwayGuardPlacement,
-  getNeighbor,
   getReachableRoomIds,
+  getNeighborInGrid,
   getRoomId,
   mapColumns,
   mapRows,
   openConnection,
+  oppositeDirections,
   placeDoorwayGuard,
   placeItem,
   setConnectionBoundary,
@@ -36,12 +37,16 @@ export function createSeededDungeonMap(seed: string, level: number, startingPosi
   const normalizedSeed = seed.trim().toLowerCase();
   const testDungeonSeeds = ["test", "testwarrior", "testcleric", "testthief"];
   const generationSeed = level === 1 && testDungeonSeeds.includes(normalizedSeed) ? "test" : seed;
+  const testStartingPosition = level === 1 && testDungeonSeeds.includes(normalizedSeed)
+    ? { column: "B", row: 5 }
+    : startingPosition;
   const map = createDungeonMap(
     level,
     createSeededRandom(`${generationSeed}:level:${level}`),
-    startingPosition,
+    testStartingPosition,
     includeClock,
     playerCount,
+    level === 1 && testDungeonSeeds.includes(normalizedSeed),
   );
 
   const testDungeonSeed = testDungeonSeeds.find((candidate) => candidate === normalizedSeed);
@@ -50,18 +55,42 @@ export function createSeededDungeonMap(seed: string, level: number, startingPosi
     : map;
 }
 
+function getLevelGridBounds(level: number) {
+  const maximumGridCapacity = mapColumns.length * mapRows.length;
+  let gridHeight = 1;
+  let gridWidth = 1;
+
+  // Keep each axis nondecreasing so a stair-entry position always fits on the next floor.
+  for (let floor = 1; floor <= Math.min(level, GAME_PARAMETERS.dungeon.maxRoomCount); floor += 1) {
+    const maxRooms = Math.min(
+      GAME_PARAMETERS.dungeon.maxRoomCount,
+      GAME_PARAMETERS.dungeon.baseRoomCount + floor + GAME_PARAMETERS.dungeon.extraRoomCountRange - 1,
+    );
+    const headroom = Math.ceil((maximumGridCapacity - maxRooms) * 0.1);
+    const targetCapacity = Math.min(maximumGridCapacity, maxRooms + headroom);
+    const nextHeight = Math.max(1, Math.min(mapColumns.length, Math.round(Math.sqrt(targetCapacity / 2))));
+    const nextWidth = Math.min(mapRows.length, Math.ceil(targetCapacity / nextHeight));
+    gridHeight = Math.max(gridHeight, nextHeight);
+    gridWidth = Math.max(gridWidth, nextWidth);
+  }
+
+  return { columns: mapColumns.slice(0, gridHeight), rows: mapRows.slice(0, gridWidth) };
+}
+
 function createMapFromContext({
   entities,
+  columns,
   level,
   rooms,
+  rows,
   startingRoomId,
 }: DungeonGenerationContext): DungeonMap {
   return {
-    columns: mapColumns,
+    columns,
     entities,
     level,
     rooms,
-    rows: mapRows,
+    rows,
     startingRoomId,
   };
 }
@@ -71,7 +100,7 @@ function createTestDungeon(map: DungeonMap, seed: string, playerCount: number) {
   // coordinate injection, hidden state mutation, or probabilistic route planning.
   const catalogItemIds = GAME_PARAMETERS.items.map(({ id }) => id);
   const itemIds = ["key", ...catalogItemIds.filter((id) => id !== "key")];
-  const route = findTestDungeonRoute(map.startingRoomId, itemIds.length + 6);
+  const route = findTestDungeonRoute(map.rooms, map.startingRoomId, itemIds.length + 6);
   if (route.length !== itemIds.length + 6) throw new Error("Test dungeon route does not fit the room grid");
 
   map.entities = { items: {}, equipment: {}, doorwayGuards: {}, monsters: {} };
@@ -95,7 +124,7 @@ function createTestDungeon(map: DungeonMap, seed: string, playerCount: number) {
       if (!incomingDirection) throw new Error(`Test route has a non-adjacent step: ${previous.id} to ${room.id}`);
       setConnectionBoundary(map.rooms, previous.id, incomingDirection, index === 2 ? "locked" : "open");
 
-      if (index > itemIds.length && index <= itemIds.length + 3) {
+      if ((index > itemIds.length && index <= itemIds.length + 3) || index === itemIds.length + 5) {
         const monster = createMonster((index - itemIds.length - 1) * 4, `${previous.id}:${incomingDirection}`, () => 0, map.level, playerCount);
         placeDoorwayGuard(map, previous.id, incomingDirection, monster);
       }
@@ -127,7 +156,7 @@ function ensureTestStartingRoomHasSecondDoorway(map: DungeonMap, route: string[]
 
   for (const direction of Object.keys(directionDeltas) as Direction[]) {
     if (startingRoom[direction] !== "wall") continue;
-    const neighbor = getNeighbor(startingRoom, direction);
+    const neighbor = getNeighborInGrid(map.rooms, startingRoom, direction);
     if (!neighbor) continue;
     const neighborId = getRoomId(neighbor);
     if (route.includes(neighborId)) continue;
@@ -138,14 +167,14 @@ function ensureTestStartingRoomHasSecondDoorway(map: DungeonMap, route: string[]
   throw new Error(`Test dungeon starting room ${startingRoom.id} cannot have a second doorway`);
 }
 
-function findTestDungeonRoute(startingRoomId: string, length: number) {
+function findTestDungeonRoute(rooms: DungeonMap["rooms"], startingRoomId: string, length: number) {
   const route = [startingRoomId];
   const visited = new Set(route);
   const walk = (): boolean => {
     if (route.length >= length) return true;
     const current = getGridPosition(route[route.length - 1]);
     for (const direction of Object.keys(directionDeltas) as Direction[]) {
-      const neighbor = getNeighbor(current, direction);
+      const neighbor = getNeighborInGrid(rooms, current, direction);
       if (!neighbor) continue;
       const nextId = getRoomId(neighbor);
       if (visited.has(nextId)) continue;
@@ -184,7 +213,7 @@ function growRoomNetwork({
       );
 
       for (const direction of directions) {
-        const neighbor = getNeighbor(room, direction);
+        const neighbor = getNeighborInGrid(rooms, room, direction);
         const neighborId = neighbor ? getRoomId(neighbor) : null;
 
         if (!neighborId || allRoomIds.has(neighborId)) {
@@ -224,7 +253,7 @@ function addExtraRoomConnections({
     const directions = shuffle(Object.keys(directionDeltas) as Direction[], random);
 
     directions.slice(0, 2).forEach((direction) => {
-      const neighbor = getNeighbor(room, direction);
+      const neighbor = getNeighborInGrid(rooms, room, direction);
       const neighborId = neighbor ? getRoomId(neighbor) : null;
 
       if (
@@ -267,9 +296,14 @@ function getUniqueOpenConnections({
 
 function placeDoorwayGuards(context: DungeonGenerationContext) {
   // Guards are attached to shared door boundaries, so both sides see the same blocked passage.
+  const stairsRoomIds = new Set([...context.allRoomIds].filter(roomId => {
+    const room = findRoomInGrid(context.rooms, roomId);
+    return room?.contents.some(content => content.type === "stairs");
+  }));
   const doorwayConnections = getUniqueOpenConnections(context).filter(connection => {
     const neighborId = getConnectedRoomIdFromRooms(context.rooms, connection.roomId, connection.direction);
-    return connection.roomId !== context.startingRoomId && neighborId !== context.startingRoomId;
+    return Boolean(neighborId) && connection.roomId !== context.startingRoomId && neighborId !== context.startingRoomId &&
+      !stairsRoomIds.has(connection.roomId) && !stairsRoomIds.has(neighborId!);
   });
   const doorwayGuardCount = Math.min(
     doorwayConnections.length,
@@ -299,6 +333,75 @@ function placeDoorwayGuards(context: DungeonGenerationContext) {
     });
 }
 
+function placeStairsEntranceGuards(context: DungeonGenerationContext) {
+  const stairsRoom = [...context.allRoomIds]
+    .map(roomId => findRoomInGrid(context.rooms, roomId))
+    .find(room => room?.contents.some(content => content.type === "stairs"));
+  if (!stairsRoom) return;
+
+  getUniqueOpenConnections(context).forEach(connection => {
+    const neighborId = getConnectedRoomIdFromRooms(context.rooms, connection.roomId, connection.direction);
+    if (!neighborId) return;
+
+    const guardsStairsRoom = connection.roomId === stairsRoom.id || neighborId === stairsRoom.id;
+    if (!guardsStairsRoom) return;
+
+    // Store the guard on the neighboring room's side, so it stands between the player and the stairs.
+    const guardRoomId = connection.roomId === stairsRoom.id ? neighborId : connection.roomId;
+    const guardDirection = connection.roomId === stairsRoom.id
+      ? oppositeDirections[connection.direction]
+      : connection.direction;
+    const monster = createMonster(
+      Object.keys(context.entities.monsters).length,
+      `${guardRoomId}:${guardDirection}:stairs`,
+      context.random,
+      context.level,
+      context.playerCount,
+    );
+    placeDoorwayGuard(createMapFromContext(context), guardRoomId, guardDirection, monster);
+  });
+}
+
+function placeStairsFarthestFromEntrance(context: DungeonGenerationContext) {
+  const currentStairsRoomId = [...context.allRoomIds].find(roomId =>
+    findRoomInGrid(context.rooms, roomId)?.contents.some(content => content.type === "stairs"),
+  );
+  if (!currentStairsRoomId) return;
+  const distances = getRoomDistances(context, context.startingRoomId);
+  const farthestDistance = Math.max(...distances.values());
+  const currentDistance = distances.get(currentStairsRoomId) ?? -1;
+  if (currentDistance === farthestDistance) return;
+
+  const candidates = [...distances.entries()].filter(([, distance]) => distance === farthestDistance);
+  const preferred = candidates.filter(([roomId]) => getDeadEndRoomIds(context).includes(roomId));
+  const choices = preferred.length ? preferred : candidates;
+  const stairsRoomId = choices[Math.floor(context.random() * choices.length)]?.[0];
+  if (!stairsRoomId) return;
+  for (const roomId of context.allRoomIds) {
+    const room = findRoomInGrid(context.rooms, roomId);
+    if (!room) continue;
+    room.contents = room.contents.filter(content => content.type !== "stairs");
+    if (roomId === stairsRoomId) room.contents.push({ id: "stairs", label: "Stairs", type: "stairs" });
+  }
+}
+
+function clearStairsRoomMonsters(context: DungeonGenerationContext) {
+  const stairsRoom = [...context.allRoomIds]
+    .map(roomId => findRoomInGrid(context.rooms, roomId))
+    .find(room => room?.contents.some(content => content.type === "stairs"));
+  if (!stairsRoom) return;
+  const protectedIds = new Set<string>();
+  for (const direction of Object.keys(directionDeltas) as Direction[]) {
+    const neighbor = getNeighborInGrid(context.rooms, stairsRoom, direction);
+    const neighborId = neighbor ? getRoomId(neighbor) : null;
+    if (!neighborId || !context.allRoomIds.has(neighborId)) continue;
+    for (const guard of Object.values(context.entities.doorwayGuards)) {
+      if (guard.roomId === neighborId) protectedIds.add(guard.monsterId);
+    }
+  }
+  stairsRoom.contents = stairsRoom.contents.filter(content => content.type !== "monster" || !protectedIds.has(content.id));
+}
+
 function ensureStartingRoomHasTwoDoorways(context: DungeonGenerationContext) {
   const startingRoom = findRoomInGrid(context.rooms, context.startingRoomId);
   if (!startingRoom) throw new Error(`Starting room ${context.startingRoomId} is missing`);
@@ -308,7 +411,7 @@ function ensureStartingRoomHasTwoDoorways(context: DungeonGenerationContext) {
   for (const direction of Object.keys(directionDeltas) as Direction[]) {
     if (doorwayCount >= 2) break;
     if (startingRoom[direction] !== "wall") continue;
-    const neighbor = getNeighbor(startingRoom, direction);
+    const neighbor = getNeighborInGrid(context.rooms, startingRoom, direction);
     if (!neighbor) continue;
     const neighborId = getRoomId(neighbor);
     openConnection(context.rooms, startingRoom.id, direction);
@@ -322,12 +425,36 @@ function ensureStartingRoomHasTwoDoorways(context: DungeonGenerationContext) {
 }
 
 function placeStairsAndStartingRoom(context: DungeonGenerationContext) {
-  // Choose one non-start room for the exit and reveal only the starting room initially.
-  const stairsCandidates = [...context.allRoomIds].filter(
-    (roomId) => roomId !== context.startingRoomId,
+  for (const roomId of context.allRoomIds) {
+    const room = findRoomInGrid(context.rooms, roomId);
+    if (room) room.contents = room.contents.filter(content => content.type !== "stairs");
+  }
+  // Put the exit as far from the entrance as the generated room graph allows.
+  const distances = new Map<string, number>([[context.startingRoomId, 0]]);
+  const queue = [context.startingRoomId];
+  for (let index = 0; index < queue.length; index += 1) {
+    const room = findRoomInGrid(context.rooms, queue[index]);
+    if (!room) continue;
+    for (const direction of Object.keys(directionDeltas) as Direction[]) {
+      if (room[direction] === "wall") continue;
+      const neighbor = getNeighborInGrid(context.rooms, room, direction);
+      if (!neighbor) continue;
+      const neighborId = getRoomId(neighbor);
+      if (!context.allRoomIds.has(neighborId) || distances.has(neighborId)) continue;
+      distances.set(neighborId, distances.get(room.id)! + 1);
+      queue.push(neighborId);
+    }
+  }
+  const stairsCandidates = [...distances.entries()]
+    .filter(([roomId]) => roomId !== context.startingRoomId)
+    .sort((left, right) => right[1] - left[1]);
+  const farthestDistance = stairsCandidates[0]?.[1];
+  const farthestRooms = stairsCandidates.filter(([roomId, distance]) =>
+    distance === farthestDistance && getDeadEndRoomIds(context).includes(roomId),
   );
+  const farthestSafeRooms = stairsCandidates.filter(([, distance]) => distance === farthestDistance);
   const stairsRoomId =
-    stairsCandidates[Math.floor(context.random() * stairsCandidates.length)] ??
+    (farthestRooms.length ? farthestRooms : farthestSafeRooms)[Math.floor(context.random() * (farthestRooms.length || farthestSafeRooms.length))]?.[0] ??
     context.startingRoomId;
 
   [...context.allRoomIds].forEach((roomId) => {
@@ -344,11 +471,32 @@ function placeStairsAndStartingRoom(context: DungeonGenerationContext) {
     }
 
     if (roomId === stairsRoomId) {
-      room.contents = [
-        { id: "stairs", label: "Stairs", type: "stairs" } satisfies RoomStairsRef,
-      ];
+      const monsters = room.contents.filter((content): content is RoomMonsterRef => content.type === "monster");
+      if (monsters.length) {
+        const direction = (Object.keys(directionDeltas) as Direction[]).find(candidate => room[candidate] !== "wall");
+        const neighbor = direction ? getNeighborInGrid(context.rooms, room, direction) : null;
+        const neighborRoom = neighbor ? findRoomInGrid(context.rooms, getRoomId(neighbor)) : null;
+        if (neighborRoom) {
+          room.contents = room.contents.filter(content => content.type !== "monster");
+          neighborRoom.contents.push(...monsters);
+        }
+      }
+      room.contents.push({ id: "stairs", label: "Stairs", type: "stairs" } satisfies RoomStairsRef);
     }
   });
+}
+
+function clearDoorwayGuards(context: DungeonGenerationContext) {
+  const guardIds = new Set(Object.keys(context.entities.doorwayGuards));
+  for (const guard of Object.values(context.entities.doorwayGuards)) {
+    const room = findRoomInGrid(context.rooms, guard.roomId);
+    if (room?.[guard.direction] === "guarded") setConnectionBoundary(context.rooms, guard.roomId, guard.direction, "open");
+  }
+  context.entities.doorwayGuards = {};
+  for (const guardId of guardIds) delete context.entities.monsters[guardId];
+  for (const room of context.rooms.flat()) {
+    room.contents = room.contents.filter(content => content.type !== "monster" || !guardIds.has(content.id));
+  }
 }
 
 function lockRandomDoors(context: DungeonGenerationContext) {
@@ -449,34 +597,181 @@ function placeOptionalLoot(
   context: DungeonGenerationContext,
   reachableRoomIds: string[],
   includeClock: boolean,
+  itemCount: number,
+  equipmentCount: number,
 ) {
-  // Loot is placed in distinct eligible rooms; candidate counts and chances directly control floor rewards.
-  const candidates = shuffle(reachableRoomIds.filter(id => {
+  // Keep floor reward counts stable, but use dead ends before ordinary rooms for chest placement.
+  const candidates = shuffle([...context.allRoomIds].filter(id => {
     const room = findRoomInGrid(context.rooms, id);
     return room && !room.isCurrentPosition && !room.contents.some(content => content.type === "stairs" || content.type === "item" || content.type === "equipment");
   }), context.random);
-  const lootCandidates = candidates.filter(id => {
-    const room = findRoomInGrid(context.rooms, id);
-    return room && !room.contents.some(content => content.type === "item" || content.type === "equipment");
-  });
-  const itemCount = Math.min(lootCandidates.length, Math.floor(reachableRoomIds.length * GAME_PARAMETERS.dungeon.itemRoomChance));
+  const deadEndIds = new Set(getDeadEndRoomIds(context));
+  const prioritizedCandidates = [
+    ...candidates.filter(id => deadEndIds.has(id)),
+    ...candidates.filter(id => !deadEndIds.has(id)),
+  ];
   const itemKinds = ["health-potion", "energy-meal", ...(includeClock ? ["clock"] : [])];
   for (let index = 0; index < itemCount; index++) {
-    placeItem(createMapFromContext(context), [lootCandidates[index]], itemKinds[index % itemKinds.length], context.random);
+    placeItem(createMapFromContext(context), [prioritizedCandidates[index]], itemKinds[index % itemKinds.length], context.random);
   }
-  const equipmentCandidates = shuffle(candidates.filter(id => {
-    const room = findRoomInGrid(context.rooms, id);
-    return room && !room.contents.some(content => content.type === "item" || content.type === "equipment");
-  }), context.random);
-  const equipmentCount = Math.min(equipmentCandidates.length, Math.floor(reachableRoomIds.length * GAME_PARAMETERS.dungeon.equipmentRoomChance));
   const equipmentKinds = GAME_PARAMETERS.equipment.map(equipment => equipment.id);
   for (let index = 0; index < equipmentCount; index++) {
-    const room = findRoomInGrid(context.rooms, equipmentCandidates[index]);
+    const room = findRoomInGrid(context.rooms, prioritizedCandidates[itemCount + index]);
     if (!room) continue;
     const equipment = createEquipment(equipmentKinds[Math.floor(context.random() * equipmentKinds.length)], `equipment:${room.id}:${Math.floor(context.random() * 1_000_000)}`);
     context.entities.equipment[equipment.id] = equipment;
     room.contents.push({ id: equipment.id, isChest: true, type: "equipment" });
   }
+}
+
+function getDeadEndRoomIds(context: DungeonGenerationContext) {
+  return [...context.allRoomIds].filter(roomId => {
+    const room = findRoomInGrid(context.rooms, roomId);
+    return room && (Object.keys(directionDeltas) as Direction[]).filter(direction => room[direction] !== "wall").length === 1;
+  });
+}
+
+function getOptionalLootCounts(context: DungeonGenerationContext, reachableRoomIds: string[]) {
+  const eligibleCount = reachableRoomIds.filter(roomId => {
+    const room = findRoomInGrid(context.rooms, roomId);
+    return room && !room.isCurrentPosition && !room.contents.some(content =>
+      content.type === "stairs" || content.type === "item" || content.type === "equipment",
+    );
+  }).length;
+  const itemCount = Math.min(eligibleCount, Math.floor(reachableRoomIds.length * GAME_PARAMETERS.dungeon.itemRoomChance));
+  const equipmentCount = Math.min(eligibleCount - itemCount, Math.floor(reachableRoomIds.length * GAME_PARAMETERS.dungeon.equipmentRoomChance));
+  return { itemCount, equipmentCount };
+}
+
+function getRoomDistances(context: DungeonGenerationContext, originRoomId: string) {
+  const distances = new Map<string, number>([[originRoomId, 0]]);
+  const queue = [originRoomId];
+  for (let index = 0; index < queue.length; index += 1) {
+    const room = findRoomInGrid(context.rooms, queue[index]);
+    if (!room) continue;
+    for (const direction of Object.keys(directionDeltas) as Direction[]) {
+      if (room[direction] === "wall") continue;
+      const neighbor = getNeighborInGrid(context.rooms, room, direction);
+      const neighborId = neighbor ? getRoomId(neighbor) : null;
+      if (!neighborId || !context.allRoomIds.has(neighborId) || distances.has(neighborId)) continue;
+      distances.set(neighborId, distances.get(room.id)! + 1);
+      queue.push(neighborId);
+    }
+  }
+  return distances;
+}
+
+function pruneEmptyDeadEnd(context: DungeonGenerationContext, roomId: string) {
+  const room = findRoomInGrid(context.rooms, roomId);
+  if (!room || room.id === context.startingRoomId
+    || room.contents.some(content => content.type === "stairs" || content.type === "item" || content.type === "equipment")) return false;
+  const direction = (Object.keys(directionDeltas) as Direction[]).find(candidate => room[candidate] !== "wall");
+  if (!direction) return false;
+  const neighbor = getNeighborInGrid(context.rooms, room, direction);
+  const parentRoom = neighbor ? findRoomInGrid(context.rooms, getRoomId(neighbor)) : null;
+  if (!neighbor || !parentRoom || parentRoom.contents.some(content => content.type === "stairs")) return false;
+  const parentDegree = (Object.keys(directionDeltas) as Direction[]).filter(candidate => parentRoom[candidate] !== "wall").length;
+  if (parentRoom.id === context.startingRoomId && parentDegree <= 2) return false;
+  for (const [guardId, guard] of Object.entries(context.entities.doorwayGuards)) {
+    const belongsToRemovedConnection = (guard.roomId === room.id && guard.direction === direction)
+      || (guard.roomId === parentRoom.id && guard.direction === oppositeDirections[direction]);
+    if (belongsToRemovedConnection) delete context.entities.doorwayGuards[guardId];
+  }
+  parentRoom.contents.push(...room.contents);
+  setConnectionBoundary(context.rooms, room.id, direction, "wall");
+  context.allRoomIds.delete(room.id);
+  return true;
+}
+
+function limitDeadEndRooms(context: DungeonGenerationContext, maximumDeadEnds: number, reachableRoomIds: Set<string>) {
+  while (getDeadEndRoomIds(context).length > maximumDeadEnds) {
+    const deadEnds = new Set(getDeadEndRoomIds(context));
+    const stairsRoomId = [...context.allRoomIds].find(roomId => findRoomInGrid(context.rooms, roomId)?.contents.some(content => content.type === "stairs"));
+    const possibleLinks = [...context.allRoomIds].flatMap(roomId => {
+      const room = findRoomInGrid(context.rooms, roomId);
+      if (!room) return [];
+      return (Object.keys(directionDeltas) as Direction[]).flatMap(direction => {
+        if (room[direction] !== "wall") return [];
+        const neighbor = getNeighborInGrid(context.rooms, room, direction);
+        const neighborId = neighbor ? getRoomId(neighbor) : null;
+        if (!neighborId || !context.allRoomIds.has(neighborId) || (!deadEnds.has(roomId) && !deadEnds.has(neighborId))) return [];
+        if (roomId === stairsRoomId || neighborId === stairsRoomId) return [];
+        const startDistances = getRoomDistances(context, context.startingRoomId);
+        const stairsDistances = stairsRoomId ? getRoomDistances(context, stairsRoomId) : new Map<string, number>();
+        const stairsDistance = stairsDistances.get(context.startingRoomId) ?? 0;
+        const routeViaLink = Math.min(
+          (startDistances.get(roomId) ?? Infinity) + 1 + (stairsDistances.get(neighborId) ?? Infinity),
+          (startDistances.get(neighborId) ?? Infinity) + 1 + (stairsDistances.get(roomId) ?? Infinity),
+        );
+        if (routeViaLink < stairsDistance) return [];
+        return [{ roomId, direction, neighborId, crossesBlockedBoundary: reachableRoomIds.has(roomId) !== reachableRoomIds.has(neighborId) }];
+      });
+    });
+    const link = shuffle(possibleLinks, context.random)[0];
+    if (link) {
+      if (link.crossesBlockedBoundary) {
+        const monster = createMonster(
+          Object.keys(context.entities.monsters).length,
+          `${link.roomId}:${link.direction}:dead-end-link`,
+          context.random,
+          context.level,
+          context.playerCount,
+        );
+        placeDoorwayGuard(createMapFromContext(context), link.roomId, link.direction, monster);
+      } else {
+        openConnection(context.rooms, link.roomId, link.direction);
+      }
+      continue;
+    }
+
+    break;
+  }
+}
+
+function moveExistingChestsIntoDeadEnds(context: DungeonGenerationContext) {
+  const deadEnds = getDeadEndRoomIds(context);
+  let movedKeyToRoom: string | null = null;
+  for (const roomId of deadEnds) {
+    const room = findRoomInGrid(context.rooms, roomId);
+    if (!room || room.contents.some(content => content.type === "stairs" || ((content.type === "item" || content.type === "equipment") && content.isChest))) continue;
+    const source = [...context.allRoomIds]
+      .filter(candidateId => !deadEnds.includes(candidateId))
+      .map(candidateId => findRoomInGrid(context.rooms, candidateId))
+      .find(candidate => candidate && !candidate.isCurrentPosition && candidate.contents.some(content =>
+        (content.type === "item" || content.type === "equipment") && content.isChest,
+      ));
+    const chest = source?.contents.find(content => (content.type === "item" || content.type === "equipment") && content.isChest);
+    if (!source || !chest) continue;
+    if (chest.type === "item" && context.entities.items[chest.id]?.itemId === "key") movedKeyToRoom = roomId;
+    source.contents = source.contents.filter(content => content !== chest);
+    room.contents.push(chest);
+  }
+  if (movedKeyToRoom) relocateLockedDoorForKey(context, movedKeyToRoom);
+}
+
+function relocateLockedDoorForKey(context: DungeonGenerationContext, keyRoomId: string) {
+  const lockedConnections: RoomConnection[] = [];
+  for (const roomId of context.allRoomIds) {
+    const room = findRoomInGrid(context.rooms, roomId);
+    if (!room) continue;
+    for (const direction of Object.keys(directionDeltas) as Direction[]) {
+      const neighbor = getNeighborInGrid(context.rooms, room, direction);
+      if (room[direction] === "locked" && neighbor && roomId.localeCompare(getRoomId(neighbor)) < 0) {
+        lockedConnections.push({ roomId, direction });
+      }
+    }
+  }
+  if (!lockedConnections.length) return;
+  lockedConnections.forEach(connection => setConnectionBoundary(context.rooms, connection.roomId, connection.direction, "open"));
+  const candidates = shuffle(getUniqueOpenConnections(context).filter(connection => {
+    const room = findRoomInGrid(context.rooms, connection.roomId);
+    const neighborId = room ? getConnectedRoomIdFromRooms(context.rooms, room.id, connection.direction) : null;
+    if (!neighborId || room?.contents.some(content => content.type === "stairs")
+      || findRoomInGrid(context.rooms, neighborId)?.contents.some(content => content.type === "stairs")) return false;
+    return getReachableRoomIds(context.rooms, context.startingRoomId, connection).has(keyRoomId);
+  }), context.random);
+  const replacement = candidates[0] ?? lockedConnections[0];
+  setConnectionBoundary(context.rooms, replacement.roomId, replacement.direction, "locked");
 }
 
 export function createDungeonMap(
@@ -485,9 +780,17 @@ export function createDungeonMap(
   startingPosition?: GridPosition,
   includeClock = false,
   playerCount = 1,
+  skipDeadEndAdjustment = false,
 ): DungeonMap {
   // Generation order is significant: connectivity precedes guards, exits, locks, and reachable-room loot.
-  const rooms = createEmptyGrid();
+  const maxRoomCount = Math.min(
+    GAME_PARAMETERS.dungeon.maxRoomCount,
+    GAME_PARAMETERS.dungeon.baseRoomCount +
+      level +
+      GAME_PARAMETERS.dungeon.extraRoomCountRange - 1,
+  );
+  const { columns, rows } = getLevelGridBounds(level);
+  const rooms = createEmptyGrid(columns, rows);
   const entities = {
     items: {} as Record<string, WorldItem>,
     equipment: {} as Record<string, WorldEquipment>,
@@ -495,23 +798,30 @@ export function createDungeonMap(
     monsters: {} as Record<string, WorldMonster>,
   };
   const finalStartingPosition = startingPosition ?? {
-    column: mapColumns[Math.floor(random() * mapColumns.length)],
-    row: mapRows[Math.floor(random() * mapRows.length)],
+    column: columns[Math.floor(random() * columns.length)],
+    row: rows[Math.floor(random() * rows.length)],
   };
+  if (!columns.includes(finalStartingPosition.column) || !rows.includes(finalStartingPosition.row)) {
+    throw new Error(`Starting position ${getRoomId(finalStartingPosition)} is outside the level ${level} grid`);
+  }
   const startingRoomId = getRoomId(finalStartingPosition);
   const allRoomIds = new Set([startingRoomId]);
   const context: DungeonGenerationContext = {
     allRoomIds,
     entities,
     level,
+    roomLimit: maxRoomCount,
+    columns,
     playerCount: Math.max(1, Math.floor(playerCount)),
     random,
     rooms,
+    rows,
     startingRoomId,
   };
   const totalRooms = Math.min(
     GAME_PARAMETERS.dungeon.maxRoomCount,
-    mapColumns.length * mapRows.length,
+    columns.length * rows.length,
+    maxRoomCount,
     GAME_PARAMETERS.dungeon.baseRoomCount +
       level +
       Math.floor(random() * GAME_PARAMETERS.dungeon.extraRoomCountRange),
@@ -520,14 +830,83 @@ export function createDungeonMap(
   growRoomNetwork(context, totalRooms);
   addExtraRoomConnections(context);
   ensureStartingRoomHasTwoDoorways(context);
-  placeDoorwayGuards(context);
   placeStairsAndStartingRoom(context);
+  placeDoorwayGuards(context);
+  placeStairsEntranceGuards(context);
   lockRandomDoors(context);
 
   const reachableRoomIds = [...getReachableRoomIds(rooms, startingRoomId)];
 
   placeWerewolfAndSilverBullet(context, reachableRoomIds);
-  placeOptionalLoot(context, reachableRoomIds, includeClock);
+  const lootCounts = getOptionalLootCounts(context, reachableRoomIds);
+  const deadEnds = new Set(getDeadEndRoomIds(context));
+  const questChestCount = [...context.allRoomIds].reduce((count, roomId) => {
+    const room = findRoomInGrid(rooms, roomId);
+    return count + (room?.contents.filter(content =>
+      (content.type === "item" || content.type === "equipment") && content.isChest,
+    ).length ?? 0);
+  }, 0);
+  const stairsCount = [...deadEnds].filter(roomId => findRoomInGrid(rooms, roomId)?.contents.some(content => content.type === "stairs")).length;
+  const reachableSet = new Set(reachableRoomIds);
+  if (!skipDeadEndAdjustment) {
+    // Reserve the stair room as a dead end, then keep the remaining leaves within
+    // the existing chest budget. Loot placement below prioritizes those leaves.
+    limitDeadEndRooms(context, questChestCount + lootCounts.itemCount + lootCounts.equipmentCount + 1, reachableSet);
+    clearDoorwayGuards(context);
+    placeStairsAndStartingRoom(context);
+    placeDoorwayGuards(context);
+    placeStairsEntranceGuards(context);
+  }
+  placeOptionalLoot(context, reachableRoomIds, includeClock, lootCounts.itemCount, lootCounts.equipmentCount);
+  if (!skipDeadEndAdjustment) {
+    for (let attempt = 0; attempt < context.roomLimit; attempt += 1) {
+      const deadEnds = getDeadEndRoomIds(context);
+      const chestCount = [...context.allRoomIds].reduce((count, roomId) => {
+        const room = findRoomInGrid(rooms, roomId);
+        return count + (room?.contents.filter(content =>
+          (content.type === "item" || content.type === "equipment") && content.isChest,
+        ).length ?? 0);
+      }, 0);
+      const stairsDeadEndCount = deadEnds.filter(roomId => findRoomInGrid(rooms, roomId)?.contents.some(content => content.type === "stairs")).length;
+      const unfilledDeadEnds = deadEnds.filter(roomId => {
+        const room = findRoomInGrid(rooms, roomId);
+        return !room?.contents.some(content => content.type === "stairs" || ((content.type === "item" || content.type === "equipment") && content.isChest));
+      });
+      if (!unfilledDeadEnds.length && deadEnds.length <= chestCount + stairsDeadEndCount) break;
+      if (unfilledDeadEnds.length) {
+        const removableUnfilled = unfilledDeadEnds.find(roomId => pruneEmptyDeadEnd(context, roomId));
+        if (removableUnfilled) continue;
+      }
+      if (deadEnds.length > chestCount + stairsDeadEndCount) {
+        const stairsRoomId = [...context.allRoomIds].find(id => findRoomInGrid(rooms, id)?.contents.some(content => content.type === "stairs"));
+        const link = deadEnds.flatMap(roomId => {
+          const room = findRoomInGrid(rooms, roomId);
+          if (!room || roomId === stairsRoomId) return [];
+          return (Object.keys(directionDeltas) as Direction[]).flatMap(direction => {
+            if (room[direction] !== "wall") return [];
+            const neighbor = getNeighborInGrid(rooms, room, direction);
+            const neighborId = neighbor ? getRoomId(neighbor) : null;
+            if (!neighborId || !context.allRoomIds.has(neighborId) || neighborId === stairsRoomId) return [];
+            return [{ roomId, direction }];
+          });
+        })[0];
+        if (link) {
+          openConnection(rooms, link.roomId, link.direction);
+          continue;
+        }
+        const removable = deadEnds.find(roomId => roomId !== stairsRoomId && pruneEmptyDeadEnd(context, roomId));
+        if (removable) continue;
+        break;
+      }
+      break;
+    }
+    clearDoorwayGuards(context);
+    placeDoorwayGuards(context);
+    moveExistingChestsIntoDeadEnds(context);
+    placeStairsFarthestFromEntrance(context);
+    placeStairsEntranceGuards(context);
+    clearStairsRoomMonsters(context);
+  }
 
   return createMapFromContext(context);
 }

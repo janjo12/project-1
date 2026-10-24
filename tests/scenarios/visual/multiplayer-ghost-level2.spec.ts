@@ -2,6 +2,7 @@ import { expect, test, type APIRequestContext, type Page } from "@playwright/tes
 
 import { getNeighbor, getRoomId, type Direction, type DungeonMap, type DungeonRoom } from "@/game/dungeon/types";
 import type { MultiplayerState, PlayerAction } from "@/game/engine/multiplayer-rules";
+import { openScenarioApp } from "../helpers";
 
 const DIRECTIONS: Direction[] = ["north", "east", "south", "west"];
 
@@ -92,16 +93,14 @@ test("two live multiplayer players reach Level 2 after a ghost reveals and suppo
   const guestPage = await guestContext.newPage();
 
   try {
-    await page.goto("/");
-    await page.evaluate(() => localStorage.clear());
-    await page.reload();
+    await openScenarioApp(page, true);
     await page.getByRole("button", { name: "Multiplayer" }).click();
     await page.getByRole("button", { name: "Host game", exact: true }).click();
     await expect(page.getByText("Room code", { exact: true })).toBeVisible();
     roomCode = (await page.locator('[aria-label="Room code"]').textContent())?.trim() ?? "";
     expect(roomCode).not.toBe("");
 
-    await guestPage.goto(new URL("/", page.url()).toString());
+    await guestPage.goto(new URL("/", page.url()).toString(), { waitUntil: "domcontentloaded" });
     await guestPage.getByRole("button", { name: "Multiplayer" }).click();
     await guestPage.getByRole("button", { name: "Join game", exact: true }).click();
     await guestPage.getByRole("textbox", { name: "Room code" }).fill(roomCode);
@@ -243,11 +242,27 @@ test("two live multiplayer players reach Level 2 after a ghost reveals and suppo
     expect(state.map.entities.monsters[wolfId!].currentHealth).toBe(0);
     expect(state.players.host.nextAttackBonus).toBe(0);
 
-    const directionToStairs = stairsPath[0].direction;
-    state = await takeTurn(request, roomCode, state, {
-      host: { type: "MOVE", target: directionToStairs },
-      [victimId]: { type: "MOVE", target: directionToStairs },
-    });
+    while (state.players.host.roomId !== stairsRoomId) {
+      const step = findPath(state.map, state.players.host.roomId, stairsRoomId!)[0];
+      const guard = Object.values(state.map.entities.doorwayGuards).find(candidate =>
+        candidate.roomId === step.from && candidate.direction === step.direction &&
+        (state.map.entities.monsters[candidate.monsterId]?.currentHealth ?? 0) > 0,
+      );
+      if (guard) {
+        state = await takeTurn(request, roomCode, state, {
+          host: { type: "ATTACK", target: guard.monsterId, microgameScore: 100 },
+          [victimId]: { type: "SUPPORT", target: hostId },
+        });
+        expect(state.players.host.health).toBeGreaterThan(0);
+        continue;
+      }
+      state = await takeTurn(request, roomCode, state, {
+        host: { type: "MOVE", target: step.direction },
+        [victimId]: { type: "MOVE", target: step.direction },
+      });
+      expect(state.players.host.roomId).toBe(step.to);
+      expect(state.players[victimId].roomId).toBe(step.to);
+    }
     expect(state.players.host.roomId).toBe(stairsRoomId);
     expect(state.players[victimId].roomId).toBe(stairsRoomId);
     await expect(page.getByRole("button", { name: new RegExp(`Warrior.*${victimId}`) })).toBeVisible();

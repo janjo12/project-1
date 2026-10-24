@@ -22,7 +22,7 @@ export default function GameOverRoute() {
           <Title>Game Over</Title>
 
           <Title>
-            Score: {score ?? "0"}
+            {score ?? "0"} Floors Cleared
           </Title>
 
           <PrimaryButton 

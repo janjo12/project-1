@@ -1,7 +1,7 @@
 import type { RoomDoorways, RoomSceneActor, ScenePosition } from "@/components/Dungeon/GameViewPanel";
-import { getDoorwayGuardPlacements, type DungeonMap, type WorldMonster } from "@/game/dungeon/types";
+import { type DungeonMap, type WorldMonster } from "@/game/dungeon/types";
 import {
-  getCurrentRoom, getGuardedDirections, getTargetableRoomMonsterRefs,
+  getCurrentRoom, getTargetableRoomMonsterRefs,
 } from "@/game/dungeon/rooms";
 import { defaultRoomDoorways, directionScenePositions } from "@/game/state/types";
 import { getEquipmentGroundLabel } from "@/game/actions/items";
@@ -56,13 +56,11 @@ export function getRoomSceneActors({
     }
   }
 
-  for (const direction of getGuardedDirections(dungeonMap, room.id)) {
-    for (const guard of getDoorwayGuardPlacements(dungeonMap, room.id, direction)) {
-      const monster = guard ? dungeonMap.entities.monsters[guard.monsterId] : null;
-      if (!monster || monster.currentHealth <= 0 || seenMonsterIds.has(monster.id)) continue;
-      seenMonsterIds.add(monster.id);
-      sceneActors.push(createMonsterSceneActor(monster, monster.id === currentMonsterId, directionScenePositions[direction]));
-    }
+  for (const guard of Object.values(dungeonMap.entities.doorwayGuards).filter(candidate => candidate.roomId === room.id)) {
+    const monster = dungeonMap.entities.monsters[guard.monsterId];
+    if (!monster || monster.currentHealth <= 0 || seenMonsterIds.has(monster.id)) continue;
+    seenMonsterIds.add(monster.id);
+    sceneActors.push(createMonsterSceneActor(monster, monster.id === currentMonsterId, directionScenePositions[guard.direction]));
   }
 
   return sceneActors.sort((left, right) => Number(Boolean(left.isActive)) - Number(Boolean(right.isActive)));

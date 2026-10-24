@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { createNumberStore } from "@/game/state/numberStore";
+import { GAME_PARAMETERS } from "@/game/config/gameparameters";
+import type { Difficulty } from "@/utils/settings-storage";
 
 export type MicrogameKind = "concentration" | "timed-attack" | "multitap";
-export type MicrogameOptions = { istest?: boolean };
+export type MicrogameOptions = { difficulty?: Difficulty; level?: number };
 export const HUMAN_REACTION_WINDOW_MS = 250;
 export const MICROGAME_MAX_DURATION_MS = 1500;
-export const CONCENTRATION_TARGET_DURATION_MS = MICROGAME_MAX_DURATION_MS - HUMAN_REACTION_WINDOW_MS;
+export const CONCENTRATION_TARGET_DURATION_MS = MICROGAME_MAX_DURATION_MS;
 export const TIMED_ATTACK_CUE_DELAY_MS = 1000;
 export const TIMED_ATTACK_WINDOW_MS = TIMED_ATTACK_CUE_DELAY_MS + HUMAN_REACTION_WINDOW_MS + 500;
-export const MULTITAP_TARGET_TAPS = 6;
 export const MULTITAP_WINDOW_MS = 3000;
 const now = () => globalThis.performance?.now?.() ?? Date.now();
 const scoreWithinRange = (score: number) => Math.max(0, Math.min(100, Math.round(score)));
@@ -24,9 +25,14 @@ export function getTimedAttackScore(actualMs: number) {
   return scoreWithinRange(100 - Math.abs(actualMs - HUMAN_REACTION_WINDOW_MS) * 100 / 500);
 }
 
-export function getMultitapScore(clicks: number) {
-  // Six ordinary-paced hits reach a perfect score within the short fixed window.
-  return scoreWithinRange(clicks * 100 / MULTITAP_TARGET_TAPS);
+export function getMultitapTargetTaps(difficulty: Difficulty, level: number) {
+  const levelSteps = Math.floor(Math.max(0, level - 1) / GAME_PARAMETERS.microgame.multitapTapsPerLevel);
+  return GAME_PARAMETERS.microgame.multitapBaseTaps +
+    GAME_PARAMETERS.microgame.multitapDifficultyBonus[difficulty] + levelSteps;
+}
+
+export function getMultitapScore(clicks: number, targetTaps: number) {
+  return scoreWithinRange(clicks * 100 / Math.max(1, targetTaps));
 }
 
 export function useMicrogame(onComplete: (score: number) => void) {
@@ -34,8 +40,8 @@ export function useMicrogame(onComplete: (score: number) => void) {
   const [kind, setKind] = useState<MicrogameKind>("concentration");
   const [elapsedStore] = useState(() => createNumberStore(0));
   const [targetDelay, setTargetDelay] = useState(500);
+  const [targetTaps, setTargetTaps] = useState(() => getMultitapTargetTaps("normal", 1));
   const [targetSpot, setTargetSpot] = useState(0.76);
-  const [istest, setIsTest] = useState(false);
   const startedAt = useRef(0);
   const leftHandedRef = useRef(false);
   const nowRef = useRef(now);
@@ -54,12 +60,12 @@ export function useMicrogame(onComplete: (score: number) => void) {
   }, []);
   const start = useCallback(
     (gameKind: MicrogameKind = "concentration", handedness: "left" | "right" = "right", options?: MicrogameOptions) => {
-      setIsTest(options?.istest ?? false);
       completed.current = false;
       setKind(gameKind);
       elapsedStore.setSnapshot(0);
       clickCount.current = 0;
       setTargetDelay(gameKind === "timed-attack" ? TIMED_ATTACK_CUE_DELAY_MS : 200 + Math.floor(Math.random() * 401));
+      setTargetTaps(getMultitapTargetTaps(options?.difficulty ?? "normal", options?.level ?? 1));
       leftHandedRef.current = handedness === "left";
       setTargetSpot(handedness === "right" ? 0.24 : 0.76);
       startedAt.current = nowRef.current();
@@ -74,15 +80,15 @@ export function useMicrogame(onComplete: (score: number) => void) {
       const next = clickCount.current + 1;
       clickCount.current = next;
       setTargetSpot(leftHandedRef.current ? 0.58 + ((next * 0.137) % 0.32) : 0.1 + ((next * 0.137) % 0.32));
-      if (next >= MULTITAP_TARGET_TAPS) finish(getMultitapScore(next));
+      if (next >= targetTaps) finish(getMultitapScore(next, targetTaps));
       return;
     }
     const targetProgress = leftHandedRef.current ? (targetSpot - 0.1) / 0.8 : (0.9 - targetSpot) / 0.8;
     const score = kind === "concentration"
-      ? getConcentrationScore(elapsedMs - HUMAN_REACTION_WINDOW_MS, targetProgress * CONCENTRATION_TARGET_DURATION_MS)
+      ? getConcentrationScore(elapsedMs, targetProgress * CONCENTRATION_TARGET_DURATION_MS)
       : getTimedAttackScore(elapsedMs - targetDelay);
     finish(score);
-  }, [active, finish, kind, targetDelay, targetSpot]);
+  }, [active, finish, kind, targetDelay, targetSpot, targetTaps]);
   useEffect(() => {
     if (!active) return;
     const interval = setInterval(() => {
@@ -90,11 +96,11 @@ export function useMicrogame(onComplete: (score: number) => void) {
       const value = Math.min(duration, nowRef.current() - startedAt.current);
       elapsedStore.setSnapshot(value);
       if (value >= duration) {
-        finish(kind === "multitap" ? getMultitapScore(clickCount.current) : 0);
+        finish(kind === "multitap" ? getMultitapScore(clickCount.current, targetTaps) : 0);
       }
     }, 16);
     return () => clearInterval(interval);
-  }, [active, elapsedStore, finish, kind]);
+  }, [active, elapsedStore, finish, kind, targetTaps]);
   return {
     active,
     kind,
@@ -102,8 +108,6 @@ export function useMicrogame(onComplete: (score: number) => void) {
     elapsedStore,
     targetDelay,
     targetSpot,
-    get clicks() { return clickCount.current; },
-    istest,
     start,
     tap,
   };

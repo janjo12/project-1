@@ -3,24 +3,23 @@
 import { useRef, useState } from "react";
 import { Text, View, useWindowDimensions } from "react-native";
 
-import { ClassBriefing } from "@/components/Common/ClassBriefing";
 import { Container, Footer, Header, Row, StyledModal, StyledText, Title } from "@/components/Common/Displays";
 import { MicrogameOverlay } from "@/components/Common/MicrogameOverlay";
 import { ScreenShell } from "@/components/Common/ScreenShell";
-import { animateSpriteFlight, measureViewCenter } from "@/components/Common/SpriteFlight";
+import { animateSpriteFlight, measureViewCenterNow } from "@/components/Common/SpriteFlight";
 import { useThemeColors } from "@/components/Common/theme";
 import { CancelButton, DestructiveButton, HelpButton, NormalButton, PrimaryButton, SegmentedButton, TextEntry, ToggleButton } from "@/components/Controls/ActionButton";
 import { ChargeControl, EquipmentControl, ItemControl } from "@/components/Controls/ActionMenu";
 import { DungeonMap } from "@/components/Dungeon/DungeonMap";
 import { GameViewPanel } from "@/components/Dungeon/GameViewPanel";
-import { DebugBar, ResourceBar, ResourceBarGroup } from "@/components/Player/PlayerHUD";
+import { ResourceBar, ResourceBarGroup } from "@/components/Player/PlayerHUD";
 import { TurnTimerBar } from "@/components/Player/TurnTimerBar";
 import { useMicrogame } from "@/game/actions/use-microgame";
 import { getEquipmentStats } from "@/game/actions/items";
 import { PLAYER_MAX_ENERGY, PLAYER_MAX_HEALTH, useRunGame } from "@/game/engine/run-game-singleplayer";
 import { useGameLoopDriver } from "@/game/engine/use-game-loop-driver";
-import { isTestSeed } from "@/utils/seed";
 import type { GameSettings } from "@/utils/settings-storage";
+import { isTestSeed } from "@/utils/seed";
 export function SetupScreen({ settings, onBack, onSettings, onUpdate, onStart, showSeed = true }: {
   settings: GameSettings;
   onBack: () => void;
@@ -112,9 +111,7 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isQuitConfirmOpen, setIsQuitConfirmOpen] = useState(false);
   const [isMapOpen, setIsMapOpen] = useState(false);
-  const [microgameScore, setMicrogameScore] = useState<number | null>(null);
   const [combatMessage, setCombatMessage] = useState("");
-  const [classIntroPage, setClassIntroPage] = useState(0);
   const colors = useThemeColors();
   const game = useRunGame({
     difficulty: settings.difficulty,
@@ -127,13 +124,12 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
   const itemTargetRef = useRef<View>(null);
   const equipmentTargetRef = useRef<View>(null);
   const microgame = useMicrogame(score => {
-    setMicrogameScore(score);
     const target = pendingAttack.current;
     pendingAttack.current = null;
     if (target) game.attackMonster(target, score);
   });
   useGameLoopDriver({
-    enabled: game.isGameLoopRunning() && !isMenuOpen && !microgame.active && classIntroPage < 0,
+    enabled: game.isGameLoopRunning() && !isMenuOpen && !microgame.active,
     isTurnClockActive: game.isTurnClockActive,
     onExpire: game.expireTurn,
     onFrame: game.updateGameFrame,
@@ -147,33 +143,30 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
     <ItemControl targetRef={itemTargetRef} activationDescription={game.inventoryItemActivationDescription} itemLabel={game.inventoryItemLabel} itemSprite={game.inventoryItemSprite} onDrop={game.dropItem} />
   </View>;
   const chargeCost = getEquipmentStats(game.equipment).chargeCost;
-  const startMicrogame = () => microgame.start(game.playerClass.microgame, settings.handedness, { istest: isTestSeed(settings.seed) });
+  const startMicrogame = () => microgame.start(game.playerClass.microgame, settings.handedness, { difficulty: settings.difficulty, level: game.level });
 
   return (
     <ScreenShell compact>
       <GameHeader onMenu={() => setIsMenuOpen(true)} />
-      {!tinyLayout ? <DebugBar accessibilityLabel="Turn status" accessibilityRole="text" testID="turn-status">{`${game.istest ? "TEST · " : ""}${combatMessage || (microgameScore === null ? game.turnStatus : `${game.turnStatus} · Last microgame ${microgameScore}/100`)}`}</DebugBar> : null}
       {!tinyLayout ? <View style={{ flexShrink: 1, maxHeight: compactLayout ? 116 : undefined, minHeight: 0 }}><DungeonMap currentRoomId={game.currentRoomId} map={game.visibleDungeonMap} compact={compactLayout} /></View> : null}
       <Row style={{ height: 148, flexShrink: 0 }}>
         {settings.handedness === "left" ? <><ChargeControl charged={game.isCharged} chargeCost={chargeCost} disabled={game.isResolving || game.hasLost || (!game.isCharged && game.playerEnergy < chargeCost)} onPress={game.toggleCharge} />{controls}</> : <>{controls}<ChargeControl charged={game.isCharged} chargeCost={chargeCost} disabled={game.isResolving || game.hasLost || (!game.isCharged && game.playerEnergy < chargeCost)} onPress={game.toggleCharge} /></>}
       </Row>
-      {!compactLayout ? <Text style={{ color: colors.sepia, fontSize: 12, textAlign: "center" }}>Charge: stronger attack, full block + counter, or move / pick up without using a turn.</Text> : null}
       <ResourceBarGroup compact={compactLayout} playerSprite={game.playerClass.sprite}>
         <ResourceBar compact={compactLayout} accessibilityLabel="Player health" color={colors.health} current={game.playerHealth} icon="heart" max={PLAYER_MAX_HEALTH} panelPosition="first" testID="player-health-bar" />
         <ResourceBar compact={compactLayout} accessibilityLabel="Player energy" color={colors.energy} current={game.playerEnergy} icon="bolt" max={PLAYER_MAX_ENERGY} panelPosition={game.hasTurnTimer ? "middle" : "last"} testID="player-energy-bar" />
         {game.hasTurnTimer ? <TurnTimerBar compact={compactLayout} accessibilityLabel="Turn timer" color={colors.timer} max={game.turnDuration} panelPosition="last" store={game.turnClockStore} testID="turn-timer" /> : null}
       </ResourceBarGroup>
-      {!compactLayout ? <View pointerEvents="none"><Text style={{ color: colors.ink, fontSize: 13, fontWeight: "700", textAlign: "center" }}>Tap a monster to attack, an item to pick it up, a doorway to move, your hero to use their class support skill, or the stairs to descend.</Text></View> : null}
       <View style={{ flex: 1, minHeight: 0, overflow: "hidden", position: "relative", zIndex: microgame.active ? 100 : undefined }}>
       {tinyLayout && combatMessage ? <Text pointerEvents="none" style={{ position: "absolute", top: 8, left: 0, right: 0, zIndex: 20, color: colors.accent, fontWeight: "900", textAlign: "center" }}>{combatMessage}</Text> : null}
       <GameViewPanel
         sceneFrameStore={game.sceneFrameStore}
         canUnlockDoors={game.inventoryItem === "key" || game.playerClass.id === "thief"}
-        disabled={game.isResolving || game.hasLost || microgame.active || classIntroPage >= 0}
+        disabled={game.isResolving || game.hasLost || microgame.active}
         pauseAnimations={microgame.active}
         enemyHealthLossAmount={game.enemyHealthLossAmount}
         hardTurnCounter={game.hardTurnCounter}
-        onActorPress={async (actor, source) => {
+        onActorPress={(actor, source) => {
           if (actor.kind === "enemy") {
             const werewolfWithSilver = !!game.dungeonMap.entities.monsters[actor.id]?.chases && game.inventoryItem === "silver-bullet";
             if (werewolfWithSilver) {
@@ -193,9 +186,10 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
               game.openLootChest(actor.id, actor.kind);
               return;
             }
-            const target = await measureViewCenter(isEquipment ? equipmentTargetRef.current : itemTargetRef.current);
-            if (source && target && actor.contentSprite) {
-              animateSpriteFlight({ start: source, end: target, sprite: actor.contentSprite, label: actor.label });
+            if (actor.contentSprite) {
+              const target = measureViewCenterNow(isEquipment ? equipmentTargetRef.current : itemTargetRef.current)
+                ?? { x: (source?.x ?? 0) + 48, y: (source?.y ?? 0) + 48 };
+              animateSpriteFlight({ start: source ?? { x: 0, y: 0 }, end: target, sprite: actor.contentSprite, label: actor.label });
             }
             if (isEquipment) game.pickupEquipment(actor.id);
             else void game.pickupItem(actor.id);
@@ -214,9 +208,8 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
         playerEnergyLossAmount={game.playerEnergyLossAmount}
         playerHealthLossAmount={game.playerHealthLossAmount}
       />
-      <MicrogameOverlay visible={microgame.active} kind={microgame.kind} elapsedStore={microgame.elapsedStore} targetDelay={microgame.targetDelay} targetSpot={microgame.targetSpot} clicks={microgame.clicks} leftHanded={settings.handedness === "left"} isTest={microgame.istest} onTap={microgame.tap} />
+      <MicrogameOverlay visible={microgame.active} kind={microgame.kind} elapsedStore={microgame.elapsedStore} targetDelay={microgame.targetDelay} targetSpot={microgame.targetSpot} leftHanded={settings.handedness === "left"} onTap={microgame.tap} />
       </View>
-      {classIntroPage >= 0 ? <ClassBriefing page={classIntroPage} classId={game.playerClass.id} damage={microgameScore === null ? game.playerAttack : Math.max(1, Math.floor(game.playerAttack * microgameScore / 100))} multiplayer={false} microgamesEnabled={settings.microgamesEnabled} onExit={onBackToSetup} onNext={() => setClassIntroPage(1)} onBack={() => setClassIntroPage(0)} onPractice={startMicrogame} onStart={() => setClassIntroPage(-1)} /> : null}
       <StyledModal accessibilityLabel="Game menu" accessibilityRole="dialog" animationType="fade" onRequestClose={() => setIsMenuOpen(false)} visible={isMenuOpen}>
         <Title>Menu</Title>
         <Container>

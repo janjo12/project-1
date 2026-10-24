@@ -64,13 +64,10 @@ export function ResourceBar({
       ]}
       testID={testID}
     >
-      <FontAwesome
-        color={color}
-        name={icon}
-        size={13}
-        testID={`${testID}-icon`}
-      />
-      <View style={styles.track}>
+      <View style={styles.iconSlot}>
+        <FontAwesome color={color} name={icon} size={16} testID={`${testID}-glyph`} />
+      </View>
+      <View style={styles.track} testID={`${testID}-track`}>
         <View
           style={[
             styles.fill,
@@ -128,6 +125,7 @@ function createStyles(colors: ThemeColors) {
     },
     compactPlayerBars: {
       flexDirection: "row",
+      gap: 3,
     },
     group: {
       alignItems: "center",
@@ -146,6 +144,11 @@ function createStyles(colors: ThemeColors) {
       borderRadius: 999,
       height: "100%",
     },
+    iconSlot: {
+      alignItems: "center",
+      justifyContent: "center",
+      width: 18,
+    },
     firstRow: {
       borderTopLeftRadius: 8,
       borderTopRightRadius: 8,
@@ -159,7 +162,7 @@ function createStyles(colors: ThemeColors) {
     },
     playerBars: {
       flex: 1,
-      gap: 6,
+      gap: 3,
       minWidth: 0,
     },
     playerSpriteSlot: {
@@ -173,11 +176,10 @@ function createStyles(colors: ThemeColors) {
     row: {
       alignItems: "center",
       backgroundColor: colors.paper,
-      borderColor: colors.resourceBorder,
       borderRadius: 8,
-      borderWidth: 2,
+      borderWidth: 0,
       flexDirection: "row",
-      gap: 6,
+      gap: 4,
       minHeight: 24,
       paddingHorizontal: 7,
       paddingVertical: 5,

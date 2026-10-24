@@ -1,7 +1,7 @@
 import { POSSIBLE_EQUIPMENT, type DungeonMap, type ItemId, type WorldMonster } from "@/game/dungeon/types";
 import { getConnectedRoomId, getCurrentRoom, getRoom, getRoomItem, getRoomItemId, getRoomMonster, getRoomEquipment, hasRoomStairs, revealRooms } from "@/game/dungeon/rooms";
 import { getTurnDuration, hasTurnLimit, hasTurnTimer } from "@/game/engine/resolveTurn";
-import { canUseInventoryItem, getInventoryItemActivationDescription, getInventoryItemSprite, getItemLabel, getEquipmentDescription, getEquipmentLabel } from "@/game/actions/items";
+import { canUseInventoryItem, getInventoryItemActivationDescription, getInventoryItemDescription, getInventoryItemSprite, getItemLabel, getEquipmentDescription, getEquipmentLabel } from "@/game/actions/items";
 import { getRoomDoorways, getRoomSceneActors } from "@/game/engine/run-game-scene";
 import { getTurnStatus } from "@/game/engine/run-game-status";
 import type { Difficulty } from "@/utils/settings-storage";
@@ -37,6 +37,7 @@ export function getRunSnapshot({
     disabledDirections: getDisabledDirections(dungeonMap, inventoryItem, isResolving, currentRoomId),
     hasHardTurnCounter, hasLost, hasRoomEnemy, hasTurnTimer: hasTurnTimer(difficulty),
     inventoryItemLabel: getItemLabel(inventoryItem),
+    inventoryItemDescription: getInventoryItemDescription(inventoryItem),
     inventoryItemActivationDescription: getInventoryItemActivationDescription(inventoryItem),
     inventoryItemSprite: getInventoryItemSprite(inventoryItem),
     equipmentLabel: getEquipmentLabel(equipment),

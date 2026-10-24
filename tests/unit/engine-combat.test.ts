@@ -52,13 +52,14 @@ describe("documented combat math", () => {
       expect(monster.damage).toBe(catalogMonster.damage);
     });
 
+    // Use ordinary generated maps so the comparison covers the normal scaled monster path.
     const solo = createMultiplayerState("testwarrior", "normal", ["host"]);
     const party = createMultiplayerState("testwarrior", "normal", ["host", "guest-1", "guest-2", "guest-3"]);
     const additionalPlayers = Object.keys(party.players).length - Object.keys(solo.players).length;
     const expectedHealthScale = 1 + additionalPlayers * GAME_PARAMETERS.monsterScaling.healthIncreasePerAdditionalPlayer;
     const expectedDamageScale = 1 + additionalPlayers * GAME_PARAMETERS.monsterScaling.damageIncreasePerAdditionalPlayer;
-    const soloMonsters = Object.values(solo.map.entities.monsters);
-    const partyMonsters = Object.values(party.map.entities.monsters);
+    const soloMonsters = Object.values(solo.map.entities.monsters).filter(monster => !monster.chases);
+    const partyMonsters = Object.values(party.map.entities.monsters).filter(monster => !monster.chases);
     expect(partyMonsters.map(monster => monster.id)).toEqual(soloMonsters.map(monster => monster.id));
     expect(soloMonsters.length).toBeGreaterThan(0);
     soloMonsters.forEach(monster => {

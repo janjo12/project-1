@@ -1,36 +1,25 @@
 import { expect, test } from "@playwright/test";
-import { MULTITAP_TARGET_TAPS, MULTITAP_WINDOW_MS } from "@/game/actions/use-microgame";
+import { MULTITAP_WINDOW_MS } from "@/game/actions/use-microgame";
+import { openScenarioApp } from "../helpers";
 
-test("web renders atlas sprites and practice timeout updates the damage preview", async ({ page }) => {
+test("web renders atlas sprites and practice attack remains available from the pause menu", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   const fixedTime = new Date("2026-01-01T00:00:00Z");
   await page.clock.install({ time: fixedTime });
   await page.clock.pauseAt(fixedTime);
-  await page.goto("/");
-  await page.evaluate(() => localStorage.clear());
-  await page.reload();
+  await openScenarioApp(page, true);
 
   await page.getByRole("button", { name: "Singleplayer" }).click();
   await page.getByRole("textbox", { name: "Seed" }).fill("testwarrior");
   await page.getByRole("button", { name: "Start", exact: true }).click();
-  await page.getByRole("button", { name: "Next class instructions", exact: true }).click();
-
-  await expect(page.getByText("Damage: 10", { exact: true })).toBeVisible();
-  const briefing = page.getByTestId("class-briefing");
-  const instructionSprite = briefing.getByTestId("pixel-sprite-image").locator("img");
-  await expect(instructionSprite).toBeVisible();
-  await expect.poll(() => instructionSprite.evaluate(element => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
-  await page.getByRole("button", { name: "Practice attack game", exact: true }).click();
+  await page.getByRole("button", { name: "Menu" }).click();
+  await page.getByRole("dialog", { name: "Game menu" }).getByRole("button", { name: "Practice attack microgame" }).click();
   const microgame = page.getByTestId("microgame-overlay");
   await expect(microgame).toBeVisible();
-  await expect(microgame.getByText("Tap the ●")).toBeVisible();
-  await expect(instructionSprite).toBeVisible();
+  await expect(microgame.getByText("Tap the ●")).toHaveCount(0);
   await expect(microgame.getByTestId("pixel-sprite-image")).toHaveCount(0);
   await page.clock.runFor(MULTITAP_WINDOW_MS + 100);
   await expect(page.getByTestId("microgame-overlay")).toBeHidden();
-  await expect(page.getByText("Damage: 1", { exact: true })).toBeVisible();
-
-  await page.getByRole("button", { name: "Start playing", exact: true }).click();
 
   const sprites = page.getByTestId("pixel-sprite-image");
   await expect(sprites.first()).toBeVisible();

@@ -316,7 +316,7 @@ function Multiplayer({ settings, onLeave, onHostSelect, onOptionsSelect, startAs
                   submit({ type: "ATTACK", target: actor.id });
                 } else if (player.health > 0 && settings.microgamesEnabled) {
                   pendingAttack.current = actor.id;
-                  microgame.start(getGameClass(player.classId).microgame, settings.handedness, { istest: isTestSeed(state.seed) });
+                  microgame.start(getGameClass(player.classId).microgame, settings.handedness, { difficulty: state.difficulty, level: state.level });
                 } else {
                   submit({ type: "ATTACK", target: actor.id });
                 }
@@ -343,9 +343,7 @@ function Multiplayer({ settings, onLeave, onHostSelect, onOptionsSelect, startAs
             elapsedStore={microgame.elapsedStore}
             targetDelay={microgame.targetDelay}
             targetSpot={microgame.targetSpot}
-            clicks={microgame.clicks}
             leftHanded={settings.handedness === "left"}
-            isTest={microgame.istest}
             onTap={microgame.tap}
           />
           </View>
@@ -362,7 +360,7 @@ function Multiplayer({ settings, onLeave, onHostSelect, onOptionsSelect, startAs
               microgamesEnabled={settings.microgamesEnabled}
               onNext={() => setIntroPage(1)}
               onBack={() => setIntroPage(0)}
-              onPractice={() => microgame.start(getGameClass(player.classId).microgame, settings.handedness, { istest: isTestSeed(state.seed) })}
+              onPractice={() => microgame.start(getGameClass(player.classId).microgame, settings.handedness, { difficulty: state.difficulty, level: state.level })}
               onStart={() => {
                 setIntroPage(-1);
                 submit({ type: "CLASS_READY" });

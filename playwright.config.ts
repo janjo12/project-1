@@ -3,10 +3,11 @@ import { defineConfig, devices } from "@playwright/test";
 const visualPort = Number(process.env.PLAYWRIGHT_PORT ?? 3127);
 
 export default defineConfig({
-  testDir: "./tests",
+  testDir: "./tests/browser",
   testMatch: "**/*.spec.ts",
   testIgnore: "**/emulator/**",
   fullyParallel: false,
+  workers: 1,
   reporter: "list",
   use: {
     ...devices["Desktop Chrome"],

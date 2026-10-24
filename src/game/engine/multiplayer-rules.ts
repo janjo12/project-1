@@ -2,7 +2,7 @@ import { GAME_PARAMETERS } from "@/game/config/gameparameters";
 import { createLevelMap } from "@/game/engine/run-game-level";
 import { PLAYER_MAX_ENERGY, PLAYER_MAX_HEALTH } from "@/game/state/types";
 import { getHardTurnLimit, hasTurnLimit, resolveTurnLoss } from "@/game/engine/resolveTurn";
-import { getNeighbor, getRoomId, POSSIBLE_EQUIPMENT, POSSIBLE_ITEMS, type Direction, type DungeonMap } from "@/game/dungeon/types";
+import { getNeighborInGrid, getRoomId, POSSIBLE_EQUIPMENT, POSSIBLE_ITEMS, type Direction, type DungeonMap } from "@/game/dungeon/types";
 import {
   addEquipmentToRoom,
   addItemToRoom,
@@ -189,7 +189,7 @@ export function resolveMultiplayerTurn(
     const room = getRoom(state.map, player.roomId);
     if (player.health <= 0) {
       if (action?.type === "MOVE" && ["north", "east", "south", "west"].includes(action.target ?? "") && room[action.target as Direction] !== "wall") {
-        const neighbor = getNeighbor(room, action.target as Direction);
+        const neighbor = getNeighborInGrid(state.map.rooms, room, action.target as Direction);
         if (neighbor) {
           const destination = getRoom(state.map, getRoomId(neighbor));
           player.roomId = destination.id;
@@ -330,7 +330,7 @@ export function resolveMultiplayerTurn(
       if (player.vanguard > 0) {
         const reflectedDamage = Math.min(
           enemy.currentHealth,
-          applyDefense(enemy.damage, enemy.defense ?? 0),
+          GAME_PARAMETERS.combat.warriorRiposteDamage,
         );
         console.info(`[combat] Player ${player.id} reflected ${reflectedDamage} damage to ${enemy.name}.`);
         state.map = damageMonsterInRoom(

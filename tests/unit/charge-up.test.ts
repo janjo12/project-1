@@ -291,15 +291,25 @@ test("Cleric support grants five defense through its next turn", async () => {
   expect(result.current.playerDefense).toBe(10);
 });
 
-test("charged Warrior support blocks the hit and counters the attacking enemy", async () => {
-  const { result } = await setup(true, false, 100, 20, "easy", "testwarrior");
+test("charged Warrior support raises defense and deals only a small riposte", async () => {
+  const { result } = await setup(true, false, 100, 24, "easy", "testwarrior");
   act(() => result.current.toggleCharge());
   act(() => result.current.supportSelf());
   await act(async () => { jest.runAllTimers(); });
 
-  expect(result.current.playerHealth).toBe(100);
-  expect(result.current.dungeonMap.entities.monsters.zombie.currentHealth).toBe(80);
+  expect(result.current.playerHealth).toBe(96);
+  expect(result.current.dungeonMap.entities.monsters.zombie.currentHealth).toBe(100 - GAME_PARAMETERS.combat.warriorRiposteDamage);
   expect(result.current.playerEnergy).toBe(PLAYER_MAX_ENERGY - 10);
+});
+
+test("uncharged Warrior support riposte is smaller than a normal attack", async () => {
+  const { result } = await setup(true, false, 100, 24, "easy", "testwarrior");
+  act(() => result.current.supportSelf());
+  await act(async () => { jest.runAllTimers(); });
+
+  expect(result.current.playerHealth).toBe(91);
+  expect(result.current.dungeonMap.entities.monsters.zombie.currentHealth).toBe(100 - GAME_PARAMETERS.combat.warriorRiposteDamage);
+  expect(GAME_PARAMETERS.combat.warriorRiposteDamage).toBeLessThan(GAME_PARAMETERS.combat.normalAttackDamage);
 });
 
 test("an uncharged thief spends a turn picking a locked door without a key", async () => {

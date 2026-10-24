@@ -2,6 +2,7 @@ import { StyleSheet, Text, View, useWindowDimensions } from "react-native";
 
 import { PixelSprite } from "@/components/Common/PixelSprite";
 import { useThemeColors, type ThemeColors } from "@/components/Common/theme";
+import { GAME_PARAMETERS } from "@/game/config/gameparameters";
 import { getRoomMonster, getRoomPosition, getRooms } from "@/game/dungeon/rooms";
 import type { DungeonMap as DungeonMapType } from "@/game/dungeon/types";
 
@@ -25,13 +26,28 @@ export function DungeonMap({
   const styles = createStyles(colors, compact, veryCompact);
   const roomMap = new Map(getRooms(map).map((room) => [room.id, room]));
   const currentRoomPosition = getRoomPosition(currentRoomId);
+  const adjacentRoomId = (roomId: string, direction: "north" | "east" | "south" | "west") => {
+    const row = roomId[0];
+    const column = Number(roomId.slice(1));
+    const rowIndex = map.columns.indexOf(row);
+    if (direction === "north") return map.columns[rowIndex - 1] ? `${map.columns[rowIndex - 1]}${column}` : null;
+    if (direction === "south") return map.columns[rowIndex + 1] ? `${map.columns[rowIndex + 1]}${column}` : null;
+    if (direction === "east") return map.rows.includes(column + 1) ? `${row}${column + 1}` : null;
+    return map.rows.includes(column - 1) ? `${row}${column - 1}` : null;
+  };
+  const hasRevealedConnection = (room: ReturnType<typeof getRooms>[number], direction: "north" | "east" | "south" | "west") => {
+    const neighborId = adjacentRoomId(room.id, direction);
+    if (!neighborId || !room.isRevealed || room[direction] !== "open") return false;
+    const neighbor = roomMap.get(neighborId);
+    const opposite = ({ north: "south", east: "west", south: "north", west: "east" } as const)[direction];
+    return Boolean(neighbor?.isRevealed && neighbor[opposite] === "open");
+  };
   if (!roomMap.has(currentRoomId)) {
     throw new Error(`Current room ${currentRoomId} is missing from the dungeon map`);
   }
 
   return (
     <View
-      accessibilityLabel={`Level ${map.level} Map`}
       style={[styles.wrapper, compact && styles.compactWrapper]}
       testID="dungeon-map"
     >
@@ -56,7 +72,7 @@ export function DungeonMap({
         })}
       </View> : null}
 
-      <View style={[styles.body, { aspectRatio: map.rows.length / map.columns.length }]}>
+      <View style={[styles.body, { aspectRatio: GAME_PARAMETERS.dungeon.mapWidthRooms / GAME_PARAMETERS.dungeon.mapHeightRooms }]}>
         <View style={styles.rowLabels}>
           {map.columns.map((rowLetter) => {
             const isCurrentRow = rowLetter === currentRoomPosition.column;
@@ -111,7 +127,11 @@ export function DungeonMap({
                         : colors.mapExploredRoom;
 
                 return (
-                  <View key={columnNumber} style={styles.gridCell}>
+                  <View key={columnNumber} style={styles.gridCell} testID={`map-cell-${roomId}`}>
+                    {hasRevealedConnection(room, "north") ? <View testID={`map-corridor-${roomId}-north`} style={[styles.corridor, styles.northCorridor]} /> : null}
+                    {hasRevealedConnection(room, "east") ? <View testID={`map-corridor-${roomId}-east`} style={[styles.corridor, styles.eastCorridor]} /> : null}
+                    {hasRevealedConnection(room, "south") ? <View testID={`map-corridor-${roomId}-south`} style={[styles.corridor, styles.southCorridor]} /> : null}
+                    {hasRevealedConnection(room, "west") ? <View testID={`map-corridor-${roomId}-west`} style={[styles.corridor, styles.westCorridor]} /> : null}
                     {room && isRevealed ? (
                       <View
                         accessibilityLabel={`Room ${rowLetter}${columnNumber}${isCurrentRoom ? ", your room" : ""}${hasMonster ? ", monster" : ""}${hasItem ? ", item" : ""}${hasEquipment ? ", equipment" : ""}${hasStairs ? ", stairs" : ""}`}
@@ -133,41 +153,29 @@ export function DungeonMap({
                             ))}
                           </View>
                         ) : null}
-                        {room.north === "open" ? (
-                          <View style={[styles.door, styles.northDoor]} />
-                        ) : null}
                         {hasNorthLock ? (
-                          <Text accessible={false} style={[styles.iconOverlay, styles.lockIcon, styles.northLock]}>🔒</Text>
+                          <Text testID={`map-locked-doorway-${roomId}-top`} accessible={false} style={[styles.iconOverlay, styles.lockIcon, styles.northLock]}>🔒</Text>
                         ) : null}
                         {hasNorthGuard ? (
-                          <PixelSprite sprite="guard_graphic" label="Guarded doorway" size={10} style={[styles.iconOverlay, styles.northGuard]} />
-                        ) : null}
-                        {room.east === "open" ? (
-                          <View style={[styles.door, styles.eastDoor]} />
+                          <Text testID={`map-guarded-doorway-${roomId}-top`} accessible={false} style={[styles.iconOverlay, styles.guardMarker, styles.northGuard]}>×</Text>
                         ) : null}
                         {hasEastLock ? (
-                          <Text accessible={false} style={[styles.iconOverlay, styles.lockIcon, styles.eastLock]}>🔒</Text>
+                          <Text testID={`map-locked-doorway-${roomId}-right`} accessible={false} style={[styles.iconOverlay, styles.lockIcon, styles.eastLock]}>🔒</Text>
                         ) : null}
                         {hasEastGuard ? (
-                          <PixelSprite sprite="guard_graphic" label="Guarded doorway" size={10} style={[styles.iconOverlay, styles.eastGuard]} />
-                        ) : null}
-                        {room.south === "open" ? (
-                          <View style={[styles.door, styles.southDoor]} />
+                          <Text testID={`map-guarded-doorway-${roomId}-right`} accessible={false} style={[styles.iconOverlay, styles.guardMarker, styles.eastGuard]}>×</Text>
                         ) : null}
                         {hasSouthLock ? (
-                          <Text accessible={false} style={[styles.iconOverlay, styles.lockIcon, styles.southLock]}>🔒</Text>
+                          <Text testID={`map-locked-doorway-${roomId}-bottom`} accessible={false} style={[styles.iconOverlay, styles.lockIcon, styles.southLock]}>🔒</Text>
                         ) : null}
                         {hasSouthGuard ? (
-                          <PixelSprite sprite="guard_graphic" label="Guarded doorway" size={10} style={[styles.iconOverlay, styles.southGuard]} />
-                        ) : null}
-                        {room.west === "open" ? (
-                          <View style={[styles.door, styles.westDoor]} />
+                          <Text testID={`map-guarded-doorway-${roomId}-bottom`} accessible={false} style={[styles.iconOverlay, styles.guardMarker, styles.southGuard]}>×</Text>
                         ) : null}
                         {hasWestLock ? (
-                          <Text accessible={false} style={[styles.iconOverlay, styles.lockIcon, styles.westLock]}>🔒</Text>
+                          <Text testID={`map-locked-doorway-${roomId}-left`} accessible={false} style={[styles.iconOverlay, styles.lockIcon, styles.westLock]}>🔒</Text>
                         ) : null}
                         {hasWestGuard ? (
-                          <PixelSprite sprite="guard_graphic" label="Guarded doorway" size={10} style={[styles.iconOverlay, styles.westGuard]} />
+                          <Text testID={`map-guarded-doorway-${roomId}-left`} accessible={false} style={[styles.iconOverlay, styles.guardMarker, styles.westGuard]}>×</Text>
                         ) : null}
                         {hasStairs ? (
                           <PixelSprite sprite="stairs_graphic" label="Stairs" size={20} />
@@ -184,19 +192,8 @@ export function DungeonMap({
           ))}
         </View>
       </View>
-      {!veryCompact ? <View style={styles.legend} accessibilityLabel="Map color key">
-        <LegendChip color={colors.mapCurrentRoom} label="You" styles={styles} />
-        <LegendChip color={colors.mapEnemyRoom} label="Monster" styles={styles} />
-        <LegendChip color={colors.mapItemRoom} label="Item" styles={styles} />
-        <LegendChip color={colors.mapStairsRoom} label="Stairs" styles={styles} />
-        <LegendChip color={colors.mapExploredRoom} label="Explored" styles={styles} />
-      </View> : null}
     </View>
   );
-}
-
-function LegendChip({ color, label, styles }: { color: string; label: string; styles: ReturnType<typeof createStyles> }) {
-  return <View style={styles.legendItem}><View style={[styles.legendSwatch, { backgroundColor: color }]} /><Text style={styles.legendLabel}>{label}</Text></View>;
 }
 
 function createStyles(colors: ThemeColors, compact: boolean, veryCompact: boolean) {
@@ -273,6 +270,7 @@ function createStyles(colors: ThemeColors, compact: boolean, veryCompact: boolea
       flex: 1,
       justifyContent: "center",
       minHeight: veryCompact ? 8 : compact ? 12 : 22,
+      position: "relative",
     },
     room: {
       alignItems: "center",
@@ -283,6 +281,7 @@ function createStyles(colors: ThemeColors, compact: boolean, veryCompact: boolea
       justifyContent: "center",
       position: "relative",
       width: "60%",
+      zIndex: 1,
     },
     playerMarkers: {
       alignItems: "center",
@@ -304,69 +303,91 @@ function createStyles(colors: ThemeColors, compact: boolean, veryCompact: boolea
       borderColor: colors.accent,
       borderWidth: 3,
     },
-    legend: { flexDirection: "row", flexWrap: "wrap", gap: 8, justifyContent: "center", paddingTop: 4 },
-    legendItem: { alignItems: "center", flexDirection: "row", gap: 4 },
-    legendSwatch: { borderColor: colors.fadedInk, borderRadius: 3, borderWidth: 1, height: 12, width: 12 },
-    legendLabel: { color: colors.ink, fontSize: 10, fontWeight: "700" },
     iconOverlay: { position: "absolute" },
     lockIcon: { fontSize: 12, lineHeight: 14, textAlign: "center" },
-    door: {
+    corridor: {
       backgroundColor: colors.ink,
       position: "absolute",
+      zIndex: 2,
     },
-    northDoor: {
-      height: 7,
-      left: "35%",
-      top: -7,
-      width: "30%",
+    northCorridor: {
+      height: "20%",
+      left: "41%",
+      top: -1,
+      width: "18%",
     },
     northLock: {
+      left: "50%",
       top: -11,
+      transform: [{ translateX: -6 }],
       width: 12,
     },
     northGuard: {
+      left: "50%",
       top: -11,
+      transform: [{ translateX: -6 }],
       width: 12,
     },
-    eastDoor: {
-      height: "40%",
-      right: -7,
-      width: 7,
+    eastCorridor: {
+      height: "24%",
+      right: -1,
+      top: "38%",
+      width: "20%",
     },
     eastLock: {
       right: -13,
+      top: "50%",
+      transform: [{ translateY: -7 }],
       width: 12,
     },
     eastGuard: {
       right: -13,
+      top: "50%",
+      transform: [{ translateY: -7 }],
       width: 12,
     },
-    southDoor: {
-      bottom: -6,
-      height: 7,
-      left: "35%",
-      width: "30%",
+    southCorridor: {
+      bottom: -1,
+      height: "20%",
+      left: "41%",
+      width: "18%",
     },
     southLock: {
       bottom: -11,
+      left: "50%",
+      transform: [{ translateX: -6 }],
       width: 12,
     },
     southGuard: {
       bottom: -11,
+      left: "50%",
+      transform: [{ translateX: -6 }],
       width: 12,
     },
-    westDoor: {
-      height: "40%",
-      left: -7,
-      width: 7,
+    westCorridor: {
+      height: "24%",
+      left: -1,
+      top: "38%",
+      width: "20%",
     },
     westLock: {
       left: -11,
+      top: "50%",
+      transform: [{ translateY: -7 }],
       width: 12,
     },
     westGuard: {
       left: -13,
+      top: "50%",
+      transform: [{ translateY: -7 }],
       width: 12,
+    },
+    guardMarker: {
+      color: "#dc2626",
+      fontSize: 12,
+      fontWeight: "900",
+      lineHeight: 14,
+      textAlign: "center",
     },
   });
 }
