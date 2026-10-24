@@ -71,7 +71,7 @@ function finishFlight(id: number) {
 
 export function SpriteFlightLayer() {
   const flight = useSyncExternalStore(subscribeToFlight, () => activeFlight, () => null);
-  const translation = useRef(new Animated.ValueXY()).current;
+  const [translation] = useState(() => new Animated.ValueXY());
   const layerRef = useRef<View>(null);
   const [origin, setOrigin] = useState<ScreenPoint>({ x: 0, y: 0 });
 

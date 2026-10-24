@@ -1,5 +1,5 @@
 import type { SceneFrameStore } from "@/game/state/sceneFrameStore";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Animated, Platform, StyleSheet, Text, View } from "react-native";
 
 import { useThemeColors, type ThemeColors } from "@/components/Common/theme";
@@ -77,7 +77,7 @@ export function GameViewPanel({
   const visibleActors = roomSceneActors ?? [];
   const [sceneBoxHeight, setSceneBoxHeight] = useState(0);
   const sceneScale = 1;
-  const panelOpacity = useRef(new Animated.Value(1)).current;
+  const [panelOpacity] = useState(() => new Animated.Value(1));
 
   useEffect(() => {
     const animation = Animated.timing(panelOpacity, {

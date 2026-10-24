@@ -114,7 +114,6 @@ export function RoomScene({
   const [transitionSnapshot, setTransitionSnapshot] = useState<RoomTransitionSnapshot | null>(null);
   const previousScene = useRef<RoomTransitionSnapshot>({ roomId, actors, floorLayer, doorways });
   const nextTransitionKey = useRef(0);
-  const stableLayout = useRef<{ roomId?: string; actors: { id: string; position?: ScenePosition }[] } | null>(null);
   useEffect(() => {
     let mounted = true;
     AccessibilityInfo.isReduceMotionEnabled().then(value => { if (mounted) setSystemReducedMotion(value); }).catch(() => undefined);
@@ -145,9 +144,11 @@ export function RoomScene({
     }, ROOM_TRANSITION_DURATION_MS);
     return () => clearTimeout(timeout);
   }, [transitionKey, animationsPaused]);
+  const layoutCache = useRef<{ roomId?: string; actors: { id: string; position?: ScenePosition }[] } | null>(null);
   const layoutActors = useMemo(() => {
-    const previous = stableLayout.current;
-    const entries = previous && previous.roomId === roomId ? previous.actors.slice() : [];
+    const cachedLayout = layoutCache.current;
+    const previous = cachedLayout && cachedLayout.roomId === roomId ? cachedLayout.actors : null;
+    const entries = previous ? previous.slice() : [];
     const knownActorIds = new Set(entries.map(actor => actor.id));
     for (const actor of actors) {
       const id = `${actor.kind}:${actor.id}`;
@@ -162,7 +163,7 @@ export function RoomScene({
     return entries;
   }, [actors, playerPosition, roomId]);
   useLayoutEffect(() => {
-    stableLayout.current = { roomId, actors: layoutActors };
+    layoutCache.current = { roomId, actors: layoutActors };
   }, [layoutActors, roomId]);
   // Keep slots for defeated/collected actors reserved until the room changes. Their removal
   // therefore cannot recenter every other sprite at the end of an attack animation.
@@ -399,7 +400,6 @@ function PlayerActor({
   useLayoutEffect(() => {
     if (entering) {
       previousPosition.current = entryPosition;
-      setExitDirection(null);
       return;
     }
     if (previousPosition.current !== entryPosition && entryPosition !== "center") {

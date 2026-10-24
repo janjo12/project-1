@@ -175,7 +175,7 @@ function Multiplayer({ settings, onLeave, onHostSelect, onOptionsSelect, startAs
               {isWeb
                 ? connected
                   ? <StyledText>Joined room {outgoing}. Waiting for the host to start…</StyledText>
-                  : <StyledText>Enter the host's room code. The room server supplies its seed and difficulty.</StyledText>
+                  : <StyledText>Enter the host&apos;s room code. The room server supplies its seed and difficulty.</StyledText>
                 : <StyledText>The host chooses the seed and difficulty for everyone.</StyledText>}
               {(!isWeb && !outgoing) || (isWeb && !connected) ? (
                 <>
