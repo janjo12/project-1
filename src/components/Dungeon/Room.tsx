@@ -144,10 +144,14 @@ export function RoomScene({
     }, ROOM_TRANSITION_DURATION_MS);
     return () => clearTimeout(timeout);
   }, [transitionKey, animationsPaused]);
-  const layoutCache = useRef<{ roomId?: string; actors: { id: string; position?: ScenePosition }[] } | null>(null);
+  const [layoutCache, setLayoutCache] = useState<{ roomId?: string; actors: { id: string; position?: ScenePosition }[]; inputActors: RoomSceneActor[]; playerPosition: ScenePosition } | null>(null);
+  const layoutCacheMatches = layoutCache !== null
+    && layoutCache.roomId === roomId
+    && layoutCache.inputActors === actors
+    && layoutCache.playerPosition === playerPosition;
+  const cachedLayout = layoutCache && layoutCache.roomId === roomId ? layoutCache.actors : null;
   const layoutActors = useMemo(() => {
-    const cachedLayout = layoutCache.current;
-    const previous = cachedLayout && cachedLayout.roomId === roomId ? cachedLayout.actors : null;
+    const previous = cachedLayout;
     const entries = previous ? previous.slice() : [];
     const knownActorIds = new Set(entries.map(actor => actor.id));
     for (const actor of actors) {
@@ -161,10 +165,10 @@ export function RoomScene({
     if (playerLayout) playerLayout.position = playerPosition;
     else entries.push({ id: "local-player", position: playerPosition });
     return entries;
-  }, [actors, playerPosition, roomId]);
-  useLayoutEffect(() => {
-    layoutCache.current = { roomId, actors: layoutActors };
-  }, [layoutActors, roomId]);
+  }, [actors, playerPosition, cachedLayout]);
+  if (!layoutCacheMatches) {
+    setLayoutCache({ roomId, actors: layoutActors, inputActors: actors, playerPosition });
+  }
   // Keep slots for defeated/collected actors reserved until the room changes. Their removal
   // therefore cannot recenter every other sprite at the end of an attack animation.
   const slots = useMemo(() => layoutRoomActors(layoutActors), [layoutActors]);
