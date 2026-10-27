@@ -36,7 +36,13 @@ const nextConfig: NextConfig = {
       new webpack.DefinePlugin({
         __DEV__: JSON.stringify(process.env.NODE_ENV !== "production"),
         // Reanimated's web bundle expects the Node-style `global`; browsers expose the same object as `globalThis`.
-        ...(!isServer ? { global: "globalThis" } : {}),
+        ...(!isServer ? { global: "globalThis" } : {
+          // Reanimated Worklets can schedule frames while Next evaluates the
+          // client bundle for SSR. Animations have no visible effect on the
+          // server, so keep those callbacks inert in server-rendered bundles.
+          requestAnimationFrame: "((callback) => 0)",
+          cancelAnimationFrame: "((handle) => undefined)",
+        }),
       }),
     );
     return config;

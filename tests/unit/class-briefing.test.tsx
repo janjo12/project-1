@@ -2,10 +2,10 @@ import { fireEvent, render } from "@testing-library/react-native";
 import { ClassBriefing } from "@/components/Common/ClassBriefing";
 
 describe("class briefing when microgames are disabled", () => {
-  it("starts directly from the class instructions without a microgame tutorial step", () => {
+  it("starts directly from the class instructions without a microgame tutorial step", async () => {
     const onNext = jest.fn();
     const onStart = jest.fn();
-    const screen = render(
+    const screen = await render(
       <ClassBriefing
         classId="warrior"
         page={0}

@@ -4,7 +4,7 @@ import { AppState } from "react-native";
 import type { createClientConnection, createHostSession } from "@/multiplayer/connection";
 import { describeMultiplayerFailure } from "@/multiplayer/multiplayer-errors";
 import { getRunSnapshot } from "@/game/engine/run-game-snapshot";
-import { getTurnDuration, hasTurnLimit } from "@/game/engine/resolveTurn";
+import { getTurnDuration } from "@/game/engine/resolveTurn";
 import { moveCurrentPosition } from "@/game/dungeon/rooms";
 import type { GameSettings } from "@/utils/settings-storage";
 import { createMultiplayerState, isMultiplayerState, resolveMultiplayerTurn } from "@/game/engine/multiplayer-rules";

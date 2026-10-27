@@ -221,6 +221,7 @@ export function RoomScene({
       ))}
 
       <PlayerActor
+        roomId={roomId}
         sceneFrameStore={sceneFrameStore}
         animationFrame={animationFrame}
         energyLossAmount={playerEnergyLossAmount}
@@ -363,6 +364,7 @@ function SceneActor({
 }
 
 type PlayerActorProps = {
+  roomId?: string;
   animationFrame?: CombatAnimationFrame;
   sceneFrameStore?: SceneFrameStore;
   energyLossAmount: number;
@@ -382,6 +384,7 @@ type PlayerActorProps = {
 };
 
 function PlayerActor({
+  roomId,
   animationFrame,
   sceneFrameStore,
   energyLossAmount,
@@ -402,18 +405,18 @@ function PlayerActor({
   const colors = useThemeColors();
   const styles = createStyles(colors);
   const previousPosition = useRef(entryPosition);
-  const [exitDirection, setExitDirection] = useState<DoorPosition | null>(null);
+  const [exitState, setExitState] = useState<{ roomId?: string; direction: DoorPosition } | null>(null);
+  const exitDirection = exitState && exitState.roomId === roomId ? exitState.direction : null;
   useLayoutEffect(() => {
     if (entering) {
       previousPosition.current = entryPosition;
-      setExitDirection(null);
       return;
     }
     if (previousPosition.current !== entryPosition && entryPosition !== "center") {
-      setExitDirection(entryPosition);
+      setExitState({ roomId, direction: entryPosition });
     }
     previousPosition.current = entryPosition;
-  }, [entering, entryPosition]);
+  }, [entering, entryPosition, roomId]);
   const positionTransition = Platform.OS === "web" && !reducedMotion && !entering
     ? ({
       transitionProperty: "left, top",

@@ -852,14 +852,12 @@ export function createDungeonMap(
 
   placeWerewolfAndSilverBullet(context, reachableRoomIds);
   const lootCounts = getOptionalLootCounts(context, reachableRoomIds);
-  const deadEnds = new Set(getDeadEndRoomIds(context));
   const questChestCount = [...context.allRoomIds].reduce((count, roomId) => {
     const room = findRoomInGrid(rooms, roomId);
     return count + (room?.contents.filter(content =>
       (content.type === "item" || content.type === "equipment") && content.isChest,
     ).length ?? 0);
   }, 0);
-  const stairsCount = [...deadEnds].filter(roomId => findRoomInGrid(rooms, roomId)?.contents.some(content => content.type === "stairs")).length;
   const reachableSet = new Set(reachableRoomIds);
   if (!skipDeadEndAdjustment) {
     // Reserve the stair room as a dead end, then keep the remaining leaves within

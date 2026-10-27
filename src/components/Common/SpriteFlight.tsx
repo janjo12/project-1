@@ -92,7 +92,7 @@ export function SpriteFlightLayer() {
       animation.start(({ finished }) => { if (finished) finishFlight(flight.id); });
     });
     return () => { cancelled = true; animation?.stop(); };
-  }, [flight?.id, translation]);
+  }, [flight, translation]);
 
   if (!flight) return null;
   return (

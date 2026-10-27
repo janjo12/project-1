@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Alert, Text, View, useWindowDimensions, type ViewInstance } from "react-native";
 
 import { Header, Row, StyledModal, Title } from "@/components/Common/Displays";
@@ -82,7 +82,6 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
   const controlsRef = useRef<ViewInstance>(null);
   const itemTargetRef = useRef<ViewInstance>(null);
   const equipmentTargetRef = useRef<ViewInstance>(null);
-  const actorTargetRef = useRef<ViewInstance>(null);
   const microgame = useMicrogame(score => {
     const resolveDefense = pendingDefense.current;
     if (resolveDefense) {
@@ -97,10 +96,13 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
     pendingAttack.current = null;
     if (target) game.attackMonster(target, score);
   });
-  startDefenseMicrogame.current = resolve => {
-    pendingDefense.current = resolve;
-    microgame.start("defense", settings.handedness);
-  };
+  const startMicrogameAction = microgame.start;
+  useEffect(() => {
+    startDefenseMicrogame.current = resolve => {
+      pendingDefense.current = resolve;
+      startMicrogameAction("defense", settings.handedness);
+    };
+  }, [startMicrogameAction, settings.handedness]);
   useGameLoopDriver({
     enabled: isRunGameLoopEnabled({
       running: game.isGameLoopRunning(), pauseMenuOpen: isMenuOpen || isLevelCleared, itemMenuOpen,

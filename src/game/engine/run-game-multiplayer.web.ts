@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 
-import { getEquipmentStats } from "@/game/actions/items";
 import { getRunSnapshot } from "@/game/engine/run-game-snapshot";
 import { moveCurrentPosition } from "@/game/dungeon/rooms";
 import type { MultiplayerState, PlayerAction } from "@/game/engine/multiplayer-rules";
@@ -12,7 +11,7 @@ type RoomResponse = {
   revision: number;
   deadlineAt: number | null;
   state: MultiplayerState | null;
-  players: Array<{ id: string; health: number }>;
+  players: { id: string; health: number }[];
 };
 
 type RoomRequestError = Error & { status: number };
@@ -52,7 +51,7 @@ export function useRunMultiplayerGame(settings: GameSettings) {
   const [roomCode, setRoomCode] = useState("");
   const [state, setState] = useState<MultiplayerState | null>(null);
   const [incoming, setIncoming] = useState("");
-  const [players, setPlayers] = useState<Array<{ id: string; health: number }>>([]);
+  const [players, setPlayers] = useState<{ id: string; health: number }[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [connected, setConnected] = useState(false);

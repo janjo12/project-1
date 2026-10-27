@@ -37,7 +37,7 @@
   "devDependencies": {
     "@playwright/test": "^1.63.0",
     "@react-native/jest-preset": "^0.88.0",
-    "@testing-library/react-native": "^13.3.3",
+    "@testing-library/react-native": "^14.1.0",
     "@types/jest": "^30.0.0",
     "@types/react": "~19.3.0",
     "eslint": "^9.0.0",
@@ -56,8 +56,8 @@
     "web:build": "next build",
     "web:start": "next start -p 3100",
     "typecheck": "tsc --noEmit",
-    "test:visual": "npm run web:build && node scripts/run-playwright.mjs test",
-    "test:scenarios": "npm run web:build && node scripts/run-playwright.mjs test --config=playwright.scenarios.config.ts",
+    "test:visual": "npm run web:build && node --test tests/ssr-runtime.test.mjs && node scripts/run-playwright.mjs test",
+    "test:scenarios": "npm run web:build && node --test tests/ssr-runtime.test.mjs && node scripts/run-playwright.mjs test --config=playwright.scenarios.config.ts",
     "test:smoke": "node scripts/run-playwright.mjs test --config=playwright.config.ts",
     "test:quick": "npm run web:build && npm run test:smoke",
     "reset-project": "node ./scripts/reset-project.js",
@@ -66,6 +66,7 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "test": "jest --runInBand",
+    "test:ssr": "npm run web:build && node --test tests/ssr-runtime.test.mjs",
     "test:watch": "jest --runInBand --watchAll"
   },
   "private": true

@@ -5,6 +5,18 @@ on:
   pull_request:
 
 jobs:
+  npm-install:
+    name: Verify clean npm install (Vercel)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm install
+      - run: git diff --exit-code -- package.json package-lock.json
+
   test:
     runs-on: ubuntu-latest
     steps:

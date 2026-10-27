@@ -52,7 +52,6 @@ export function getNextMultitapTargetSpot(currentSpot: MultitapTargetSpot, hande
   if (trackWidth <= 0 || trackHeight <= 0) return currentSpot;
   const { diameter, columns, rows } = getMultitapGrid(trackWidth, trackHeight, dotDiameter);
   const cellWidth = (trackWidth / 2) / columns;
-  const cellHeight = trackHeight / rows;
   const cellCount = columns * rows;
 
   // Each cell holds one dot. Cycling from a different cell guarantees that the

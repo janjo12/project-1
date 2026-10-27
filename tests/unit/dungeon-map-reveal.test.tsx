@@ -19,7 +19,7 @@ function withRevealedRooms(map: ReturnType<typeof createSeededDungeonMap>, revea
   };
 }
 
-test("a revealed doorway draws one hallway half until the neighboring room is revealed", () => {
+test("a revealed doorway draws one hallway half until the neighboring room is revealed", async () => {
   const map = createSeededDungeonMap("map-half-hallway", 1);
   const startingRoom = map.rooms.flat().find(room => room.id === map.startingRoomId)!;
   const direction = (["north", "east", "south", "west"] as const)
@@ -27,7 +27,7 @@ test("a revealed doorway draws one hallway half until the neighboring room is re
       && getNeighborRoom(map.rooms, startingRoom.id, candidate) !== null)!;
   const neighbor = getNeighborRoom(map.rooms, startingRoom.id, direction)!;
   const hiddenNeighborMap = withRevealedRooms(map, new Set([startingRoom.id]));
-  const screen = render(
+  const screen = await render(
     <ThemeProvider appearance="dark">
       <DungeonMap currentRoomId={startingRoom.id} map={hiddenNeighborMap} />
     </ThemeProvider>,
@@ -37,7 +37,7 @@ test("a revealed doorway draws one hallway half until the neighboring room is re
   expect(screen.queryByTestId(`map-corridor-${neighbor.id}-${mapDirection[direction]}`)).toBeNull();
 
   const revealedNeighborMap = withRevealedRooms(map, new Set([startingRoom.id, neighbor.id]));
-  screen.rerender(
+  await screen.rerender(
     <ThemeProvider appearance="dark">
       <DungeonMap currentRoomId={startingRoom.id} map={revealedNeighborMap} />
     </ThemeProvider>,
@@ -47,7 +47,7 @@ test("a revealed doorway draws one hallway half until the neighboring room is re
   expect(screen.getByTestId(`map-corridor-${neighbor.id}-${mapDirection[direction]}`)).toBeTruthy();
 });
 
-test.each(["locked", "guarded"] as const)("a %s doorway shows its marker without a hallway", state => {
+test.each(["locked", "guarded"] as const)("a %s doorway shows its marker without a hallway", async state => {
   const generated = createSeededDungeonMap("map-blocked-hallway", 1);
   const startingRoom = generated.rooms.flat().find(room => room.id === generated.startingRoomId)!;
   const direction = (["north", "east", "south", "west"] as const)
@@ -59,7 +59,7 @@ test.each(["locked", "guarded"] as const)("a %s doorway shows its marker without
       ? { ...room, [direction]: state, isRevealed: true }
       : { ...room, isRevealed: false })),
   };
-  const screen = render(
+  const screen = await render(
     <ThemeProvider appearance="dark">
       <DungeonMap currentRoomId={startingRoom.id} map={blockedMap} />
     </ThemeProvider>,
@@ -76,7 +76,7 @@ test.each(["locked", "guarded"] as const)("a %s doorway shows its marker without
       ? { ...room, [direction]: "open" }
       : room)),
   };
-  screen.rerender(
+  await screen.rerender(
     <ThemeProvider appearance="dark">
       <DungeonMap currentRoomId={startingRoom.id} map={openMap} />
     </ThemeProvider>,

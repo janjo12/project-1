@@ -10,7 +10,7 @@ type DungeonMapProps = {
   currentRoomId: string;
   map: DungeonMapType;
   compact?: boolean;
-  players?: Array<{ id: string; roomId: string; color: string }>;
+  players?: { id: string; roomId: string; color: string }[];
 };
 
 export function DungeonMap({

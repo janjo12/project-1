@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { GAME_PARAMETERS } from "@/game/config/gameparameters";
 
 import { openFreshApp, startTestGame } from "./helpers";
 
@@ -6,14 +7,14 @@ test("room frame gaps align with visible doorways without a game-view guard mark
   await page.setViewportSize({ width: 1100, height: 1000 });
   await openFreshApp(page);
   await startTestGame(page, "testwarrior");
-  await page.getByRole("button", { name: /Tap right doorway to move/ }).last().click();
+  await moveThroughDoorway(page, /Tap right doorway to move/);
   await page.getByRole("button", { name: "Key", exact: true }).click();
-  await page.getByRole("button", { name: /Tap left doorway to move/ }).last().click();
-  await page.getByRole("button", { name: /Tap right doorway to move/ }).last().click();
+  await moveThroughDoorway(page, /Tap left doorway to move/);
+  await moveThroughDoorway(page, /Tap right doorway to move/);
   await page.getByRole("button", { name: /locked doorway/ }).last().click();
-  await page.getByRole("button", { name: /Tap left doorway to move/ }).last().click();
-  await page.getByRole("button", { name: /Tap left doorway to move/ }).last().click();
-  await page.getByRole("button", { name: /Tap bottom doorway to move/ }).last().click();
+  await moveThroughDoorway(page, /Tap left doorway to move/);
+  await moveThroughDoorway(page, /Tap left doorway to move/);
+  await moveThroughDoorway(page, /Tap bottom doorway to move/);
 
   const frame = page.getByTestId("dungeon-room-frame");
   const frameBounds = await frame.boundingBox();
@@ -55,4 +56,9 @@ test("room frame gaps align with visible doorways without a game-view guard mark
 
 function expectWithinOnePixel(actual: number, expected: number) {
   expect(Math.abs(actual - expected)).toBeLessThanOrEqual(1);
+}
+
+async function moveThroughDoorway(page: import("@playwright/test").Page, name: RegExp) {
+  await page.getByRole("button", { name }).last().click();
+  await page.waitForTimeout(GAME_PARAMETERS.animation.roomExitDurationMs + GAME_PARAMETERS.animation.roomTransitionDurationMs);
 }

@@ -163,7 +163,7 @@ function MultitapMicrogame({ multitapTargetSpot, leftHanded, onTap, panelHeight 
   const [trackWidth, setTrackWidth] = useState(0);
   const [trackHeight, setTrackHeight] = useState(0);
   const gridHeight = panelHeight > 0 ? Math.max(48, panelHeight * 0.5) : 110;
-  const { diameter: dotDiameter, columns, rows } = getMultitapGrid(trackWidth, trackHeight, MULTITAP_DOT_DIAMETER);
+  const { diameter: dotDiameter } = getMultitapGrid(trackWidth, trackHeight, MULTITAP_DOT_DIAMETER);
   const gridRegionStyle = leftHanded
     ? { left: 0, right: "50%" as const }
     : { left: "50%" as const, right: 0 };

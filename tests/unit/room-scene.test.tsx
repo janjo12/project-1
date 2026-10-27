@@ -32,8 +32,8 @@ function scene(roomId: string, playerPosition: "top" | "right" | "bottom" | "lef
   );
 }
 
-test("the outer room border has doorway gaps while guarded-doorway markers stay on the display map", () => {
-  const screen = render(scene("A1", "center", {
+test("the outer room border has doorway gaps while guarded-doorway markers stay on the display map", async () => {
+  const screen = await render(scene("A1", "center", {
     top: "guarded",
     right: "locked",
     bottom: "open",
@@ -51,10 +51,10 @@ test("the outer room border has doorway gaps while guarded-doorway markers stay 
 });
 
 test("moving from an already aligned position still animates the player toward the doorway", async () => {
-  const screen = render(scene("A1", "center"));
+  const screen = await render(scene("A1", "center"));
 
   await act(async () => {
-    screen.rerender(scene("A1", "bottom"));
+    await screen.rerender(scene("A1", "bottom"));
   });
 
   const exitAnimation = screen.getByTestId("player-room-exit-animation");
@@ -62,11 +62,11 @@ test("moving from an already aligned position still animates the player toward t
   expect(exitAnimation.props.style.animationName.to).toEqual({ transform: [{ translateY: 34 }] });
 });
 
-test("player sprite scale stays constant when moving from the room center to a doorway", () => {
-  const screen = render(scene("A1", "center"));
+test("player sprite scale stays constant when moving from the room center to a doorway", async () => {
+  const screen = await render(scene("A1", "center"));
   const initialScale = screen.getByTestId("player-sprite-envelope").props.style.transform;
 
-  screen.rerender(scene("A2", "top"));
+  await screen.rerender(scene("A2", "top"));
 
   expect(screen.getByTestId("player-sprite-envelope").props.style.transform).toEqual(initialScale);
 });
@@ -74,10 +74,10 @@ test("player sprite scale stays constant when moving from the room center to a d
 test("shows the new room directly without replaying the previous room snapshot", async () => {
   jest.useFakeTimers();
   try {
-    const screen = render(scene("A1"));
+    const screen = await render(scene("A1"));
 
     await act(async () => {
-      screen.rerender(scene("A2"));
+      await screen.rerender(scene("A2"));
       await Promise.resolve();
     });
 
@@ -97,7 +97,7 @@ test("shows the new room directly without replaying the previous room snapshot",
   }
 });
 
-test("pressing an enemy sends that actor to the game handler", () => {
+test("pressing an enemy sends that actor to the game handler", async () => {
   const onActorPress = jest.fn();
   const zombie = {
     id: "zombie",
@@ -106,7 +106,7 @@ test("pressing an enemy sends that actor to the game handler", () => {
     sprite: "🧟",
     position: "center" as const,
   };
-  const screen = render(
+  const screen = await render(
     <GameViewPanel
       animationFrame={createCombatAnimationFrame()}
       onActorPress={onActorPress}
@@ -115,14 +115,14 @@ test("pressing an enemy sends that actor to the game handler", () => {
     />,
   );
 
-  fireEvent.press(screen.getByRole("button", { name: "Zombie" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Zombie" }));
 
   expect(onActorPress).toHaveBeenCalledWith(zombie);
   expect(screen.queryByText("Zombie")).toBeNull();
   expect(screen.queryByText("Player")).toBeNull();
 });
 
-test("loot chests render only the chest sprite while keeping an accessible pickup name", () => {
+test("loot chests render only the chest sprite while keeping an accessible pickup name", async () => {
   const chest = {
     id: "health-potion-room-item",
     kind: "item" as const,
@@ -132,7 +132,7 @@ test("loot chests render only the chest sprite while keeping an accessible picku
     isChest: true,
     position: "center" as const,
   };
-  const screen = render(
+  const screen = await render(
     <GameViewPanel
       animationFrame={createCombatAnimationFrame()}
       roomDoorways={doorways}
@@ -146,20 +146,20 @@ test("loot chests render only the chest sprite while keeping an accessible picku
   expect(screen.getAllByTestId("pixel-sprite-image").length).toBeGreaterThan(0);
 });
 
-test("a failed sprite image falls back, and switching sprites retries the new image", () => {
-  const screen = render(<PixelSprite label="Warrior" size={24} sprite="warrior_graphic" />);
+test("a failed sprite image falls back, and switching sprites retries the new image", async () => {
+  const screen = await render(<PixelSprite label="Warrior" size={24} sprite="warrior_graphic" />);
 
-  fireEvent(screen.getByTestId("pixel-sprite-image"), "error");
+  await fireEvent(screen.getByTestId("pixel-sprite-image"), "error");
   expect(screen.getByText("❔")).toBeTruthy();
 
-  screen.rerender(<PixelSprite label="Zombie" size={24} sprite="zombie_graphic" />);
+  await screen.rerender(<PixelSprite label="Zombie" size={24} sprite="zombie_graphic" />);
   expect(screen.getByTestId("pixel-sprite-image")).toBeTruthy();
 
-  screen.rerender(<PixelSprite label="Warrior" size={24} sprite="warrior_graphic" />);
+  await screen.rerender(<PixelSprite label="Warrior" size={24} sprite="warrior_graphic" />);
   expect(screen.getByTestId("pixel-sprite-image")).toBeTruthy();
 });
 
-test("player idle animation style stays stable as combat progress updates", () => {
+test("player idle animation style stays stable as combat progress updates", async () => {
   const sprite = (attackProgress: number | null, animationsPaused = false) => (
     <CombatantSprite
       accessibilityLabel="Player"
@@ -172,17 +172,17 @@ test("player idle animation style stays stable as combat progress updates", () =
       size={56}
     />
   );
-  const screen = render(sprite(null));
+  const screen = await render(sprite(null));
   const idleLayer = screen.getByTestId("combatant-sprite-idle-layer");
   const idleStyle = idleLayer.props.style;
 
-  screen.rerender(sprite(0.5, true));
+  await screen.rerender(sprite(0.5, true));
 
   expect(screen.getByTestId("combatant-sprite-idle-layer").props.style).toBe(idleStyle);
 });
 
-test("player idle bob keeps running while gameplay effects are paused", () => {
-  const screen = render(
+test("player idle bob keeps running while gameplay effects are paused", async () => {
+  const screen = await render(
     <RoomScene
       actors={[]}
       animationsPaused
@@ -202,8 +202,8 @@ test("player idle bob keeps running while gameplay effects are paused", () => {
   expect(idleLayer.props.style[1].animationPlayState).toBe("running");
 });
 
-test("player keeps clear of the doorway arrow after entering from an edge", () => {
-  const screen = render(scene("A1", "left"));
+test("player keeps clear of the doorway arrow after entering from an edge", async () => {
+  const screen = await render(scene("A1", "left"));
   const playerStyle = screen.getByTestId("local-player-actor").props.style;
   const flattened = Array.isArray(playerStyle) ? Object.assign({}, ...playerStyle.filter(value => typeof value === "object")) : playerStyle;
 

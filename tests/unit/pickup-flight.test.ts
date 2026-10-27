@@ -19,7 +19,7 @@ test.each([
   });
 });
 
-test.each(["pauseMenuOpen", "itemMenuOpen", "equipmentMenuOpen", "mapOpen"] as const)("opening the %s pauses the singleplayer turn timer", menu => {
+test.each(["pauseMenuOpen", "itemMenuOpen", "equipmentMenuOpen", "mapOpen"] as const)("opening the %s pauses the singleplayer turn timer", async menu => {
   jest.useFakeTimers();
   let frameCount = 0;
   let expiryCount = 0;
@@ -32,8 +32,8 @@ test.each(["pauseMenuOpen", "itemMenuOpen", "equipmentMenuOpen", "mapOpen"] as c
     levelNumber: 1,
     turnNumber: 1,
   };
-  renderHook(() => useGameLoopDriver(loop));
-  act(() => jest.advanceTimersByTime(GAME_PARAMETERS.turn.gameLoopTickMs * 3));
+  await renderHook(() => useGameLoopDriver(loop));
+  await act(async () => { jest.advanceTimersByTime(GAME_PARAMETERS.turn.gameLoopTickMs * 3); });
   expect(frameCount).toBe(0);
   expect(expiryCount).toBe(0);
 });

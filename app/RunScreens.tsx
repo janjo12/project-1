@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Text, View, useWindowDimensions, type ViewInstance } from "react-native";
 
 import { Container, Footer, Header, Row, StyledModal, StyledText, Title } from "@/components/Common/Displays";
@@ -136,10 +136,13 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
     pendingAttack.current = null;
     if (target) game.attackMonster(target, score);
   });
-  startDefenseMicrogame.current = resolve => {
-    pendingDefense.current = resolve;
-    microgame.start("defense", settings.handedness);
-  };
+  const startMicrogameAction = microgame.start;
+  useEffect(() => {
+    startDefenseMicrogame.current = resolve => {
+      pendingDefense.current = resolve;
+      startMicrogameAction("defense", settings.handedness);
+    };
+  }, [startMicrogameAction, settings.handedness]);
   useGameLoopDriver({
     enabled: game.isGameLoopRunning() && !isMenuOpen && !isLevelCleared && !microgame.active,
     isTurnClockActive: game.isTurnClockActive,
