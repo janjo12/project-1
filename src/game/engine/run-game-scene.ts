@@ -15,7 +15,7 @@ export function getRoomDoorways(room: ReturnType<typeof getCurrentRoom>): RoomDo
 function createMonsterSceneActor(monster: WorldMonster, isActive: boolean, position: ScenePosition): RoomSceneActor {
   return {
     id: monster.id, currentHealth: monster.currentHealth, sprite: monster.sprite,
-    kind: "enemy", isActive, label: monster.name, maxHealth: monster.maximumHealth, position,
+    kind: "enemy", isActive, isWerewolf: Boolean(monster.chases), label: monster.name, maxHealth: monster.maximumHealth, position,
   };
 }
 

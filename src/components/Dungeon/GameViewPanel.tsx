@@ -9,11 +9,12 @@ import {
   type RoomSceneActor,
   type ScenePosition,
   type ScreenPoint,
+  type SupportEffect,
 } from "@/components/Dungeon/Room";
 import {
   type CombatAnimationFrame,
 } from "@/game/entities";
-export type { RoomDoorways, RoomSceneActor, ScenePosition, ScreenPoint };
+export type { RoomDoorways, RoomSceneActor, ScenePosition, ScreenPoint, SupportEffect };
 
 type GameViewPanelProps = {
   canUnlockDoors?: boolean;
@@ -23,6 +24,11 @@ type GameViewPanelProps = {
   floorLayer?: ReactNode;
   enemyHealthLossAmount?: number;
   hardTurnCounter?: number | null;
+  showStairsObjective?: boolean;
+  showMoveHints?: boolean;
+  showAttackHints?: boolean;
+  showGetHint?: boolean;
+  supportEffect?: SupportEffect | null;
   playerPosition?: ScenePosition;
   playerLabel?: string;
   playerSprite?: string;
@@ -56,6 +62,11 @@ export function GameViewPanel({
   sceneFrameStore,
   enemyHealthLossAmount = 0,
   hardTurnCounter = null,
+  showStairsObjective = false,
+  showMoveHints = false,
+  showAttackHints = false,
+  showGetHint = false,
+  supportEffect = null,
   playerPosition = "center",
   playerLabel = "Player",
   playerSprite = PLAYER_SPRITE,
@@ -92,14 +103,15 @@ export function GameViewPanel({
   return (
     <Animated.View style={[styles.panel, { opacity: panelOpacity }]}>
       <View style={[styles.sceneBox, Platform.OS === "web" && styles.webSceneBox]} onLayout={event => setSceneBoxHeight(event.nativeEvent.layout.height)}>
-        {hardTurnCounter !== null ? (
+        {showStairsObjective || hardTurnCounter !== null ? (
           <Text
-            accessibilityLabel="Turns remaining"
+            accessibilityLabel={hardTurnCounter !== null ? "Turns remaining" : "Level objective"}
             style={styles.turnCounter}
             testID="hard-turn-counter"
           >
-            Reach the Stairs in {hardTurnCounter}{" "}
-            {hardTurnCounter === 1 ? "Turn" : "Turns"}
+            {hardTurnCounter !== null
+              ? `Reach the Stairs in ${hardTurnCounter} ${hardTurnCounter === 1 ? "Turn" : "Turns"}`
+              : "Find the Stairs to Reach the Next Level"}
           </Text>
         ) : null}
 
@@ -126,6 +138,10 @@ export function GameViewPanel({
           disabled={disabled}
           onActorPress={onActorPress}
           onDoorwayPress={onDoorwayPress}
+          showMoveHints={showMoveHints}
+          showAttackHints={showAttackHints}
+          showGetHint={showGetHint}
+          supportEffect={supportEffect}
           onPlayerPress={onPlayerPress}
         />
       </View>

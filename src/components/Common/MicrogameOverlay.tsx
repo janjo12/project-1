@@ -160,6 +160,7 @@ function DefenseMicrogame({ elapsed, targetDelay }: MicrogameContentProps) {
 }
 
 function MultitapMicrogame({ multitapTargetSpot, leftHanded, onTap, panelHeight }: MicrogameContentProps) {
+  const colors = useThemeColors();
   const [trackWidth, setTrackWidth] = useState(0);
   const [trackHeight, setTrackHeight] = useState(0);
   const gridHeight = panelHeight > 0 ? Math.max(48, panelHeight * 0.5) : 110;
@@ -169,6 +170,10 @@ function MultitapMicrogame({ multitapTargetSpot, leftHanded, onTap, panelHeight 
     : { left: "50%" as const, right: 0 };
   return (
     <>
+      <View testID="multitap-instruction" accessible accessibilityRole="text" accessibilityLabel="Tap the filled circle as quickly as you can" style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 8 }}>
+        <Text style={{ color: colors.ink, fontSize: 20, fontWeight: "800" }}>Tap</Text>
+        <MicrogameCircle size={18} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />
+      </View>
       <View testID="multitap-track" onLayout={event => {
         setTrackWidth(event.nativeEvent.layout.width);
         setTrackHeight(event.nativeEvent.layout.height);

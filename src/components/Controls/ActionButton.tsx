@@ -29,6 +29,7 @@ type NormalButtonProps = {
   icon?: keyof typeof FontAwesome.glyphMap;
   label?: string;
   onPress: () => void;
+  disabled?: boolean;
   testID?: string;
 };
 
@@ -134,6 +135,7 @@ export function NormalButton({
   icon,
   label,
   onPress,
+  disabled = false,
   testID,
 }: NormalButtonProps) {
   const colors = useThemeColors();
@@ -143,9 +145,12 @@ export function NormalButton({
     <Pressable
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [
         icon ? styles.iconButton : styles.textButton,
+        disabled && { opacity: 0.45 },
         pressed && styles.pressed,
       ]}
       testID={testID}

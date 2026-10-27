@@ -30,6 +30,10 @@ type DebugBarProps = {
   children: React.ReactNode;
 };
 
+export function ResourceBarIcon({ color, icon, testID }: { color: string; icon: keyof typeof FontAwesome.glyphMap; testID?: string }) {
+  return <FontAwesome color={color} name={icon} size={16} testID={testID} />;
+}
+
 export function ResourceBar({
   accessibilityLabel,
   color,
@@ -65,7 +69,7 @@ export function ResourceBar({
       testID={testID}
     >
       <View style={styles.iconSlot}>
-        <FontAwesome color={color} name={icon} size={16} testID={`${testID}-glyph`} />
+        <ResourceBarIcon color={color} icon={icon} testID={`${testID}-glyph`} />
       </View>
       <View style={styles.track} testID={`${testID}-track`}>
         <View

@@ -4,17 +4,20 @@ import { PixelSprite } from "@/components/Common/PixelSprite";
 import { PlayerAura } from "@/components/Common/PlayerAura";
 
 type ResourceBarProps = { accessibilityLabel: string; color: string; current: number; icon: "heart" | "bolt" | "hourglass-half"; max: number; panelPosition?: "first" | "last" | "middle" | "single"; testID: string; compact?: boolean };
-export function ResourceBar({ accessibilityLabel, color, current, icon, max, testID, compact = false }: ResourceBarProps) {
-  const colors = useThemeColors(); const styles = createStyles(colors);
-  const fillPercent = Math.max(0, Math.min(100, current / Math.max(1, max) * 100));
+export function ResourceBarIcon({ color, icon, testID }: { color: string; icon: "heart" | "bolt" | "hourglass-half"; testID?: string }) {
   const iconPath = icon === "bolt"
     ? "M13 2 4 14h6l-1 8 11-13h-7l2-7z"
     : icon === "heart"
       ? "M12 21.35 10.55 20.03C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09A6 6 0 0 1 16.5 3C19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54z"
       : "M6 2h12v6l-4 4 4 4v6H6v-6l4-4-4-4zm2 2v3.17l4 4 4-4V4zm0 12.83V20h8v-5.17l-4-4z";
   const iconName = icon === "hourglass-half" ? "hourglass" : icon;
+  return <svg aria-hidden="true" data-testid={testID} data-icon={iconName} width="16" height="16" viewBox="0 0 24 24" style={{ display: "block", color }}><path fill="currentColor" d={iconPath} /></svg>;
+}
+export function ResourceBar({ accessibilityLabel, color, current, icon, max, testID, compact = false }: ResourceBarProps) {
+  const colors = useThemeColors(); const styles = createStyles(colors);
+  const fillPercent = Math.max(0, Math.min(100, current / Math.max(1, max) * 100));
   return <View accessibilityLabel={accessibilityLabel} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max, now: current }} aria-valuemin={0} aria-valuemax={max} aria-valuenow={current} style={[styles.row, compact && styles.compactRow]} testID={testID}><View style={styles.iconSlot}>
-    <svg aria-hidden="true" data-testid={`${testID}-glyph`} data-icon={iconName} width="16" height="16" viewBox="0 0 24 24" style={{ display: "block", color }}><path fill="currentColor" d={iconPath} /></svg>
+    <ResourceBarIcon color={color} icon={icon} testID={`${testID}-glyph`} />
   </View><View style={styles.track} testID={`${testID}-track`}><View style={[styles.fill, { backgroundColor: color, width: `${fillPercent}%` }]} /></View></View>;
 }
 export function ResourceBarGroup({ children, compact = false, playerSprite, playerAuraColor }: React.PropsWithChildren<{ compact?: boolean; playerSprite?: string; playerAuraColor?: string }>) {

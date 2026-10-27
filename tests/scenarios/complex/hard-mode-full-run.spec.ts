@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { DEFENSE_WINDOW_MS, getMultitapTargetTaps, HUMAN_REACTION_WINDOW_MS, TIMED_ATTACK_CUE_DELAY_MS } from "@/game/actions/use-microgame";
+import { DEFENSE_WINDOW_MS, HUMAN_REACTION_WINDOW_MS, MULTITAP_WINDOW_MS, TIMED_ATTACK_CUE_DELAY_MS } from "@/game/actions/use-microgame";
 import { GAME_PARAMETERS } from "@/game/config/gameparameters";
 import { getTurnDuration } from "@/game/engine/resolveTurn";
 import { openScenarioApp } from "../helpers";
@@ -294,12 +294,10 @@ async function advanceEnemyTurn(page: import("@playwright/test").Page, includeAt
 async function playClassMicrogame(page: import("@playwright/test").Page, className: string) {
   if (className === "Warrior") {
     const target = page.getByRole("button", { name: "Tap circle" });
-    const mapLabel = await page.getByText(/Level \d+ Map/).first().innerText();
-    const level = Number(mapLabel.match(/Level (\d+) Map/)?.[1] ?? 1);
-    const targetTaps = getMultitapTargetTaps("hard", level);
-    for (let tap = 0; tap < targetTaps; tap += 1) {
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < MULTITAP_WINDOW_MS) {
       await page.clock.runFor(HUMAN_REACTION_WINDOW_MS);
-      await target.click();
+      if (await target.isVisible()) await target.click();
     }
     return;
   }

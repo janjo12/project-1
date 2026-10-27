@@ -19,8 +19,8 @@ test("empty inventory slots are hidden and occupied item and equipment slots app
   await empty.unmount();
 
   await renderThemed(<>
-    <ItemControl itemLabel="Health Potion" activationDescription="Restores Health when you reach zero." />
-    <EquipmentControl label="Good Armor" description="Raises Defense by 1." />
+    <ItemControl itemLabel="Health Potion" onPress={jest.fn()} />
+    <EquipmentControl label="Good Armor" onPress={jest.fn()} />
   </>);
   expect(screen.getByText("Health Potion")).toBeTruthy();
   expect(screen.getByText("Good Armor")).toBeTruthy();
@@ -31,22 +31,24 @@ test("item and equipment details menus show replacement and activation instructi
   function InventoryMenuHarness() {
     const [menu, setMenu] = useState<"item" | "equipment" | null>(null);
     return <>
-      <ItemControl itemLabel="Silver Arrow" activationDescription="Automatically defeats the Werewolf." onDrop={() => setMenu("item")} />
-      <EquipmentControl label="Spyglass" description="Reveals the full map." onDrop={() => setMenu("equipment")} />
+      <ItemControl itemLabel="Silver Arrow" onPress={() => setMenu("item")} />
+      <EquipmentControl label="Spyglass" onPress={() => setMenu("equipment")} />
       <ItemDetailsMenu visible={menu === "item"} label="Silver Arrow" description="A rare shot." activationDescription="Automatically defeats the Werewolf." onClose={() => setMenu(null)} />
       <EquipmentDetailsMenu visible={menu === "equipment"} label="Spyglass" description="Reveals the full map." onDrop={() => { dropEquipment(); setMenu(null); }} onClose={() => setMenu(null)} />
     </>;
   }
 
   await renderThemed(<InventoryMenuHarness />);
-  await fireEvent.press(screen.getByRole("button", { name: "Silver Arrow. Drop item" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Silver Arrow" }));
+  expect(screen.getByTestId("item-status").props.children.filter(Boolean)).toHaveLength(1);
+  expect(screen.getByTestId("item-status").props.children.filter(Boolean)[0].props.children).toBe("Silver Arrow");
   expect(screen.getByText("A rare shot.")).toBeTruthy();
-  expect(screen.getAllByText("Automatically defeats the Werewolf.").length).toBeGreaterThan(1);
+  expect(screen.getByText("Automatically defeats the Werewolf.")).toBeTruthy();
   expect(screen.getByText(/Pick up another item at any time/)).toBeTruthy();
   await fireEvent.press(screen.getByRole("button", { name: "Close item details" }));
 
-  await fireEvent.press(screen.getByRole("button", { name: "Spyglass. Drop equipment" }));
-  expect(screen.getAllByText("Reveals the full map.").length).toBeGreaterThan(1);
+  await fireEvent.press(screen.getByRole("button", { name: "Spyglass" }));
+  expect(screen.getByText("Reveals the full map.")).toBeTruthy();
   expect(screen.getByText(/Pick up another piece of equipment at any time/)).toBeTruthy();
   await fireEvent.press(screen.getByRole("button", { name: "Drop equipment" }));
   expect(dropEquipment).toHaveBeenCalledTimes(1);
@@ -55,7 +57,7 @@ test("item and equipment details menus show replacement and activation instructi
 test("instructions are kept behind the Instructions option in the pause menu", async () => {
   await renderThemed(<PauseMenu
     onBackToGame={jest.fn()} onQuitToTitle={jest.fn()} onPractice={jest.fn()}
-    onSettingsChange={jest.fn()} microgamesEnabled level={3} microgameAverage={76}
+    onSettingsChange={jest.fn()} microgamesEnabled classId="cleric" level={3} microgameAverage={76}
     settings={DEFAULT_GAME_SETTINGS} seed={DEFAULT_GAME_SETTINGS.seed} visible
   />);
   expect(screen.queryByText(/Each action advances the turn/)).toBeNull();
@@ -63,4 +65,5 @@ test("instructions are kept behind the Instructions option in the pause menu", a
   expect(screen.getByText(/Each action advances the turn/)).toBeTruthy();
   expect(screen.getByText("Level 3")).toBeTruthy();
   expect(screen.getByText("Running microgame average: 76% of maximum score")).toBeTruthy();
+  expect(screen.getByText("Aid: Tap yourself to gain +5 Defense for 2 turns. Charge Up first to also restore 10 Health.")).toBeTruthy();
 });

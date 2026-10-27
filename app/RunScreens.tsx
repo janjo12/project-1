@@ -10,6 +10,7 @@ import { animateSpriteFlight, measureViewCenterNow } from "@/components/Common/S
 import { useThemeColors } from "@/components/Common/theme";
 import { CancelButton, DestructiveButton, HelpButton, NormalButton, PrimaryButton, SegmentedButton, TextEntry, ToggleButton } from "@/components/Controls/ActionButton";
 import { ChargeControl, EquipmentControl, ItemControl } from "@/components/Controls/ActionMenu";
+import { EquipmentDetailsMenu, ItemDetailsMenu } from "@/components/Controls/InventoryDetailsMenu";
 import { DungeonMap } from "@/components/Dungeon/DungeonMap";
 import { GameViewPanel } from "@/components/Dungeon/GameViewPanel";
 import { ResourceBar, ResourceBarGroup } from "@/components/Player/PlayerHUD";
@@ -20,6 +21,9 @@ import { PLAYER_MAX_ENERGY, PLAYER_MAX_HEALTH, useRunGame } from "@/game/engine/
 import { useGameLoopDriver } from "@/game/engine/use-game-loop-driver";
 import type { GameSettings } from "@/utils/settings-storage";
 import { isTestSeed } from "@/utils/seed";
+import { getConnectedRoomId, getRoom, getRooms } from "@/game/dungeon/rooms";
+import { getRoomSceneActors } from "@/game/engine/run-game-scene";
+import { getSupportFeedback } from "@/game/engine/support-feedback";
 export function SetupScreen({ settings, onBack, onSettings, onUpdate, onStart, showSeed = true }: {
   settings: GameSettings;
   onBack: () => void;
@@ -110,7 +114,11 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
   const [isLevelCleared, setIsLevelCleared] = useState(false);
   const [isQuitConfirmOpen, setIsQuitConfirmOpen] = useState(false);
   const [isMapOpen, setIsMapOpen] = useState(false);
+  const [itemMenuOpen, setItemMenuOpen] = useState(false);
+  const [equipmentMenuOpen, setEquipmentMenuOpen] = useState(false);
   const [combatMessage, setCombatMessage] = useState("");
+  const [tutorial, setTutorial] = useState<{ enemyRoomId: string | null; chestRoomId: string | null; visitedRooms: string[] }>({ enemyRoomId: null, chestRoomId: null, visitedRooms: [] });
+  const [supportEffect, setSupportEffect] = useState<{ targetId: string | null; emoji: string; label: string; key: number } | null>(null);
   const colors = useThemeColors();
   const pendingDefense = useRef<((score: number) => void) | null>(null);
   const startDefenseMicrogame = useRef<(resolve: (score: number) => void) => void>(() => undefined);
@@ -123,9 +131,10 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
     vibrationEnabled: settings.vibrationEnabled,
   });
   const pendingAttack = useRef<string | null>(null);
+  const controlsRef = useRef<ViewInstance>(null);
   const itemTargetRef = useRef<ViewInstance>(null);
   const equipmentTargetRef = useRef<ViewInstance>(null);
-  const microgame = useMicrogame(score => {
+  const microgame = useMicrogame(({ score, damageScore }) => {
     const resolveDefense = pendingDefense.current;
     if (resolveDefense) {
       pendingDefense.current = null;
@@ -134,7 +143,7 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
     }
     const target = pendingAttack.current;
     pendingAttack.current = null;
-    if (target) game.attackMonster(target, score);
+    if (target) game.attackMonster(target, damageScore);
   });
   const startMicrogameAction = microgame.start;
   useEffect(() => {
@@ -144,7 +153,7 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
     };
   }, [startMicrogameAction, settings.handedness]);
   useGameLoopDriver({
-    enabled: game.isGameLoopRunning() && !isMenuOpen && !isLevelCleared && !microgame.active,
+    enabled: game.isGameLoopRunning() && !isMenuOpen && !isLevelCleared && !microgame.active && !itemMenuOpen && !equipmentMenuOpen,
     isTurnClockActive: game.isTurnClockActive,
     onExpire: game.expireTurn,
     onFrame: game.updateGameFrame,
@@ -153,20 +162,55 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
     turnNumber: game.turnNumber,
   });
 
-  const controls = <View style={{ flex: 1, gap: 4 }}>
-    <EquipmentControl targetRef={equipmentTargetRef} label={game.equipmentLabel} description={game.equipmentDescription} sprite={game.equipmentSprite} onDrop={game.dropEquipment} />
-    <ItemControl targetRef={itemTargetRef} activationDescription={game.inventoryItemActivationDescription} itemLabel={game.inventoryItemLabel} itemSprite={game.inventoryItemSprite} onDrop={game.dropItem} />
-  </View>;
   const chargeCost = getEquipmentStats(game.equipment).chargeCost;
+  const tutorialEnabled = game.level === 1;
+  const currentRoom = getRooms(game.dungeonMap).find(room => room.id === game.currentRoomId);
+  const tutorialRoomIds = new Set([game.dungeonMap.startingRoomId, ...tutorial.visitedRooms].slice(0, 4));
+  const isFirstRoom = game.currentRoomId === game.dungeonMap.startingRoomId;
+  const firstRoomHasEnemy = isFirstRoom && game.roomSceneActors.some(actor => actor.kind === "enemy");
+  const firstRoomHasChest = isFirstRoom && !!currentRoom?.contents.some(content => (content.type === "item" || content.type === "equipment") && content.isChest);
+  const shouldShowAttackHint = tutorialEnabled && (tutorial.enemyRoomId === game.currentRoomId || (tutorial.enemyRoomId === null && firstRoomHasEnemy));
+  const shouldShowGetHint = tutorialEnabled && (tutorial.chestRoomId === game.currentRoomId || (tutorial.chestRoomId === null && firstRoomHasChest));
+  const moveToTutorialRoom = (position: "top" | "bottom" | "left" | "right") => {
+    const direction = ({ bottom: "south", left: "west", right: "east", top: "north" } as const)[position];
+    const nextRoomId = getConnectedRoomId(game.dungeonMap, game.currentRoomId, direction);
+    const nextRoom = nextRoomId ? getRoom(game.dungeonMap, nextRoomId) : null;
+    if (tutorialEnabled && nextRoom) {
+      const hasEnemy = getRoomSceneActors({ currentMonsterId: null, dungeonMap: game.dungeonMap, room: nextRoom }).some(actor => actor.kind === "enemy");
+      const hasChest = nextRoom.contents.some(content => (content.type === "item" || content.type === "equipment") && content.isChest);
+      setTutorial(previous => ({
+        enemyRoomId: previous.enemyRoomId ?? (hasEnemy ? nextRoom.id : null),
+        chestRoomId: previous.chestRoomId ?? (hasChest ? nextRoom.id : null),
+        visitedRooms: previous.visitedRooms.includes(nextRoom.id) ? previous.visitedRooms : [...previous.visitedRooms, nextRoom.id],
+      }));
+    }
+    void game.moveToRoom(direction);
+  };
   const startMicrogame = () => microgame.start(game.playerClass.microgame, settings.handedness, { difficulty: settings.difficulty, level: game.level });
 
   return (
     <ScreenShell compact>
+      {isLevelCleared ? (
+        <View accessibilityLabel="Level cleared" accessibilityRole="summary" testID="level-cleared-screen" style={{ flex: 1, width: "100%", alignItems: "center", justifyContent: "center", gap: 24, padding: 24, backgroundColor: colors.paper }}>
+          <Title>Level Cleared!</Title>
+          <PrimaryButton
+            accessibilityLabel="Continue to next level"
+            accessibilityRole="button"
+            label="Continue"
+            onPress={() => {
+              setIsLevelCleared(false);
+              game.descend();
+            }}
+          />
+        </View>
+      ) : <>
       <GameHeader onMenu={() => setIsMenuOpen(true)} />
-      {!tinyLayout ? <View style={{ flexShrink: 1, maxHeight: compactLayout ? 116 : undefined, minHeight: 0 }}><DungeonMap currentRoomId={game.currentRoomId} map={game.visibleDungeonMap} compact={compactLayout} /></View> : null}
-      <Row style={{ height: 148, flexShrink: 0 }}>
-        {settings.handedness === "left" ? <><ChargeControl charged={game.isCharged} chargeCost={chargeCost} disabled={game.isResolving || game.hasLost || (!game.isCharged && game.playerEnergy < chargeCost)} onPress={game.toggleCharge} />{controls}</> : <>{controls}<ChargeControl charged={game.isCharged} chargeCost={chargeCost} disabled={game.isResolving || game.hasLost || (!game.isCharged && game.playerEnergy < chargeCost)} onPress={game.toggleCharge} /></>}
-      </Row>
+      {!tinyLayout ? <View style={{ flexShrink: 1, maxHeight: compactLayout ? 116 : undefined, minHeight: 0 }}><DungeonMap currentRoomId={game.currentRoomId} map={game.visibleDungeonMap} compact={compactLayout} showCurrentRoomHint={tutorialEnabled && tutorialRoomIds.has(game.currentRoomId)} /></View> : null}
+      <View ref={controlsRef} style={{ height: 80, flexShrink: 0, flexDirection: "row", gap: 6 }}>
+        {settings.handedness === "left" ? <ChargeControl charged={game.isCharged} chargeCost={chargeCost} disabled={game.isResolving || game.hasLost || (!game.isCharged && game.playerEnergy < chargeCost)} onPress={game.toggleCharge} /> : <EquipmentControl targetRef={equipmentTargetRef} label={game.equipmentLabel} sprite={game.equipmentSprite} onPress={() => setEquipmentMenuOpen(true)} />}
+        <ItemControl targetRef={itemTargetRef} itemLabel={game.inventoryItemLabel} itemSprite={game.inventoryItemSprite} onPress={() => setItemMenuOpen(true)} />
+        {settings.handedness === "left" ? <EquipmentControl targetRef={equipmentTargetRef} label={game.equipmentLabel} sprite={game.equipmentSprite} onPress={() => setEquipmentMenuOpen(true)} /> : <ChargeControl charged={game.isCharged} chargeCost={chargeCost} disabled={game.isResolving || game.hasLost || (!game.isCharged && game.playerEnergy < chargeCost)} onPress={game.toggleCharge} />}
+      </View>
       <ResourceBarGroup compact={compactLayout} playerSprite={game.playerClass.sprite}>
         <ResourceBar compact={compactLayout} accessibilityLabel="Player health" color={colors.health} current={game.playerHealth} icon="heart" max={PLAYER_MAX_HEALTH} panelPosition="first" testID="player-health-bar" />
         <ResourceBar compact={compactLayout} accessibilityLabel="Player energy" color={colors.energy} current={game.playerEnergy} icon="bolt" max={PLAYER_MAX_ENERGY} panelPosition={game.hasTurnTimer ? "middle" : "last"} testID="player-energy-bar" />
@@ -177,10 +221,15 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
       <GameViewPanel
         sceneFrameStore={game.sceneFrameStore}
         canUnlockDoors={game.inventoryItem === "key" || game.playerClass.id === "thief"}
-        disabled={game.isResolving || game.hasLost || microgame.active}
+        disabled={game.isResolving || game.hasLost || microgame.active || itemMenuOpen || equipmentMenuOpen}
         pauseAnimations={microgame.active}
         enemyHealthLossAmount={game.enemyHealthLossAmount}
         hardTurnCounter={game.hardTurnCounter}
+        showStairsObjective
+        showMoveHints={tutorialEnabled && isFirstRoom}
+        showAttackHints={shouldShowAttackHint}
+        showGetHint={shouldShowGetHint}
+        supportEffect={supportEffect}
         onActorPress={(actor, source) => {
           if (actor.kind === "enemy") {
             const werewolfWithSilver = !!game.dungeonMap.entities.monsters[actor.id]?.chases && game.inventoryItem === "silver-bullet";
@@ -211,8 +260,11 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
           }
           else if (actor.kind === "stairs") setIsLevelCleared(true);
         }}
-        onDoorwayPress={position => void game.moveToRoom(({ bottom: "south", left: "west", right: "east", top: "north" } as const)[position])}
-        onPlayerPress={game.supportSelf}
+        onDoorwayPress={moveToTutorialRoom}
+        onPlayerPress={() => {
+          setSupportEffect(previous => ({ targetId: null, ...getSupportFeedback(game.playerClass.id), key: (previous?.key ?? 0) + 1 }));
+          game.supportSelf();
+        }}
         playerPosition={game.playerScenePosition}
         playerLabel={game.playerLabel}
         playerSprite={game.playerClass.sprite}
@@ -225,6 +277,8 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
       />
       <MicrogameOverlay visible={microgame.active} kind={microgame.kind} elapsedStore={microgame.elapsedStore} targetDelay={microgame.targetDelay} targetSpot={microgame.targetSpot} multitapTargetSpot={microgame.multitapTargetSpot} leftHanded={settings.handedness === "left"} onTap={microgame.tap} />
       </View>
+      <ItemDetailsMenu visible={itemMenuOpen && !!game.inventoryItemLabel} label={game.inventoryItemLabel ?? "Item"} description={game.inventoryItemDescription ?? "A useful item."} activationDescription={game.inventoryItemActivationDescription ?? "This item activates automatically when its condition is met."} onClose={() => setItemMenuOpen(false)} />
+      <EquipmentDetailsMenu visible={equipmentMenuOpen && !!game.equipmentLabel} label={game.equipmentLabel ?? "Equipment"} description={game.equipmentDescription ?? "Equipment provides its listed effects while carried."} dropDisabled={game.isResolving || game.hasLost || microgame.active} onDrop={() => { game.dropEquipment(); setEquipmentMenuOpen(false); }} onClose={() => setEquipmentMenuOpen(false)} />
       <StyledModal accessibilityLabel="Game menu" accessibilityRole="dialog" animationType="fade" onRequestClose={() => setIsMenuOpen(false)} visible={isMenuOpen}>
         <Title>Menu</Title>
         <StyledText>Seed: {settings.seed.trim()}</StyledText>
@@ -255,21 +309,10 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
       </StyledModal>
       <StyledModal accessibilityLabel="Dungeon map" accessibilityRole="dialog" animationType="fade" onRequestClose={() => setIsMapOpen(false)} visible={isMapOpen}>
         <Title>Dungeon Map</Title>
-        <DungeonMap currentRoomId={game.currentRoomId} map={game.visibleDungeonMap} />
+        <DungeonMap currentRoomId={game.currentRoomId} map={game.visibleDungeonMap} showCurrentRoomHint={tutorialEnabled && tutorialRoomIds.has(game.currentRoomId)} />
         <PrimaryButton accessibilityLabel="Close map" accessibilityRole="button" label="Close map" onPress={() => setIsMapOpen(false)} />
       </StyledModal>
-      <StyledModal accessibilityLabel="Level cleared" accessibilityRole="dialog" animationType="fade" onRequestClose={() => setIsLevelCleared(false)} visible={isLevelCleared}>
-        <Title>Level Cleared!</Title>
-        <PrimaryButton
-          accessibilityLabel="Continue to next level"
-          accessibilityRole="button"
-          label="Continue"
-          onPress={() => {
-            setIsLevelCleared(false);
-            game.descend();
-          }}
-        />
-      </StyledModal>
+      </>}
     </ScreenShell>
   );
 }

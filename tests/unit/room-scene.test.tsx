@@ -50,6 +50,47 @@ test("the outer room border has doorway gaps while guarded-doorway markers stay 
   expect(screen.getByText("↓")).toBeTruthy();
 });
 
+test("a Werewolf hit with no damage shows No Effect in the floating damage position", async () => {
+  const animationFrame = { ...createCombatAnimationFrame(), enemyHealthLossElapsed: 40 };
+  const screen = await render(
+    <RoomScene
+      actors={[{ id: "werewolf", currentHealth: 1, isWerewolf: true, kind: "enemy", label: "Werewolf", maxHealth: 1, sprite: "werewolf_graphic" }]}
+      animationFrame={animationFrame}
+      doorways={doorways}
+      enemyHealthLossAmount={0}
+      playerEnergyLossAmount={0}
+      playerHealthLossAmount={0}
+      playerPosition="center"
+      playerSprite="warrior_graphic"
+      roomId="A1"
+      sceneScale={1}
+    />,
+  );
+
+  expect(screen.getByTestId("werewolf-no-effect")).toHaveTextContent("No Effect!");
+  expect(screen.queryByTestId("enemy-health-loss")).toBeNull();
+});
+
+test("support feedback is shown over the selected ally", async () => {
+  const screen = await render(
+    <RoomScene
+      actors={[{ id: "ally", kind: "player", label: "Cleric · ally", sprite: "cleric_graphic", position: "center" }]}
+      doorways={doorways}
+      enemyHealthLossAmount={0}
+      playerEnergyLossAmount={0}
+      playerHealthLossAmount={0}
+      playerPosition="center"
+      playerSprite="warrior_graphic"
+      roomId="A1"
+      sceneScale={1}
+      supportEffect={{ targetId: "ally", emoji: "🛡️", label: "Vanguard", key: 1 }}
+    />,
+  );
+
+  expect(within(screen.getByRole("button", { name: "Cleric · ally" })).getByText("Vanguard")).toBeTruthy();
+  expect(screen.getAllByTestId("support-feedback")).toHaveLength(1);
+});
+
 test("moving from an already aligned position still animates the player toward the doorway", async () => {
   const screen = await render(scene("A1", "center"));
 
@@ -92,6 +133,28 @@ test("shows the new room directly without replaying the previous room snapshot",
       jest.advanceTimersByTime(GAME_PARAMETERS.animation.roomTransitionDurationMs);
     });
     expect(screen.queryByTestId("room-transition-snapshot")).toBeNull();
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
+test("pauses player idle bob until the room-entry slide reaches its spot", async () => {
+  jest.useFakeTimers();
+  try {
+    const screen = await render(scene("A1"));
+    const idleLayer = screen.getByTestId("combatant-sprite-idle-layer");
+    expect(idleLayer.props.style[1].animationPlayState).toBe("running");
+
+    await act(async () => {
+      await screen.rerender(scene("A2"));
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId("combatant-sprite-idle-layer").props.style[1].animationPlayState).toBe("paused");
+
+    await act(async () => {
+      jest.advanceTimersByTime(GAME_PARAMETERS.animation.roomTransitionDurationMs);
+    });
+    expect(screen.getByTestId("combatant-sprite-idle-layer").props.style[1].animationPlayState).toBe("running");
   } finally {
     jest.useRealTimers();
   }

@@ -1,15 +1,15 @@
 import { ACTOR_ENVELOPE, HUMAN_FORM_SPRITE_SIZE, SCENE_HEIGHT, SCENE_WIDTH, getActorSpriteSize, getHumanFormScale, layoutRoomActors } from "@/utils/coordinates";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { Platform, Pressable, View, type ViewInstance, type ViewStyle } from "react-native";
+import { Platform, Pressable, Text, View, type ViewInstance, type ViewStyle } from "react-native";
 
 import { useThemeColors } from "@/components/Common/theme";
 import { measureViewCenterNow } from "@/components/Common/SpriteFlight";
-import { PlayerAura } from "@/components/Common/PlayerAura";
+import { PlayerAura, SupportFeedback } from "@/components/Common/PlayerAura";
 import { RoomFloor } from "@/components/Dungeon/Floor";
 import { RoomWalls, SceneSprite } from "@/components/Dungeon/Walls";
 import { createStyles } from "@/components/Dungeon/room-scene-styles";
 import { CombatantSprite } from "@/components/Enemy/Enemy";
-import { EnemyHealthBar, FloatingResourceLoss } from "@/components/Enemy/EnemyFeedback";
+import { EnemyHealthBar, FloatingResourceLoss, FloatingTextFeedback } from "@/components/Enemy/EnemyFeedback";
 import { COMBAT_ANIMATION, createCombatAnimationFrame, type CombatAnimationFrame } from "@/game/entities";
 import { GAME_PARAMETERS } from "@/game/config/gameparameters";
 import { getAdjacentRoomTransition } from "@/utils/room-transition";
@@ -42,12 +42,15 @@ export type RoomSceneActor = {
   currentHealth?: number;
   sprite: string;
   isChest?: boolean;
+  isWerewolf?: boolean;
   kind: "enemy" | "item" | "equipment" | "stairs" | "player";
   label: string;
   position?: ScenePosition;
   isActive?: boolean;
   maxHealth?: number;
 };
+
+export type SupportEffect = { targetId: string | null; emoji: string; label: string; key: number };
 
 type RoomSceneProps = {
   canUnlockDoors?: boolean;
@@ -73,6 +76,10 @@ type RoomSceneProps = {
   reducedMotion?: boolean;
   animationsPaused?: boolean;
   maxHeight?: number;
+  showMoveHints?: boolean;
+  showAttackHints?: boolean;
+  showGetHint?: boolean;
+  supportEffect?: SupportEffect | null;
 };
 
 export function RoomScene({
@@ -99,6 +106,10 @@ export function RoomScene({
   reducedMotion = false,
   animationsPaused = false,
   maxHeight,
+  showMoveHints = false,
+  showAttackHints = false,
+  showGetHint = false,
+  supportEffect = null,
 }: RoomSceneProps) {
   // Render in fixed logical coordinates, then scale once to the measured device width.
   const colors = useThemeColors();
@@ -199,6 +210,7 @@ export function RoomScene({
         reducedMotion={reducedMotion || systemReducedMotion}
         animationsPaused={animationsPaused}
         onPress={onDoorwayPress}
+        showMoveHints={showMoveHints}
       />
 
       {actors.map((actor) => (
@@ -216,6 +228,9 @@ export function RoomScene({
           disabled={disabled}
           reducedMotion={reducedMotion || systemReducedMotion}
           onPress={onActorPress}
+          showAttackHint={showAttackHints && actor.kind === "enemy"}
+          showGetHint={showGetHint && (actor.kind === "item" || actor.kind === "equipment") && actor.isChest}
+          supportEffect={supportEffect?.targetId === actor.id ? supportEffect : null}
           sceneScale={sceneScale}
         />
       ))}
@@ -238,6 +253,7 @@ export function RoomScene({
         entering={transitionKey !== null}
         entryPosition={playerPosition}
         onPress={onPlayerPress}
+        supportEffect={supportEffect?.targetId === null ? supportEffect : null}
       />
       </Animated.View>
       </Animated.View>
@@ -283,6 +299,9 @@ type SceneActorProps = {
   reducedMotion: boolean;
   animationsPaused: boolean;
   onPress?: (actor: RoomSceneActor, source?: ScreenPoint) => void;
+  showAttackHint?: boolean;
+  showGetHint?: boolean;
+  supportEffect?: SupportEffect | null;
 };
 
 function SceneActor({
@@ -297,6 +316,9 @@ function SceneActor({
   reducedMotion,
   animationsPaused,
   onPress,
+  showAttackHint = false,
+  showGetHint = false,
+  supportEffect = null,
 }: SceneActorProps) {
   const actorRef = useRef<ViewInstance>(null);
   const colors = useThemeColors();
@@ -329,6 +351,12 @@ function SceneActor({
         pressed && styles.pressedActor,
       ]}
     >
+      {showAttackHint || showGetHint ? (
+        <View pointerEvents="none" style={{ position: "absolute", bottom: "100%", alignItems: "center", zIndex: 10 }} testID={showAttackHint ? "tutorial-attack" : "tutorial-get"}>
+          <Text style={{ backgroundColor: colors.paperLight, borderColor: colors.accent, borderWidth: 1, color: colors.accent, fontSize: 12, fontWeight: "900", lineHeight: 15, paddingHorizontal: 4 }}>{showAttackHint ? "Attack" : "Get"}</Text>
+          <Text style={{ color: colors.accent, fontSize: 12, fontWeight: "900", lineHeight: 12 }}>↓</Text>
+        </View>
+      ) : null}
       <View pointerEvents="none" style={{ width: ACTOR_ENVELOPE, height: ACTOR_ENVELOPE, alignItems: "center", justifyContent: "center", transform: [{ scale: slotScale }] }}>
       {actor.kind === "enemy" ? (
         <View style={styles.actorContent}>
@@ -342,6 +370,7 @@ function SceneActor({
               sceneFrameStore={sceneFrameStore}
               sprite={actor.sprite}
               scale={sceneScale}
+              isWerewolf={actor.isWerewolf}
             /> : <CombatantSprite accessibilityLabel={actor.label} animationsPaused={animationsPaused} reducedMotion={reducedMotion} sprite={actor.sprite} scale={sceneScale} size={getActorSpriteSize(actor.sprite)} />}
             <EnemyHealthBar
               accessibilityLabel="Enemy health"
@@ -354,6 +383,7 @@ function SceneActor({
         </View>
       ) : (
         <View style={styles.actorContent}>
+          {supportEffect ? <SupportFeedback key={supportEffect.key} emoji={supportEffect.emoji} label={supportEffect.label} /> : null}
           {actor.kind === "player" && actor.auraColor ? <PlayerAura color={actor.auraColor} /> : null}
           <SceneSprite accessibilityLabel={actor.label} sprite={actor.sprite} scale={sceneScale} size={getActorSpriteSize(actor.sprite)} />
         </View>
@@ -381,6 +411,7 @@ type PlayerActorProps = {
   entering: boolean;
   entryPosition: ScenePosition;
   onPress?: () => void;
+  supportEffect?: SupportEffect | null;
 };
 
 function PlayerActor({
@@ -401,6 +432,7 @@ function PlayerActor({
   entering,
   entryPosition,
   onPress,
+  supportEffect,
 }: PlayerActorProps) {
   const colors = useThemeColors();
   const styles = createStyles(colors);
@@ -471,12 +503,14 @@ function PlayerActor({
           } : {}),
         }}
       >
+      {supportEffect ? <SupportFeedback key={supportEffect.key} emoji={supportEffect.emoji} label={supportEffect.label} /> : null}
       {auraColor ? <PlayerAura color={auraColor} /> : null}
       <PlayerAnimationLayer
         accessibilityLabel={playerLabel}
         animationFrame={animationFrame}
         energyLossAmount={energyLossAmount}
         healthLossAmount={healthLossAmount}
+        idleAnimationPaused={entering}
         reducedMotion={reducedMotion}
         animationsPaused={animationsPaused}
         sceneFrameStore={sceneFrameStore}
@@ -518,31 +552,34 @@ function useAnimationFrame(
 const EMPTY_ANIMATION_FRAME = createCombatAnimationFrame();
 
 function EnemyAnimationLayer({
-  accessibilityLabel, amount, animationFrame: fallbackFrame, reducedMotion, animationsPaused, sceneFrameStore, sprite, scale,
+  accessibilityLabel, amount, animationFrame: fallbackFrame, reducedMotion, animationsPaused, sceneFrameStore, sprite, scale, isWerewolf = false,
 }: {
   accessibilityLabel: string; amount: number; animationFrame?: CombatAnimationFrame; reducedMotion: boolean; animationsPaused: boolean;
-  sceneFrameStore?: SceneFrameStore; sprite: string; scale: number;
+  sceneFrameStore?: SceneFrameStore; sprite: string; scale: number; isWerewolf?: boolean;
 }) {
   const animationFrame = useAnimationFrame(sceneFrameStore, fallbackFrame, ENEMY_ANIMATION_KEYS, animationsPaused);
   const colors = useThemeColors();
+  const healthLossProgress = getProgress(animationFrame.enemyHealthLossElapsed, COMBAT_ANIMATION.resourceLossDuration);
   return <View style={{ alignItems: "center", justifyContent: "center", width: 48, height: 48, flexShrink: 0 }}>
-    <FloatingResourceLoss amount={amount} color={colors.health} icon="heart" progress={getProgress(animationFrame.enemyHealthLossElapsed, COMBAT_ANIMATION.resourceLossDuration)} testID="enemy-health-loss" />
+    {isWerewolf && amount === 0
+      ? <FloatingTextFeedback text="No Effect!" color={colors.health} progress={healthLossProgress} testID="werewolf-no-effect" />
+      : <FloatingResourceLoss amount={amount} color={colors.health} icon="heart" progress={healthLossProgress} testID="enemy-health-loss" />}
     <CombatantSprite accessibilityLabel={accessibilityLabel} animationsPaused={animationsPaused} attackDirection="right" attackProgress={getProgress(animationFrame.enemyAttackElapsed, COMBAT_ANIMATION.attackDuration)} damageProgress={getProgress(animationFrame.enemyDamageElapsed, COMBAT_ANIMATION.damageDuration)} reducedMotion={reducedMotion} sprite={sprite} scale={scale} size={getActorSpriteSize(sprite)} />
   </View>;
 }
 
 function PlayerAnimationLayer({
-  accessibilityLabel, animationFrame: fallbackFrame, energyLossAmount, healthLossAmount, reducedMotion, animationsPaused, sceneFrameStore, scale, sprite,
+  accessibilityLabel, animationFrame: fallbackFrame, energyLossAmount, healthLossAmount, idleAnimationPaused, reducedMotion, animationsPaused, sceneFrameStore, scale, sprite,
 }: {
   accessibilityLabel: string; animationFrame?: CombatAnimationFrame; energyLossAmount: number; healthLossAmount: number;
-  reducedMotion: boolean; animationsPaused: boolean; sceneFrameStore?: SceneFrameStore; scale: number; sprite: string;
+  idleAnimationPaused?: boolean; reducedMotion: boolean; animationsPaused: boolean; sceneFrameStore?: SceneFrameStore; scale: number; sprite: string;
 }) {
   const animationFrame = useAnimationFrame(sceneFrameStore, fallbackFrame, PLAYER_ANIMATION_KEYS, animationsPaused);
   const colors = useThemeColors();
   return <View style={{ alignItems: "center", justifyContent: "center", width: 48, height: 48, flexShrink: 0 }}>
     <FloatingResourceLoss amount={healthLossAmount} color={colors.health} icon="heart" progress={getProgress(animationFrame.playerHealthLossElapsed, COMBAT_ANIMATION.resourceLossDuration)} testID="player-health-loss" />
     <FloatingResourceLoss amount={energyLossAmount} color={colors.energy} icon="bolt" progress={getProgress(animationFrame.playerEnergyLossElapsed, COMBAT_ANIMATION.resourceLossDuration)} testID="player-energy-loss" />
-    <CombatantSprite accessibilityLabel={accessibilityLabel} animationsPaused={animationsPaused} idleAnimationPaused={false} attackDirection="left" attackProgress={getProgress(animationFrame.playerAttackElapsed, COMBAT_ANIMATION.attackDuration)} damageProgress={getProgress(animationFrame.playerDamageElapsed, COMBAT_ANIMATION.damageDuration)} reducedMotion={reducedMotion} sprite={sprite} scale={scale} size={getActorSpriteSize(sprite)} />
+    <CombatantSprite accessibilityLabel={accessibilityLabel} animationsPaused={animationsPaused} idleAnimationPaused={idleAnimationPaused} attackDirection="left" attackProgress={getProgress(animationFrame.playerAttackElapsed, COMBAT_ANIMATION.attackDuration)} damageProgress={getProgress(animationFrame.playerDamageElapsed, COMBAT_ANIMATION.damageDuration)} reducedMotion={reducedMotion} sprite={sprite} scale={scale} size={getActorSpriteSize(sprite)} />
   </View>;
 }
 
@@ -569,6 +606,3 @@ export function getProgress(elapsed: number | null, duration: number) {
 
   return Math.max(0, Math.min(1, elapsed / duration));
 }
-
-
-

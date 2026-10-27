@@ -7,6 +7,7 @@ import type { Difficulty } from "@/utils/settings-storage";
 export type MicrogameKind = "concentration" | "timed-attack" | "multitap" | "defense";
 export type MultitapTargetSpot = { x: number; y: number };
 export type MicrogameOptions = { difficulty?: Difficulty; level?: number };
+export type MicrogameResult = { score: number; damageScore: number };
 export const HUMAN_REACTION_WINDOW_MS = 250;
 export const MICROGAME_MAX_DURATION_MS = 1500;
 export const CONCENTRATION_TARGET_DURATION_MS = MICROGAME_MAX_DURATION_MS;
@@ -18,6 +19,9 @@ export const DEFENSE_WINDOW_MS = 700;
 export const MULTITAP_DOT_DIAMETER = 44;
 const now = () => globalThis.performance?.now?.() ?? Date.now();
 const scoreWithinRange = (score: number) => Math.max(0, Math.min(100, Math.round(score)));
+const normalizeScore = (score: number, kind: MicrogameKind) => kind === "multitap"
+  ? Math.max(0, Math.round(score))
+  : scoreWithinRange(score);
 
 export function getConcentrationScore(actualMs: number, targetMs: number) {
   // Score falls linearly with timing error and is clamped to the shared 0–100 range.
@@ -36,7 +40,7 @@ export function getMultitapTargetTaps(difficulty: Difficulty, level: number) {
 }
 
 export function getMultitapScore(clicks: number, targetTaps: number) {
-  return scoreWithinRange(clicks * 100 / Math.max(1, targetTaps));
+  return Math.max(0, Math.round(clicks * 100 / Math.max(1, targetTaps)));
 }
 
 export function getMultitapGrid(trackWidth: number, trackHeight: number, requestedDiameter: number) {
@@ -48,16 +52,18 @@ export function getMultitapGrid(trackWidth: number, trackHeight: number, request
   };
 }
 
-export function getNextMultitapTargetSpot(currentSpot: MultitapTargetSpot, handedness: "left" | "right", trackWidth: number, trackHeight: number, dotDiameter: number, nextTap: number): MultitapTargetSpot {
+export function getNextMultitapTargetSpot(currentSpot: MultitapTargetSpot, handedness: "left" | "right", trackWidth: number, trackHeight: number, dotDiameter: number, random = Math.random): MultitapTargetSpot {
   if (trackWidth <= 0 || trackHeight <= 0) return currentSpot;
   const { diameter, columns, rows } = getMultitapGrid(trackWidth, trackHeight, dotDiameter);
   const cellWidth = (trackWidth / 2) / columns;
   const cellCount = columns * rows;
 
-  // Each cell holds one dot. Cycling from a different cell guarantees that the
-  // new dot cannot overlap the previous one, including on compact screens.
-  for (let offset = 0; offset < cellCount; offset += 1) {
-    const cellIndex = (nextTap + offset) % cellCount;
+  const previousColumn = Math.floor((handedness === "left" ? currentSpot.x : currentSpot.x - 0.5) * trackWidth / cellWidth);
+  const previousRow = Math.floor(currentSpot.y * rows);
+  const previousIndex = previousRow * columns + previousColumn;
+  const availableSpots: Array<{ x: number; y: number; index: number }> = [];
+  for (let cellIndex = 0; cellIndex < cellCount; cellIndex += 1) {
+    if (cellIndex === previousIndex) continue;
     const column = cellIndex % columns;
     const row = Math.floor(cellIndex / columns);
     const x = handedness === "left"
@@ -65,13 +71,14 @@ export function getNextMultitapTargetSpot(currentSpot: MultitapTargetSpot, hande
       : 0.5 + ((column + 0.5) * cellWidth) / trackWidth;
     const y = (row + 0.5) / rows;
     if (Math.hypot((x - currentSpot.x) * trackWidth, (y - currentSpot.y) * trackHeight) >= diameter) {
-      return { x, y };
+      availableSpots.push({ x, y, index: cellIndex });
     }
   }
-  return currentSpot;
+  if (!availableSpots.length) return currentSpot;
+  return availableSpots[Math.min(availableSpots.length - 1, Math.floor(random() * availableSpots.length))];
 }
 
-export function useMicrogame(onComplete: (score: number) => void) {
+export function useMicrogame(onComplete: (result: MicrogameResult) => void) {
   const [active, setActive] = useState(false);
   const [kind, setKind] = useState<MicrogameKind>("concentration");
   const [elapsedStore] = useState(() => createNumberStore(0));
@@ -88,13 +95,22 @@ export function useMicrogame(onComplete: (score: number) => void) {
   useLayoutEffect(() => {
     onCompleteRef.current = onComplete;
   }, [onComplete]);
-  const finish = useCallback((score: number) => {
+  const finish = useCallback((score: number, gameKind = kind) => {
     // A single completion guard prevents tap/timeout races from submitting twice.
     if (completed.current) return;
     completed.current = true;
     setActive(false);
-    onCompleteRef.current(scoreWithinRange(score));
-  }, []);
+    const normalized = normalizeScore(score, gameKind);
+    onCompleteRef.current({ score: Math.min(100, normalized), damageScore: normalized });
+  }, [kind]);
+  const finishMultitap = useCallback(() => {
+    // Keep the bonus damage score uncapped while reporting a conventional average.
+    if (completed.current) return;
+    completed.current = true;
+    setActive(false);
+    const damageScore = getMultitapScore(clickCount.current, targetTaps);
+    onCompleteRef.current({ score: Math.min(100, damageScore), damageScore });
+  }, [targetTaps]);
   const start = useCallback(
     (gameKind: MicrogameKind = "concentration", handedness: "left" | "right" = "right", options?: MicrogameOptions) => {
       completed.current = false;
@@ -118,8 +134,7 @@ export function useMicrogame(onComplete: (score: number) => void) {
     if (kind === "multitap") {
       const next = clickCount.current + 1;
       clickCount.current = next;
-      setMultitapTargetSpot(currentSpot => getNextMultitapTargetSpot(currentSpot, leftHandedRef.current ? "left" : "right", trackWidth, trackHeight, dotDiameter, next));
-      if (next >= targetTaps) finish(getMultitapScore(next, targetTaps));
+      setMultitapTargetSpot(currentSpot => getNextMultitapTargetSpot(currentSpot, leftHandedRef.current ? "left" : "right", trackWidth, trackHeight, dotDiameter));
       return;
     }
     const targetProgress = leftHandedRef.current ? (targetSpot - 0.1) / 0.8 : (0.9 - targetSpot) / 0.8;
@@ -129,7 +144,7 @@ export function useMicrogame(onComplete: (score: number) => void) {
         ? 0
         : getTimedAttackScore(elapsedMs - targetDelay);
     finish(score);
-  }, [active, finish, kind, targetDelay, targetSpot, targetTaps]);
+  }, [active, kind, targetDelay, targetSpot, targetTaps]);
   useEffect(() => {
     if (!active) return;
     const interval = setInterval(() => {
@@ -137,11 +152,12 @@ export function useMicrogame(onComplete: (score: number) => void) {
       const value = Math.min(duration, nowRef.current() - startedAt.current);
       elapsedStore.setSnapshot(value);
       if (value >= duration) {
-        finish(kind === "multitap" ? getMultitapScore(clickCount.current, targetTaps) : 0);
+        if (kind === "multitap") finishMultitap();
+        else finish(0, kind);
       }
     }, 16);
     return () => clearInterval(interval);
-  }, [active, elapsedStore, finish, kind, targetTaps]);
+  }, [active, elapsedStore, finish, finishMultitap, kind, targetTaps]);
   return {
     active,
     kind,

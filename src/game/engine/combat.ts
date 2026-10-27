@@ -34,7 +34,7 @@ export function getPotentialAttackDamage({
   target: WorldMonster;
 }): number {
   if (target.chases) return 0;
-  const boundedScore = Math.max(0, Math.min(100, Math.round(score)));
+  const boundedScore = Math.max(0, Math.round(score));
   const raw = Math.max(1, Math.floor(profile * boundedScore / 100)) + equipmentAttack + (charged ? 5 : 0);
   return Math.max(0, raw - (target.defense ?? 0));
 }

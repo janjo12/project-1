@@ -107,7 +107,7 @@ function validAction(value: unknown): value is PlayerAction {
   if (!isRecord(value) || !["MOVE", "ATTACK", "SUPPORT", "CLASS_READY", "PICKUP", "PICKUP_EQUIPMENT", "DROP_EQUIPMENT", "DESCEND"].includes(String(value.type))) return false;
   return (value.target === undefined || typeof value.target === "string") &&
     (value.charged === undefined || typeof value.charged === "boolean") &&
-    (value.microgameScore === undefined || (typeof value.microgameScore === "number" && Number.isFinite(value.microgameScore) && value.microgameScore >= 0 && value.microgameScore <= 100));
+    (value.microgameScore === undefined || (typeof value.microgameScore === "number" && Number.isFinite(value.microgameScore) && value.microgameScore >= 0));
 }
 
 function getSession(code: string) {
