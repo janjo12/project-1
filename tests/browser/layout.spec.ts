@@ -10,6 +10,14 @@ for (const viewport of [
     await openFreshApp(page);
     await startTestGame(page);
 
+    await expect(page.getByText("Find the Stairs to Reach the Next Level")).toBeVisible();
+    await expect(page.getByTestId("tutorial-you-are-here")).toBeVisible();
+    await expect(page.getByTestId("tutorial-move").first()).toBeVisible();
+    expect(await page.getByTestId("tutorial-move").count()).toBeGreaterThan(0);
+    await page.getByRole("button", { name: /Tap right doorway to move/ }).last().click();
+    await expect(page.getByTestId("tutorial-move")).toHaveCount(0);
+    await expect(page.getByTestId("tutorial-you-are-here")).toBeVisible();
+
     const viewportBounds = { width: viewport.width, height: viewport.height };
     const gameBounds = await page.getByTestId("dungeon-room-frame").boundingBox();
     expect(gameBounds).not.toBeNull();

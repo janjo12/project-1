@@ -41,6 +41,7 @@ export function RoomWalls({
   onPress,
   reducedMotion = false,
   animationsPaused = false,
+  showMoveHints = false,
 }: {
   canUnlockDoors: boolean;
   canPassBlockedDoorways?: boolean;
@@ -50,6 +51,7 @@ export function RoomWalls({
   onPress?: (position: DoorPosition) => void;
   reducedMotion?: boolean;
   animationsPaused?: boolean;
+  showMoveHints?: boolean;
 }) {
   const styles = createStyles(useThemeColors());
   const positions: DoorPosition[] = ["top", "right", "bottom", "left"];
@@ -97,6 +99,7 @@ export function RoomWalls({
               pressed && styles.pressedActor,
             ]}
           >
+            {showMoveHints && !isDisabled ? <Text pointerEvents="none" testID="tutorial-move" style={{ position: "absolute", bottom: "100%", backgroundColor: "#fff7cc", borderColor: "#8a5a00", borderWidth: 1, color: "#5b3a00", fontSize: 10, fontWeight: "900", lineHeight: 12, paddingHorizontal: 3 }}>Move</Text> : null}
             {state === "open" ? (
               <Text
                 accessible={false}

@@ -10,6 +10,7 @@ type DungeonMapProps = {
   currentRoomId: string;
   map: DungeonMapType;
   compact?: boolean;
+  showCurrentRoomHint?: boolean;
   players?: { id: string; roomId: string; color: string }[];
 };
 
@@ -18,6 +19,7 @@ export function DungeonMap({
   map,
   players = [],
   compact: forceCompact = false,
+  showCurrentRoomHint = false,
 }: DungeonMapProps) {
   const colors = useThemeColors();
   const { height } = useWindowDimensions();
@@ -150,6 +152,12 @@ export function DungeonMap({
                                 testID={`map-player-${player.id}-${roomId}`}
                               />
                             ))}
+                          </View>
+                        ) : null}
+                        {isCurrentRoom && showCurrentRoomHint ? (
+                          <View pointerEvents="none" style={styles.currentRoomHint} testID="tutorial-you-are-here">
+                            <Text style={styles.currentRoomHintArrow}>↓</Text>
+                            <Text style={styles.currentRoomHintText}>You Are Here</Text>
                           </View>
                         ) : null}
                         {hasNorthLock ? (
@@ -301,6 +309,32 @@ function createStyles(colors: ThemeColors, compact: boolean, veryCompact: boolea
     currentRoom: {
       borderColor: colors.accent,
       borderWidth: 3,
+    },
+    currentRoomHint: {
+      alignItems: "center",
+      bottom: "100%",
+      left: "50%",
+      position: "absolute",
+      transform: [{ translateX: -35 }],
+      width: 70,
+      zIndex: 5,
+    },
+    currentRoomHintArrow: {
+      color: colors.accent,
+      fontSize: compact ? 10 : 14,
+      fontWeight: "900",
+      lineHeight: compact ? 10 : 14,
+    },
+    currentRoomHintText: {
+      backgroundColor: colors.paperLight,
+      borderColor: colors.accent,
+      borderWidth: 1,
+      color: colors.ink,
+      fontSize: compact ? 7 : 9,
+      fontWeight: "900",
+      lineHeight: compact ? 9 : 11,
+      paddingHorizontal: 2,
+      textAlign: "center",
     },
     iconOverlay: { position: "absolute" },
     lockIcon: { fontSize: 12, lineHeight: 14, textAlign: "center" },

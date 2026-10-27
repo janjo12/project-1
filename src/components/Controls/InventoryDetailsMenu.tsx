@@ -29,18 +29,20 @@ export function EquipmentDetailsMenu({
   description,
   onDrop,
   onClose,
+  dropDisabled = false,
 }: {
   visible: boolean;
   label: string;
   description: string;
   onDrop: () => void;
   onClose: () => void;
+  dropDisabled?: boolean;
 }) {
   return <StyledModal accessibilityLabel="Equipment details" accessibilityRole="dialog" animationType="fade" onRequestClose={onClose} visible={visible}>
     <Title>{label}</Title>
     <StyledText>{description}</StyledText>
     <StyledText>Pick up another piece of equipment at any time. Your current equipment will be dropped on the ground in this room.</StyledText>
-    <NormalButton accessibilityLabel="Drop equipment" accessibilityRole="button" label="Drop Equipment" onPress={onDrop} />
+    <NormalButton accessibilityLabel="Drop equipment" accessibilityRole="button" label="Drop Equipment" disabled={dropDisabled} onPress={onDrop} />
     <PrimaryButton accessibilityLabel="Close equipment details" accessibilityRole="button" label="Close" onPress={onClose} />
   </StyledModal>;
 }

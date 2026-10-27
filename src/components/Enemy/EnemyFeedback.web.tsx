@@ -1,4 +1,5 @@
 import { Text, View } from "react-native";
+import { ResourceBarIcon } from "@/components/Player/PlayerHUD";
 import { createStyles } from "@/components/Dungeon/room-scene-styles";
 import { useThemeColors } from "@/components/Common/theme";
 
@@ -13,5 +14,12 @@ export function FloatingResourceLoss({ amount, color, icon, progress, testID }: 
   if (amount <= 0) return null;
   const visibleProgress = progress ?? 1;
   const opacity = progress === null ? 0 : progress < 0.62 ? 1 : Math.max(0, 1 - (progress - 0.62) / 0.38);
-  return <View style={[styles.floatingLoss, { opacity, transform: [{ translateY: -28 * visibleProgress }] }]} testID={testID}><Text style={[styles.floatingLossText, { color }]}>- {amount} {icon === "heart" ? "♥" : "⚡"}</Text></View>;
+  return <View style={[styles.floatingLoss, { opacity, transform: [{ translateY: -28 * visibleProgress }] }]} testID={testID}><Text numberOfLines={1} adjustsFontSizeToFit style={[styles.floatingLossText, { color }]}>- {amount}</Text><ResourceBarIcon color={color} icon={icon} testID={`${testID}-icon`} /></View>;
+}
+
+export function FloatingTextFeedback({ text, color, progress, testID }: { text: string; color: string; progress: number | null; testID: string }) {
+  const styles = createStyles(useThemeColors());
+  if (progress === null) return null;
+  const opacity = progress < 0.62 ? 1 : Math.max(0, 1 - (progress - 0.62) / 0.38);
+  return <View style={[styles.floatingLoss, { opacity, transform: [{ translateY: -28 * progress }] }]} testID={testID}><Text numberOfLines={1} adjustsFontSizeToFit style={[styles.floatingLossText, { color }]}>{text}</Text></View>;
 }

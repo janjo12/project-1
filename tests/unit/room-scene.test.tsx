@@ -50,6 +50,47 @@ test("the outer room border has doorway gaps while guarded-doorway markers stay 
   expect(screen.getByText("↓")).toBeTruthy();
 });
 
+test("a Werewolf hit with no damage shows No Effect in the floating damage position", async () => {
+  const animationFrame = { ...createCombatAnimationFrame(), enemyHealthLossElapsed: 40 };
+  const screen = await render(
+    <RoomScene
+      actors={[{ id: "werewolf", currentHealth: 1, isWerewolf: true, kind: "enemy", label: "Werewolf", maxHealth: 1, sprite: "werewolf_graphic" }]}
+      animationFrame={animationFrame}
+      doorways={doorways}
+      enemyHealthLossAmount={0}
+      playerEnergyLossAmount={0}
+      playerHealthLossAmount={0}
+      playerPosition="center"
+      playerSprite="warrior_graphic"
+      roomId="A1"
+      sceneScale={1}
+    />,
+  );
+
+  expect(screen.getByTestId("werewolf-no-effect")).toHaveTextContent("No Effect!");
+  expect(screen.queryByTestId("enemy-health-loss")).toBeNull();
+});
+
+test("support feedback is shown over the selected ally", async () => {
+  const screen = await render(
+    <RoomScene
+      actors={[{ id: "ally", kind: "player", label: "Cleric · ally", sprite: "cleric_graphic", position: "center" }]}
+      doorways={doorways}
+      enemyHealthLossAmount={0}
+      playerEnergyLossAmount={0}
+      playerHealthLossAmount={0}
+      playerPosition="center"
+      playerSprite="warrior_graphic"
+      roomId="A1"
+      sceneScale={1}
+      supportEffect={{ targetId: "ally", emoji: "🛡️", label: "Vanguard", key: 1 }}
+    />,
+  );
+
+  expect(within(screen.getByRole("button", { name: "Cleric · ally" })).getByText("Vanguard")).toBeTruthy();
+  expect(screen.getAllByTestId("support-feedback")).toHaveLength(1);
+});
+
 test("moving from an already aligned position still animates the player toward the doorway", async () => {
   const screen = await render(scene("A1", "center"));
 
@@ -92,6 +133,28 @@ test("shows the new room directly without replaying the previous room snapshot",
       jest.advanceTimersByTime(GAME_PARAMETERS.animation.roomTransitionDurationMs);
     });
     expect(screen.queryByTestId("room-transition-snapshot")).toBeNull();
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
+test("pauses player idle bob until the room-entry slide reaches its spot", async () => {
+  jest.useFakeTimers();
+  try {
+    const screen = await render(scene("A1"));
+    const idleLayer = screen.getByTestId("combatant-sprite-idle-layer");
+    expect(idleLayer.props.style[1].animationPlayState).toBe("running");
+
+    await act(async () => {
+      await screen.rerender(scene("A2"));
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId("combatant-sprite-idle-layer").props.style[1].animationPlayState).toBe("paused");
+
+    await act(async () => {
+      jest.advanceTimersByTime(GAME_PARAMETERS.animation.roomTransitionDurationMs);
+    });
+    expect(screen.getByTestId("combatant-sprite-idle-layer").props.style[1].animationPlayState).toBe("running");
   } finally {
     jest.useRealTimers();
   }
@@ -179,6 +242,31 @@ test("player idle animation style stays stable as combat progress updates", asyn
   await screen.rerender(sprite(0.5, true));
 
   expect(screen.getByTestId("combatant-sprite-idle-layer").props.style).toBe(idleStyle);
+});
+
+test("idle bob web animation styles survive the Animated.View style boundary", async () => {
+  const screen = await render(
+    <CombatantSprite
+      accessibilityLabel="Warrior"
+      animationsPaused
+      damageProgress={null}
+      idleAnimationPaused
+      sprite="warrior_graphic"
+    />,
+  );
+  const idleStyle = screen.getByTestId("combatant-sprite-idle-layer").props.style[1];
+
+  expect(idleStyle).toEqual({
+    animationName: {
+      from: { transform: [{ translateY: -GAME_PARAMETERS.animation.bounceDistance }] },
+      to: { transform: [{ translateY: GAME_PARAMETERS.animation.bounceDistance }] },
+    },
+    animationDuration: `${GAME_PARAMETERS.animation.bounceDurationMs / 2}ms`,
+    animationDirection: "alternate",
+    animationIterationCount: "infinite",
+    animationTimingFunction: "ease-in-out",
+    animationPlayState: "paused",
+  });
 });
 
 test("player idle bob keeps running while gameplay effects are paused", async () => {

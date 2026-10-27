@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { Text, TextInput, View, useWindowDimensions } from "react-native";
+import { Text, TextInput, View, useWindowDimensions, type ViewInstance } from "react-native";
 
 import { ClassBriefing } from "@/components/Common/ClassBriefing";
 import { Row, StyledText, Title } from "@/components/Common/Displays";
@@ -9,6 +9,7 @@ import { ScreenShell } from "@/components/Common/ScreenShell";
 import { ThemeProvider, useThemeColors } from "@/components/Common/theme";
 import { NormalButton, PrimaryButton } from "@/components/Controls/ActionButton";
 import { ChargeControl, EquipmentControl, ItemControl } from "@/components/Controls/ActionMenu";
+import { EquipmentDetailsMenu, ItemDetailsMenu } from "@/components/Controls/InventoryDetailsMenu";
 import { DungeonMap } from "@/components/Dungeon/DungeonMap";
 import { GameViewPanel } from "@/components/Dungeon/GameViewPanel";
 import { ResourceBar, ResourceBarGroup } from "@/components/Player/PlayerHUD";
@@ -77,6 +78,10 @@ function Multiplayer({ settings, startAsHost }: { settings: GameSettings; startA
   const [introPage, setIntroPage] = useState(0);
   const [storedScore, setStoredScore] = useState<number | null>(null);
   const [combatMessage, setCombatMessage] = useState("");
+  const [itemDetailsOpen, setItemDetailsOpen] = useState(false);
+  const [equipmentDetailsOpen, setEquipmentDetailsOpen] = useState(false);
+  const itemTargetRef = useRef<ViewInstance>(null);
+  const equipmentTargetRef = useRef<ViewInstance>(null);
   const pendingAttack = useRef<string | null>(null);
   const pendingDefenseAction = useRef<PlayerAction | null>(null);
   const microgameMode = useRef<"attack" | "defense" | "practice">("practice");
@@ -87,7 +92,7 @@ function Multiplayer({ settings, startAsHost }: { settings: GameSettings; startA
       hostGame();
     }
   }, [hostGame, startAsHost]);
-  const microgame = useMicrogame(score => {
+  const microgame = useMicrogame(({ score, damageScore }) => {
     setStoredScore(score);
     if (microgameMode.current === "defense") {
       const action = pendingDefenseAction.current;
@@ -99,7 +104,7 @@ function Multiplayer({ settings, startAsHost }: { settings: GameSettings; startA
     const target = pendingAttack.current;
     pendingAttack.current = null;
     microgameMode.current = "practice";
-    if (target) submitAfterDefense({ type: "ATTACK", target, microgameScore: score });
+    if (target) submitAfterDefense({ type: "ATTACK", target, microgameScore: damageScore });
   });
 
   function shouldRunDefense(action: PlayerAction) {
@@ -272,7 +277,7 @@ function Multiplayer({ settings, startAsHost }: { settings: GameSettings; startA
             </View>
           ) : null}
 
-          <Row>
+          <Row style={{ height: 80, flexShrink: 0, gap: 6 }}>
             {settings.handedness === "left" ? (
               <>
                 <ChargeControl
@@ -281,19 +286,13 @@ function Multiplayer({ settings, startAsHost }: { settings: GameSettings; startA
                   disabled={state.ended || player.health <= 0 || submitted === state.turn || player.energy < getEquipmentStats(player.equipment).chargeCost}
                   onPress={toggleCharge}
                 />
-                <EquipmentInventoryControls
-                  snapshot={snapshot}
-                  disabled={submitted === state.turn || player.health <= 0 || state.ended}
-                  onDrop={() => submitAfterDefense({ type: "DROP_EQUIPMENT" })}
-                />
+                <ItemControl targetRef={itemTargetRef} itemLabel={snapshot.inventoryItemLabel} itemSprite={snapshot.inventoryItemSprite} onPress={() => setItemDetailsOpen(true)} />
+                <EquipmentControl targetRef={equipmentTargetRef} label={snapshot.equipmentLabel} sprite={snapshot.equipmentSprite} disabled={submitted === state.turn || player.health <= 0 || state.ended} onPress={() => setEquipmentDetailsOpen(true)} />
               </>
             ) : (
               <>
-                <EquipmentInventoryControls
-                  snapshot={snapshot}
-                  disabled={submitted === state.turn || player.health <= 0 || state.ended}
-                  onDrop={() => submitAfterDefense({ type: "DROP_EQUIPMENT" })}
-                />
+                <EquipmentControl targetRef={equipmentTargetRef} label={snapshot.equipmentLabel} sprite={snapshot.equipmentSprite} disabled={submitted === state.turn || player.health <= 0 || state.ended} onPress={() => setEquipmentDetailsOpen(true)} />
+                <ItemControl targetRef={itemTargetRef} itemLabel={snapshot.inventoryItemLabel} itemSprite={snapshot.inventoryItemSprite} onPress={() => setItemDetailsOpen(true)} />
                 <ChargeControl
                   charged={charged}
                   chargeCost={getEquipmentStats(player.equipment).chargeCost}
@@ -334,7 +333,7 @@ function Multiplayer({ settings, startAsHost }: { settings: GameSettings; startA
           <View style={{ flex: 1, minHeight: 0, overflow: "hidden", position: "relative", zIndex: microgame.active ? 100 : undefined }}>
           {tinyLayout && combatMessage ? <Text pointerEvents="none" style={{ position: "absolute", top: 8, left: 0, right: 0, zIndex: 20, color: colors.accent, fontWeight: "900", textAlign: "center" }}>{combatMessage}</Text> : null}
           <GameViewPanel
-            disabled={state.phase !== "playing" || state.ended || disconnected || submitted === state.turn || microgame.active}
+            disabled={state.phase !== "playing" || state.ended || disconnected || submitted === state.turn || microgame.active || itemDetailsOpen || equipmentDetailsOpen}
             pauseAnimations={microgame.active}
             reducedMotion={settings.reducedMotion}
             playerLabel={`${getGameClass(player.classId).name} · ${playerId} · Support`}
@@ -384,6 +383,8 @@ function Multiplayer({ settings, startAsHost }: { settings: GameSettings; startA
             leftHanded={settings.handedness === "left"}
             onTap={microgame.tap}
           />
+          <ItemDetailsMenu visible={itemDetailsOpen && !!snapshot.inventoryItemLabel} label={snapshot.inventoryItemLabel ?? "Item"} description={snapshot.inventoryItemDescription ?? "A useful item."} activationDescription={snapshot.inventoryItemActivationDescription ?? "This item activates automatically when its condition is met."} onClose={() => setItemDetailsOpen(false)} />
+          <EquipmentDetailsMenu visible={equipmentDetailsOpen && !!snapshot.equipmentLabel} label={snapshot.equipmentLabel ?? "Equipment"} description={snapshot.equipmentDescription ?? "Equipment provides its listed effects while carried."} dropDisabled={submitted === state.turn || player.health <= 0 || state.ended} onDrop={() => { submitAfterDefense({ type: "DROP_EQUIPMENT" }); setEquipmentDetailsOpen(false); }} onClose={() => setEquipmentDetailsOpen(false)} />
           </View>
 
           {storedScore === null ? null : <StyledText>Last microgame score: {storedScore}/100</StyledText>}
@@ -457,33 +458,6 @@ function LobbyTextBox({
       autoCapitalize="none"
       style={style}
     />
-  );
-}
-
-function EquipmentInventoryControls({
-  snapshot,
-  disabled,
-  onDrop,
-}: {
-  snapshot: NonNullable<ReturnType<typeof useRunMultiplayerGame>["snapshot"]>;
-  disabled: boolean;
-  onDrop: () => void;
-}) {
-  return (
-    <View style={{ flex: 1, gap: 4 }}>
-      <EquipmentControl
-        label={snapshot.equipmentLabel}
-        description={snapshot.equipmentDescription}
-        sprite={snapshot.equipmentSprite}
-        onDrop={onDrop}
-        disabled={disabled}
-      />
-      <ItemControl
-        activationDescription={snapshot.inventoryItemActivationDescription}
-        itemLabel={snapshot.inventoryItemLabel}
-        itemSprite={snapshot.inventoryItemSprite}
-      />
-    </View>
   );
 }
 

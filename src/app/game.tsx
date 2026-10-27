@@ -82,19 +82,19 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
   const controlsRef = useRef<ViewInstance>(null);
   const itemTargetRef = useRef<ViewInstance>(null);
   const equipmentTargetRef = useRef<ViewInstance>(null);
-  const microgame = useMicrogame(score => {
+  const microgame = useMicrogame(({ score, damageScore }) => {
     const resolveDefense = pendingDefense.current;
     if (resolveDefense) {
       pendingDefense.current = null;
       resolveDefense(score);
       return;
     }
-    setMicrogameScore(score);
+    setMicrogameScore(damageScore);
     setMicrogameScoreTotal(total => total + score);
     setMicrogameCount(count => count + 1);
     const target = pendingAttack.current;
     pendingAttack.current = null;
-    if (target) game.attackMonster(target, score);
+    if (target) game.attackMonster(target, damageScore);
   });
   const startMicrogameAction = microgame.start;
   useEffect(() => {
@@ -119,12 +119,6 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
   const map = (
     <View style={{ flexShrink: 1, maxHeight: compactLayout ? 116 : undefined, minHeight: 0 }}>
       <DungeonMap currentRoomId={game.currentRoomId} map={game.visibleDungeonMap} compact={compactLayout} />
-    </View>
-  );
-  const controls = (
-    <View ref={controlsRef} style={{ flex: 1, gap: 4, position: "relative" }}>
-      <EquipmentControl label={game.equipmentLabel} description={game.equipmentDescription} sprite={game.equipmentSprite} targetRef={equipmentTargetRef} onDrop={() => setEquipmentMenuOpen(true)} />
-      <ItemControl activationDescription={game.inventoryItemActivationDescription} itemLabel={game.inventoryItemLabel} itemSprite={game.inventoryItemSprite} targetRef={itemTargetRef} onDrop={() => setItemMenuOpen(true)} />
     </View>
   );
   const chargeCost = getEquipmentStats(game.equipment).chargeCost;
@@ -193,7 +187,7 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
       </Header>
 
       {!tinyLayout ? map : null}
-      <Row style={{ height: 148, flexShrink: 0 }}>
+      <View ref={controlsRef} style={{ height: 80, flexShrink: 0, flexDirection: "row", gap: 6 }}>
         {settings.handedness === "left" ? (
           <>
             <ChargeControl
@@ -202,11 +196,13 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
               disabled={game.isResolving || game.hasLost || (!game.isCharged && game.playerEnergy < chargeCost)}
               onPress={game.toggleCharge}
             />
-            {controls}
+            <ItemControl itemLabel={game.inventoryItemLabel} itemSprite={game.inventoryItemSprite} targetRef={itemTargetRef} onPress={() => setItemMenuOpen(true)} />
+            <EquipmentControl label={game.equipmentLabel} sprite={game.equipmentSprite} targetRef={equipmentTargetRef} onPress={() => setEquipmentMenuOpen(true)} />
           </>
         ) : (
           <>
-            {controls}
+            <EquipmentControl label={game.equipmentLabel} sprite={game.equipmentSprite} targetRef={equipmentTargetRef} onPress={() => setEquipmentMenuOpen(true)} />
+            <ItemControl itemLabel={game.inventoryItemLabel} itemSprite={game.inventoryItemSprite} targetRef={itemTargetRef} onPress={() => setItemMenuOpen(true)} />
             <ChargeControl
               charged={game.isCharged}
               chargeCost={chargeCost}
@@ -215,7 +211,7 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
             />
           </>
         )}
-      </Row>
+      </View>
 
       <ResourceBarGroup compact={compactLayout} playerSprite={game.playerClass.sprite}>
         <ResourceBar
@@ -306,6 +302,7 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
         onQuitToTitle={confirmQuitToTitle}
         onPractice={() => { setIsMenuOpen(false); microgame.start(game.playerClass.microgame, settings.handedness, { difficulty: settings.difficulty, level: game.level }); }}
         level={game.level}
+        classId={game.playerClass.id}
         microgameAverage={microgameCount ? microgameScoreTotal / microgameCount : null}
         microgamesEnabled={settings.microgamesEnabled}
         onOpenMap={tinyLayout ? () => { setIsMenuOpen(false); setIsMapOpen(true); } : undefined}

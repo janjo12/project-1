@@ -54,6 +54,15 @@ type FloatingResourceLossProps = {
   testID: string;
 };
 
+export function FloatingTextFeedback({ text, color, progress, testID }: { text: string; color: string; progress: number | null; testID: string }) {
+  const styles = createStyles(useThemeColors());
+  if (progress === null) return null;
+  const opacity = progress < 0.62 ? 1 : Math.max(0, 1 - (progress - 0.62) / 0.38);
+  return <View style={[styles.floatingLoss, { opacity, transform: [{ translateY: -28 * progress }] }]} testID={testID}>
+    <Text style={[styles.floatingLossText, { color }]}>{text}</Text>
+  </View>;
+}
+
 export function FloatingResourceLoss({
   amount,
   color,
@@ -88,7 +97,7 @@ export function FloatingResourceLoss({
       ]}
       testID={testID}
     >
-      <Text style={[styles.floatingLossText, { color }]}>- {amount}</Text>
+      <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.floatingLossText, { color }]}>- {amount}</Text>
       <FontAwesome color={color} name={icon} size={16} testID={`${testID}-icon`} />
     </View>
   );

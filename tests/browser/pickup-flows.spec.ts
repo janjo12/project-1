@@ -12,7 +12,7 @@ test("picking up a floor item fills the singleplayer item slot and animates the 
   const emptySlotTarget = await page.getByTestId("item-flight-target").boundingBox();
   expect(emptySlotTarget).not.toBeNull();
   await key.click();
-  const carriedItem = page.getByRole("button", { name: "Key. Drop item" });
+  const carriedItem = page.getByRole("button", { name: "Key", exact: true });
   await expect(carriedItem).toBeVisible();
   const carriedItemBounds = await page.getByTestId("item-status").boundingBox();
   expect(carriedItemBounds).not.toBeNull();
@@ -28,17 +28,17 @@ test("replacing a carried item drops it in the room and picks up the replacement
 
   await page.getByRole("button", { name: /Tap right doorway to move/ }).last().click();
   await page.getByRole("button", { name: "Key", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Key. Drop item" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Key", exact: true })).toBeVisible();
   await page.getByRole("button", { name: /locked doorway/ }).last().click();
   const meal = page.getByRole("button", { name: "Stamina Meal", exact: true });
   await expect(meal).toBeVisible();
   await meal.click();
-  await expect(page.getByRole("button", { name: "Stamina Meal. Drop item" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Stamina Meal", exact: true })).toBeVisible();
   await page.getByRole("button", { name: /doorway to move/ }).last().click();
   const potion = page.getByRole("button", { name: "Health Potion", exact: true });
   await expect(potion).toBeVisible();
   await potion.click();
-  await expect(page.getByRole("button", { name: "Health Potion. Drop item" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Health Potion", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Stamina Meal", exact: true })).toBeVisible();
 });
 

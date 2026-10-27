@@ -121,6 +121,13 @@ for (const viewport of viewports) {
 
     await page.getByRole("textbox", { name: "Seed" }).fill("testwarrior");
     await page.getByRole("button", { name: "Start" }).click();
+    const nextClassInstructions = page.getByRole("button", { name: "Next class instructions", exact: true });
+    if (await nextClassInstructions.isVisible().catch(() => false)) {
+      await expectScreenFits(page, "class instructions");
+      await nextClassInstructions.click();
+      await expectScreenFits(page, "class microgame instructions");
+      await page.getByRole("button", { name: "Start playing", exact: true }).click();
+    }
     await expect(page.getByRole("button", { name: "Menu" })).toBeVisible();
     if (viewport.height >= 500) await expect(page.getByTestId("dungeon-map")).toBeVisible();
     await expect(page.getByTestId("turn-status")).toHaveCount(0);

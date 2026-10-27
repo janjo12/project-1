@@ -257,7 +257,7 @@ export function resolveMultiplayerTurn(
       const monster = getTargetableMonsters(state.map, room).find(m => m.id === action.target);
       if (monster) {
         const silver = monster.chases && player.item === "silver-bullet";
-        const attackScore = action.microgameScore ?? 100;
+        const attackScore = Math.max(0, action.microgameScore ?? 100);
         const damage = silver
           ? monster.currentHealth
           : resolveAttackDamage({

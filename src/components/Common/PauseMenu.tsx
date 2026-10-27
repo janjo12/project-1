@@ -3,6 +3,7 @@ import { ScrollView, useWindowDimensions } from "react-native";
 
 import { Container, Row, StyledModal, StyledText, Title } from "@/components/Common/Displays";
 import { DestructiveButton, NormalButton, PrimaryButton, SegmentedButton, ToggleButton } from "@/components/Controls/ActionButton";
+import { getSupportDescription, type GameClassId } from "@/game/config/game-classes";
 import type { GameSettings } from "@/utils/settings-storage";
 
 export type PauseMenuProps = {
@@ -13,6 +14,7 @@ export type PauseMenuProps = {
   onSettingsChange: (settings: Partial<GameSettings>) => void;
   microgamesEnabled: boolean;
   level: number;
+  classId: GameClassId;
   microgameAverage: number | null;
   settings: GameSettings;
   seed: string;
@@ -27,6 +29,7 @@ export function PauseMenu({
   onSettingsChange,
   microgamesEnabled,
   level,
+  classId,
   microgameAverage,
   settings,
   seed,
@@ -48,6 +51,7 @@ export function PauseMenu({
       {showInstructions ? <ScrollView style={{ maxHeight: "70%" }} contentContainerStyle={{ alignItems: "stretch", gap: 10 }}>
         <StyledText>Level {level}</StyledText>
         <StyledText>Tap a monster to attack. Tap an item or equipment in the room to pick it up. Use doorways to move, tap your hero for the class support skill, and tap the stairs to descend.</StyledText>
+        <StyledText>{getSupportDescription(classId, false)}</StyledText>
         <StyledText>When an enemy attacks, tap when BLOCK! appears. Better timing reduces the damage you take.</StyledText>
         <StyledText>Each action advances the turn and lets enemies act. On timed difficulties, the turn timer also limits how long you have to choose. Hard runs also have a turn budget; Easy has no run-wide turn deadline.</StyledText>
         <StyledText>Charge Up spends Energy to strengthen your next attack, block and counter the next hit, or move and pick up loot without spending a turn. Tap it again to cancel and refund the Energy.</StyledText>

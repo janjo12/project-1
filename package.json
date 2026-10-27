@@ -56,6 +56,7 @@
     "web:build": "next build",
     "web:start": "next start -p 3100",
     "typecheck": "tsc --noEmit",
+    "test:ci": "npm run lint && npm run typecheck && npm test && npm run web:build && node --test tests/ssr-runtime.test.mjs",
     "test:visual": "npm run web:build && node --test tests/ssr-runtime.test.mjs && node scripts/run-playwright.mjs test",
     "test:scenarios": "npm run web:build && node --test tests/ssr-runtime.test.mjs && node scripts/run-playwright.mjs test --config=playwright.scenarios.config.ts",
     "test:smoke": "node scripts/run-playwright.mjs test --config=playwright.config.ts",

@@ -21,6 +21,7 @@ test("microgame modes use their own score rules", () => {
   expect(getMultitapScore(targetTaps - 2, targetTaps)).toBeCloseTo(67, 0);
   expect(getMultitapScore(targetTaps - 1, targetTaps)).toBeCloseTo(83, 0);
   expect(getMultitapScore(targetTaps, targetTaps)).toBe(100);
+  expect(getMultitapScore(targetTaps + 2, targetTaps)).toBeGreaterThan(100);
 });
 
 test("Multitap perfect taps scale with difficulty and level", () => {
@@ -30,24 +31,37 @@ test("Multitap perfect taps scale with difficulty and level", () => {
   expect(getMultitapTargetTaps("hard", 3)).toBeGreaterThan(getMultitapTargetTaps("hard", 1));
 });
 
-test("Multitap targets move on a fitting grid, stay on the handedness side, and never overlap", () => {
+test("Multitap targets choose a random different cell on a fitting grid and stay on the handedness side", () => {
   for (const [trackWidth, trackHeight] of [[180, 48], [320, 300], [640, 450]]) {
     const { diameter, columns, rows } = getMultitapGrid(trackWidth, trackHeight, MULTITAP_DOT_DIAMETER);
     expect(trackWidth / 2 / columns).toBeGreaterThanOrEqual(diameter);
     expect(trackHeight / rows).toBeGreaterThanOrEqual(diameter);
     for (const handedness of ["left", "right"] as const) {
       let spot = { x: handedness === "left" ? 0.24 : 0.76, y: 0.5 };
-      let changedRows = false;
-      for (let tap = 1; tap <= 8; tap += 1) {
-        const next = getNextMultitapTargetSpot(spot, handedness, trackWidth, trackHeight, diameter, tap);
+      for (const randomValue of [0, 0.2, 0.55, 0.99]) {
+        const next = getNextMultitapTargetSpot(spot, handedness, trackWidth, trackHeight, diameter, () => randomValue);
         expect(Math.hypot((next.x - spot.x) * trackWidth, (next.y - spot.y) * trackHeight)).toBeGreaterThanOrEqual(diameter - 0.001);
         expect(handedness === "left" ? next.x : 1 - next.x).toBeLessThan(0.5);
-        changedRows ||= next.y !== spot.y;
-        spot = next;
+        const currentColumn = Math.floor((handedness === "left" ? spot.x : spot.x - 0.5) * trackWidth / (trackWidth / 2 / columns));
+        const currentRow = Math.floor(spot.y * rows);
+        const nextColumn = Math.floor((handedness === "left" ? next.x : next.x - 0.5) * trackWidth / (trackWidth / 2 / columns));
+        const nextRow = Math.floor(next.y * rows);
+        expect(nextRow * columns + nextColumn).not.toBe(currentRow * columns + currentColumn);
       }
-      expect(changedRows).toBe(true);
     }
   }
+});
+
+test("Multitap target selection maps random values to different cells without a fixed sequence", () => {
+  const { diameter, columns, rows } = getMultitapGrid(640, 450, MULTITAP_DOT_DIAMETER);
+  const spot = { x: 0.76, y: 0.5 };
+  const nextCells = [0, 0.5, 0.99].map(value => {
+    const next = getNextMultitapTargetSpot(spot, "right", 640, 450, diameter, () => value);
+    const column = Math.floor((next.x - 0.5) * 640 / (640 / 2 / columns));
+    const row = Math.floor(next.y * rows);
+    return row * columns + column;
+  });
+  expect(new Set(nextCells).size).toBe(3);
 });
 
 test("Thief attacks use the Timed Attack microgame", () => {
