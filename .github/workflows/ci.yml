@@ -6,7 +6,7 @@ on:
 
 jobs:
   npm-install:
-    name: Verify clean npm install (Vercel)
+    name: Verify clean lockfile install
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -14,7 +14,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm install
+      - run: npm ci
       - run: git diff --exit-code -- package.json package-lock.json
 
   test:
