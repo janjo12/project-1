@@ -1,9 +1,10 @@
 import React from "react";
-import { act, fireEvent, render } from "@testing-library/react-native";
+import { act, fireEvent, render, within } from "@testing-library/react-native";
 import { PixelSprite } from "@/components/Common/PixelSprite";
 
 import { RoomScene, type RoomDoorways } from "@/components/Dungeon/Room";
 import { GameViewPanel } from "@/components/Dungeon/GameViewPanel";
+import { CombatantSprite } from "@/components/Enemy/Enemy";
 import { createCombatAnimationFrame } from "@/game/entities";
 import { GAME_PARAMETERS } from "@/game/config/gameparameters";
 
@@ -14,12 +15,12 @@ const doorways: RoomDoorways = {
   top: "wall",
 };
 
-function scene(roomId: string, playerPosition: "top" | "right" | "bottom" | "left" | "center" = "center") {
+function scene(roomId: string, playerPosition: "top" | "right" | "bottom" | "left" | "center" = "center", sceneDoorways = doorways) {
   return (
     <RoomScene
       actors={[]}
       animationFrame={createCombatAnimationFrame()}
-      doorways={doorways}
+      doorways={sceneDoorways}
       enemyHealthLossAmount={0}
       playerEnergyLossAmount={0}
       playerHealthLossAmount={0}
@@ -30,6 +31,24 @@ function scene(roomId: string, playerPosition: "top" | "right" | "bottom" | "lef
     />
   );
 }
+
+test("the outer room border has doorway gaps while guarded-doorway markers stay on the display map", () => {
+  const screen = render(scene("A1", "center", {
+    top: "guarded",
+    right: "locked",
+    bottom: "open",
+    left: "wall",
+  }));
+
+  expect(screen.getByTestId("room-frame-gap-top")).toBeTruthy();
+  expect(screen.getByTestId("room-frame-gap-right")).toBeTruthy();
+  expect(screen.getByTestId("room-frame-gap-bottom")).toBeTruthy();
+  expect(screen.queryByTestId("room-frame-gap-left")).toBeNull();
+  expect(screen.getByRole("button", { name: "top guarded doorway" })).toBeTruthy();
+  expect(screen.queryByText("×")).toBeNull();
+  expect(screen.getByText("🔒")).toBeTruthy();
+  expect(screen.getByText("↓")).toBeTruthy();
+});
 
 test("moving from an already aligned position still animates the player toward the doorway", async () => {
   const screen = render(scene("A1", "center"));
@@ -43,7 +62,16 @@ test("moving from an already aligned position still animates the player toward t
   expect(exitAnimation.props.style.animationName.to).toEqual({ transform: [{ translateY: 34 }] });
 });
 
-test("crossfades adjacent rooms with UI-side opacity keyframes", async () => {
+test("player sprite scale stays constant when moving from the room center to a doorway", () => {
+  const screen = render(scene("A1", "center"));
+  const initialScale = screen.getByTestId("player-sprite-envelope").props.style.transform;
+
+  screen.rerender(scene("A2", "top"));
+
+  expect(screen.getByTestId("player-sprite-envelope").props.style.transform).toEqual(initialScale);
+});
+
+test("shows the new room directly without replaying the previous room snapshot", async () => {
   jest.useFakeTimers();
   try {
     const screen = render(scene("A1"));
@@ -53,9 +81,11 @@ test("crossfades adjacent rooms with UI-side opacity keyframes", async () => {
       await Promise.resolve();
     });
 
-    expect(screen.getByTestId("room-transition-snapshot")).toBeTruthy();
-    expect(screen.getByTestId("room-transition-snapshot").props.style.animationName).toBeDefined();
-    expect(screen.getByTestId("room-incoming-snapshot").props.style.animationName).toBeDefined();
+    expect(screen.queryByTestId("room-transition-snapshot")).toBeNull();
+    const incomingRoom = screen.getByTestId("room-incoming-snapshot");
+    expect(incomingRoom.props.style.animationName).toBeDefined();
+    expect(within(incomingRoom).getByTestId("tiled-room-floor")).toBeTruthy();
+    expect(screen.getAllByTestId("tiled-room-floor")).toHaveLength(1);
     expect(screen.getByTestId("room-incoming-snapshot").props.style.transform).toBeUndefined();
 
     await act(async () => {
@@ -127,4 +157,55 @@ test("a failed sprite image falls back, and switching sprites retries the new im
 
   screen.rerender(<PixelSprite label="Warrior" size={24} sprite="warrior_graphic" />);
   expect(screen.getByTestId("pixel-sprite-image")).toBeTruthy();
+});
+
+test("player idle animation style stays stable as combat progress updates", () => {
+  const sprite = (attackProgress: number | null, animationsPaused = false) => (
+    <CombatantSprite
+      accessibilityLabel="Player"
+      attackDirection="left"
+      attackProgress={attackProgress}
+      damageProgress={null}
+      animationsPaused={animationsPaused}
+      idleAnimationPaused={false}
+      sprite="warrior_graphic"
+      size={56}
+    />
+  );
+  const screen = render(sprite(null));
+  const idleLayer = screen.getByTestId("combatant-sprite-idle-layer");
+  const idleStyle = idleLayer.props.style;
+
+  screen.rerender(sprite(0.5, true));
+
+  expect(screen.getByTestId("combatant-sprite-idle-layer").props.style).toBe(idleStyle);
+});
+
+test("player idle bob keeps running while gameplay effects are paused", () => {
+  const screen = render(
+    <RoomScene
+      actors={[]}
+      animationsPaused
+      animationFrame={createCombatAnimationFrame()}
+      doorways={doorways}
+      enemyHealthLossAmount={0}
+      playerEnergyLossAmount={0}
+      playerHealthLossAmount={0}
+      playerPosition="center"
+      playerSprite="warrior_graphic"
+      roomId="A1"
+      sceneScale={1}
+    />,
+  );
+
+  const idleLayer = screen.getByTestId("combatant-sprite-idle-layer");
+  expect(idleLayer.props.style[1].animationPlayState).toBe("running");
+});
+
+test("player keeps clear of the doorway arrow after entering from an edge", () => {
+  const screen = render(scene("A1", "left"));
+  const playerStyle = screen.getByTestId("local-player-actor").props.style;
+  const flattened = Array.isArray(playerStyle) ? Object.assign({}, ...playerStyle.filter(value => typeof value === "object")) : playerStyle;
+
+  expect(flattened.left).toBeGreaterThan(40);
 });

@@ -33,6 +33,7 @@ export type UseGameRunOptions = {
   seed: string;
   istest: boolean;
   vibrationEnabled: boolean;
+  onDefenseRequested?: (resolve: (score: number) => void) => void;
 };
 
 export type GameState = {

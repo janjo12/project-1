@@ -15,7 +15,10 @@ import { ResourceBar, ResourceBarGroup } from "@/components/Player/PlayerHUD";
 import { getEquipmentStats } from "@/game/actions/items";
 import { useMicrogame } from "@/game/actions/use-microgame";
 import { getGameClass } from "@/game/config/game-classes";
+import { getConnectedRoomId, getRoom, getRoomMonster, unlockDoor } from "@/game/dungeon/rooms";
+import { getPlayerAttackDamage, resolveAttackDamage } from "@/game/engine/combat";
 import { useRunMultiplayerGame } from "@/game/engine/run-game-multiplayer";
+import type { PlayerAction } from "@/game/engine/multiplayer-rules";
 import { getMultiplayerPlayerAuraColor, getMultiplayerRoomActors } from "@/game/engine/multiplayer-presentation";
 import { PLAYER_MAX_ENERGY, PLAYER_MAX_HEALTH } from "@/game/state/types";
 import { useGameSettings } from "@/hooks/use-game-settings";
@@ -75,6 +78,8 @@ function Multiplayer({ settings, startAsHost }: { settings: GameSettings; startA
   const [storedScore, setStoredScore] = useState<number | null>(null);
   const [combatMessage, setCombatMessage] = useState("");
   const pendingAttack = useRef<string | null>(null);
+  const pendingDefenseAction = useRef<PlayerAction | null>(null);
+  const microgameMode = useRef<"attack" | "defense" | "practice">("practice");
   const hostStartedRef = useRef(false);
   useEffect(() => {
     if (startAsHost && !hostStartedRef.current) {
@@ -84,10 +89,63 @@ function Multiplayer({ settings, startAsHost }: { settings: GameSettings; startA
   }, [hostGame, startAsHost]);
   const microgame = useMicrogame(score => {
     setStoredScore(score);
+    if (microgameMode.current === "defense") {
+      const action = pendingDefenseAction.current;
+      pendingDefenseAction.current = null;
+      microgameMode.current = "practice";
+      if (action) submit({ ...action, defenseScore: score });
+      return;
+    }
     const target = pendingAttack.current;
     pendingAttack.current = null;
-    if (target) submit({ type: "ATTACK", target, microgameScore: score });
+    microgameMode.current = "practice";
+    if (target) submitAfterDefense({ type: "ATTACK", target, microgameScore: score });
   });
+
+  function shouldRunDefense(action: PlayerAction) {
+    if (!state || !player || player.health <= 0 || action.type === "CLASS_READY" || action.type === "DROP_EQUIPMENT") return false;
+    let destinationRoomId = player.roomId;
+    if (action.type === "MOVE" && ["north", "east", "south", "west"].includes(action.target ?? "")) {
+      const direction = action.target as "north" | "east" | "south" | "west";
+      const sourceRoom = getRoom(state.map, player.roomId);
+      const keyUnlock = sourceRoom[direction] === "locked" && player.item === "key";
+      const chargedThiefUnlock = sourceRoom[direction] === "locked" && player.classId === "thief" && charged;
+      const destinationMap = keyUnlock || chargedThiefUnlock ? unlockDoor(state.map, player.roomId, direction) : state.map;
+      destinationRoomId = getConnectedRoomId(destinationMap, player.roomId, direction) ?? player.roomId;
+    }
+    const targetRoom = getRoom(state.map, destinationRoomId);
+    const enemy = getRoomMonster(state.map, targetRoom);
+    if (!enemy) return false;
+    if (action.type === "ATTACK") {
+      const target = getRoom(state.map, player.roomId).contents
+        .map(content => content.type === "monster" ? state.map.entities.monsters[content.id] : null)
+        .find(monster => monster !== null && monster.id === action.target && (monster.currentHealth ?? 0) > 0);
+      if (target) {
+        const damage = target.chases && player.item === "silver-bullet"
+          ? target.currentHealth
+          : resolveAttackDamage({
+            profile: getPlayerAttackDamage(target, action.charged ?? charged),
+            score: action.microgameScore ?? 100,
+            equipmentAttack: getEquipmentStats(player.equipment).attack,
+            charged: action.charged ?? charged,
+            target,
+          });
+        if (damage >= target.currentHealth) return false;
+      }
+    }
+    return true;
+  }
+
+  function submitAfterDefense(action: PlayerAction) {
+    if (!shouldRunDefense(action)) {
+      microgameMode.current = "practice";
+      submit(action);
+      return;
+    }
+    pendingDefenseAction.current = action;
+    microgameMode.current = "defense";
+    microgame.start("defense", settings.handedness, { difficulty: state!.difficulty, level: state!.level });
+  }
 
   return (
     <ScreenShell compact={!!state}>
@@ -226,7 +284,7 @@ function Multiplayer({ settings, startAsHost }: { settings: GameSettings; startA
                 <EquipmentInventoryControls
                   snapshot={snapshot}
                   disabled={submitted === state.turn || player.health <= 0 || state.ended}
-                  onDrop={() => submit({ type: "DROP_EQUIPMENT" })}
+                  onDrop={() => submitAfterDefense({ type: "DROP_EQUIPMENT" })}
                 />
               </>
             ) : (
@@ -234,7 +292,7 @@ function Multiplayer({ settings, startAsHost }: { settings: GameSettings; startA
                 <EquipmentInventoryControls
                   snapshot={snapshot}
                   disabled={submitted === state.turn || player.health <= 0 || state.ended}
-                  onDrop={() => submit({ type: "DROP_EQUIPMENT" })}
+                  onDrop={() => submitAfterDefense({ type: "DROP_EQUIPMENT" })}
                 />
                 <ChargeControl
                   charged={charged}
@@ -287,24 +345,25 @@ function Multiplayer({ settings, startAsHost }: { settings: GameSettings; startA
             roomDoorways={snapshot.roomDoorways}
             roomSceneActors={getMultiplayerRoomActors(snapshot.roomSceneActors, Object.values(state.players), player.roomId, playerId)}
             hardTurnCounter={state.difficulty === "easy" ? null : state.turnsLeft}
-            onPlayerPress={() => submit({ type: "SUPPORT", target: playerId })}
-            onDoorwayPress={position => submit({ type: "MOVE", target: getDirection(position) })}
+            onPlayerPress={() => submitAfterDefense({ type: "SUPPORT", target: playerId })}
+            onDoorwayPress={position => submitAfterDefense({ type: "MOVE", target: getDirection(position) })}
             onActorPress={actor => {
               if (player.health <= 0 && actor.kind !== "enemy" && actor.kind !== "player") return;
               if (actor.kind === "player") {
-                submit({ type: "SUPPORT", target: actor.id });
+                submitAfterDefense({ type: "SUPPORT", target: actor.id });
                 return;
               }
               if (actor.kind === "enemy") {
                 const werewolfWithSilver = !!state.map.entities.monsters[actor.id]?.chases && player.item === "silver-bullet";
                 if (werewolfWithSilver) {
-                  setCombatMessage("Silver Bullet worked! The Werewolf is defeated.");
-                  submit({ type: "ATTACK", target: actor.id });
+                  setCombatMessage("Silver Arrow worked! The Werewolf is defeated.");
+                  submitAfterDefense({ type: "ATTACK", target: actor.id });
                 } else if (player.health > 0 && settings.microgamesEnabled) {
                   pendingAttack.current = actor.id;
+                  microgameMode.current = "attack";
                   microgame.start(getGameClass(player.classId).microgame, settings.handedness, { difficulty: state.difficulty, level: state.level });
                 } else {
-                  submit({ type: "ATTACK", target: actor.id });
+                  submitAfterDefense({ type: "ATTACK", target: actor.id });
                 }
                 return;
               }
@@ -312,7 +371,7 @@ function Multiplayer({ settings, startAsHost }: { settings: GameSettings; startA
               const actionType = actor.kind === "equipment"
                 ? "PICKUP_EQUIPMENT"
                 : actor.kind === "item" ? "PICKUP" : "DESCEND";
-              submit({ type: actionType, target: actor.id });
+              submitAfterDefense({ type: actionType, target: actor.id });
             }}
           />
           <MicrogameOverlay
@@ -321,6 +380,7 @@ function Multiplayer({ settings, startAsHost }: { settings: GameSettings; startA
             elapsedStore={microgame.elapsedStore}
             targetDelay={microgame.targetDelay}
             targetSpot={microgame.targetSpot}
+            multitapTargetSpot={microgame.multitapTargetSpot}
             leftHanded={settings.handedness === "left"}
             onTap={microgame.tap}
           />

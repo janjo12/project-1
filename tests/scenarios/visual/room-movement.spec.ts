@@ -36,7 +36,13 @@ test("the player reaches the exit before the room changes and enters from the op
   }
   const player = page.getByTestId("local-player-actor");
   const startingBounds = await player.boundingBox();
+  const playerSprite = player.getByTestId("pixel-sprite-image");
+  const startingSpriteBounds = await playerSprite.boundingBox();
   expect(startingBounds).not.toBeNull();
+  expect(startingSpriteBounds).not.toBeNull();
+  await page.evaluate(() => {
+    (window as any).__playerSpriteImage = document.querySelector('[data-testid="local-player-actor"] [data-testid="pixel-sprite-image"]');
+  });
 
   await doorway.click();
   const exitAnimation = page.getByTestId("player-room-exit-animation");
@@ -60,11 +66,7 @@ test("the player reaches the exit before the room changes and enters from the op
   const nextRoom = (await page.getByTestId("current-dungeon-room").getAttribute("aria-label"))?.match(/Room ([A-F](?:1[0-2]|[1-9]))/)?.[1];
   expect(nextRoom).toBeTruthy();
   expect(nextRoom).not.toBe(startingRoom);
-  const outgoingSnapshot = page.getByTestId("room-transition-snapshot");
-  await expect(outgoingSnapshot).toBeVisible();
-  const outgoingSpriteCount = await outgoingSnapshot.getByTestId("pixel-sprite-image").count();
-  const floorSpriteCount = await outgoingSnapshot.getByTestId("tiled-room-floor").getByTestId("pixel-sprite-image").count();
-  expect(outgoingSpriteCount).toBe(floorSpriteCount);
+  await expect(page.getByTestId("room-transition-snapshot")).toHaveCount(0);
   const entryAnimation = page.getByTestId("player-room-entry-animation");
   await expect(entryAnimation).toBeVisible();
   const incomingSnapshot = page.getByTestId("room-incoming-snapshot");
@@ -82,6 +84,13 @@ test("the player reaches the exit before the room changes and enters from the op
   expect(incomingFade.duration).toBeGreaterThan(GAME_PARAMETERS.animation.roomExitDurationMs);
   expect(incomingFade.keyframes?.[0]).toBe(0);
   expect(incomingFade.keyframes?.[incomingFade.keyframes.length - 1]).toBe(1);
+  const incomingSpritesLoaded = await incomingSnapshot.getByTestId("pixel-sprite-image").evaluateAll(images =>
+    images.every(wrapper => {
+      const image = wrapper.querySelector("img");
+      return image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0;
+    }),
+  );
+  expect(incomingSpritesLoaded).toBe(true);
 
   const entryAnimationStyle = await entryAnimation.evaluate(element => {
     const style = getComputedStyle(element);
@@ -103,8 +112,12 @@ test("the player reaches the exit before the room changes and enters from the op
   expect(entryPositionTransition).not.toContain("top");
   const roomFrame = await page.getByTestId("dungeon-room-frame").boundingBox();
   const entryBounds = await player.boundingBox();
+  const entrySpriteBounds = await playerSprite.boundingBox();
   expect(roomFrame).not.toBeNull();
   expect(entryBounds).not.toBeNull();
+  expect(entrySpriteBounds).not.toBeNull();
+  expectWithinOnePixel(entrySpriteBounds!.width, startingSpriteBounds!.width);
+  expectWithinOnePixel(entrySpriteBounds!.height, startingSpriteBounds!.height);
   const entryX = entryBounds!.x - roomFrame!.x;
   const entryY = entryBounds!.y - roomFrame!.y;
   if (direction === "right") expect(entryX).toBeLessThan(roomFrame!.width * 0.35);
@@ -147,6 +160,8 @@ test("the player reaches the exit before the room changes and enters from the op
   await page.clock.runFor(GAME_PARAMETERS.animation.roomTransitionDurationMs);
   await expect(page.getByTestId("room-transition-snapshot")).toHaveCount(0);
   await expect(incomingSnapshot).toHaveCSS("opacity", "1");
+  const spriteStayedMounted = await playerSprite.evaluate(element => element === (window as any).__playerSpriteImage);
+  expect(spriteStayedMounted).toBe(true);
 });
 
 function adjacentRoom(roomId: string, direction: string) {

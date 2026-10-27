@@ -148,7 +148,7 @@ describe("run-game policies", () => {
     expect(canPressDoorway("guarded", true)).toBe(false);
   });
 
-  it.each([1, 2, 5, 10])("keeps stairs rooms enemy-free on level %i", level => {
+  it.each([1, 2, 5, 10])("keeps stairs rooms free of room monsters while showing doorway guards on level %i", level => {
     for (let seedIndex = 0; seedIndex < 12; seedIndex += 1) {
       const map = createSeededDungeonMap(`stairs-room-${level}-${seedIndex}`, level);
       const stairsRoom = map.rooms.flat().find(room => room.contents.some(content => content.type === "stairs"));
@@ -157,7 +157,9 @@ describe("run-game policies", () => {
       expect(stairsRoom).toBeDefined();
       expect(roomDistances.get(stairsRoom!.id)).toBe(Math.max(...roomDistances.values()));
       expect(stairsRoom!.contents.some(content => content.type === "monster")).toBe(false);
-      expect(getRoomSceneActors({ currentMonsterId: null, dungeonMap: map, room: stairsRoom! }).filter(actor => actor.kind === "enemy")).toEqual([]);
+      const sceneEnemies = getRoomSceneActors({ currentMonsterId: null, dungeonMap: map, room: stairsRoom! })
+        .filter(actor => actor.kind === "enemy");
+      expect(sceneEnemies.every(actor => actor.position !== "center")).toBe(true);
 
       const entranceDirections = (Object.keys(directionDeltas) as Direction[]).filter(direction => stairsRoom![direction] !== "wall");
       expect(entranceDirections.length).toBeGreaterThan(0);
@@ -240,7 +242,9 @@ describe("run-game policies", () => {
     expect(getHardTurnLimit({ difficulty: "hard", map })).toBe(
       getActiveRooms(map).length * GAME_PARAMETERS.dungeon.hardTurnsPerRoom,
     );
-    expect(getRoomSceneActors({ currentMonsterId: null, dungeonMap: map, room: stairsRoom }).filter(actor => actor.kind === "enemy")).toEqual([]);
+    const sceneEnemies = getRoomSceneActors({ currentMonsterId: null, dungeonMap: map, room: stairsRoom })
+      .filter(actor => actor.kind === "enemy");
+    expect(sceneEnemies.every(actor => actor.position !== "center")).toBe(true);
     const stairsEntry = (Object.keys(directionDeltas) as Direction[]).find(direction => stairsRoom[direction] !== "wall");
     expect(stairsEntry).toBeDefined();
     expect(stairsRoom[stairsEntry!]).toBe("guarded");

@@ -1,6 +1,6 @@
 import { PixelSprite } from "@/components/Common/PixelSprite";
 import { type Ref } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View, type ViewInstance } from "react-native";
 
 import { type ThemeColors, useThemeColors } from "@/components/Common/theme";
 
@@ -9,7 +9,7 @@ type ItemControlProps = {
   itemLabel?: string | null;
   itemSprite?: string | null;
   onDrop?: () => void;
-  targetRef?: Ref<View>;
+  targetRef?: Ref<ViewInstance>;
 };
 
 export function ItemControl({
@@ -21,7 +21,7 @@ export function ItemControl({
 }: ItemControlProps) {
   const styles = createStyles(useThemeColors());
 
-  if (!itemLabel) return null;
+  if (!itemLabel) return <View ref={targetRef} accessible={false} pointerEvents="none" style={{ alignSelf: "center", width: 105, height: 72, opacity: 0 }} testID="item-flight-target" />;
 
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={itemLabel ? `${itemLabel}. Drop item` : "No item held"}
@@ -44,10 +44,10 @@ export function ItemControl({
 }
 
 export function EquipmentControl({ label, description, sprite, onDrop, disabled = false, targetRef }: {
-  label?: string | null; description?: string | null; sprite?: string | null; onDrop?: () => void; disabled?: boolean; targetRef?: Ref<View>;
+  label?: string | null; description?: string | null; sprite?: string | null; onDrop?: () => void; disabled?: boolean; targetRef?: Ref<ViewInstance>;
 }) {
   const colors = useThemeColors();
-  if (!label) return null;
+  if (!label) return <View ref={targetRef} accessible={false} pointerEvents="none" style={{ flex: 1, height: 72, minHeight: 72, maxHeight: 72, opacity: 0 }} testID="equipment-flight-target" />;
   return <Pressable accessibilityRole="button" accessibilityLabel={label ? `${label}. Drop equipment` : "Equipment slot empty"}
     accessibilityHint="Tap to drop your equipment without using a turn" disabled={disabled || !label} onPress={onDrop}
       testID="equipment-slot" style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.paperLight,

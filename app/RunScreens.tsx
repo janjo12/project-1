@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Text, View, useWindowDimensions } from "react-native";
+import { Text, View, useWindowDimensions, type ViewInstance } from "react-native";
 
 import { Container, Footer, Header, Row, StyledModal, StyledText, Title } from "@/components/Common/Displays";
 import { MicrogameOverlay } from "@/components/Common/MicrogameOverlay";
@@ -90,8 +90,6 @@ export function SettingsScreen({ settings, onBack, onUpdate }: {
             />
           </Row>
           <ToggleButton label="Vibration" value={settings.vibrationEnabled} onValueChange={value => onUpdate({ vibrationEnabled: value })} />
-          <ToggleButton label="Reduce motion" value={settings.reducedMotion} onValueChange={value => onUpdate({ reducedMotion: value })} />
-          <StyledText>Skips room slides, doorway pulsing, and idle enemy bobbing.</StyledText>
         </Container>
       </Container>
     </ScreenShell>
@@ -109,27 +107,41 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
   const compactLayout = height < 800;
   const tinyLayout = height < 500;
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isLevelCleared, setIsLevelCleared] = useState(false);
   const [isQuitConfirmOpen, setIsQuitConfirmOpen] = useState(false);
   const [isMapOpen, setIsMapOpen] = useState(false);
   const [combatMessage, setCombatMessage] = useState("");
   const colors = useThemeColors();
+  const pendingDefense = useRef<((score: number) => void) | null>(null);
+  const startDefenseMicrogame = useRef<(resolve: (score: number) => void) => void>(() => undefined);
   const game = useRunGame({
     difficulty: settings.difficulty,
     istest: isTestSeed(settings.seed),
     onGameOver,
+    onDefenseRequested: resolve => startDefenseMicrogame.current(resolve),
     seed: settings.seed.trim(),
     vibrationEnabled: settings.vibrationEnabled,
   });
   const pendingAttack = useRef<string | null>(null);
-  const itemTargetRef = useRef<View>(null);
-  const equipmentTargetRef = useRef<View>(null);
+  const itemTargetRef = useRef<ViewInstance>(null);
+  const equipmentTargetRef = useRef<ViewInstance>(null);
   const microgame = useMicrogame(score => {
+    const resolveDefense = pendingDefense.current;
+    if (resolveDefense) {
+      pendingDefense.current = null;
+      resolveDefense(score);
+      return;
+    }
     const target = pendingAttack.current;
     pendingAttack.current = null;
     if (target) game.attackMonster(target, score);
   });
+  startDefenseMicrogame.current = resolve => {
+    pendingDefense.current = resolve;
+    microgame.start("defense", settings.handedness);
+  };
   useGameLoopDriver({
-    enabled: game.isGameLoopRunning() && !isMenuOpen && !microgame.active,
+    enabled: game.isGameLoopRunning() && !isMenuOpen && !isLevelCleared && !microgame.active,
     isTurnClockActive: game.isTurnClockActive,
     onExpire: game.expireTurn,
     onFrame: game.updateGameFrame,
@@ -194,7 +206,7 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
             if (isEquipment) game.pickupEquipment(actor.id);
             else void game.pickupItem(actor.id);
           }
-          else if (actor.kind === "stairs") game.descend();
+          else if (actor.kind === "stairs") setIsLevelCleared(true);
         }}
         onDoorwayPress={position => void game.moveToRoom(({ bottom: "south", left: "west", right: "east", top: "north" } as const)[position])}
         onPlayerPress={game.supportSelf}
@@ -208,11 +220,12 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
         playerEnergyLossAmount={game.playerEnergyLossAmount}
         playerHealthLossAmount={game.playerHealthLossAmount}
       />
-      <MicrogameOverlay visible={microgame.active} kind={microgame.kind} elapsedStore={microgame.elapsedStore} targetDelay={microgame.targetDelay} targetSpot={microgame.targetSpot} leftHanded={settings.handedness === "left"} onTap={microgame.tap} />
+      <MicrogameOverlay visible={microgame.active} kind={microgame.kind} elapsedStore={microgame.elapsedStore} targetDelay={microgame.targetDelay} targetSpot={microgame.targetSpot} multitapTargetSpot={microgame.multitapTargetSpot} leftHanded={settings.handedness === "left"} onTap={microgame.tap} />
       </View>
       <StyledModal accessibilityLabel="Game menu" accessibilityRole="dialog" animationType="fade" onRequestClose={() => setIsMenuOpen(false)} visible={isMenuOpen}>
         <Title>Menu</Title>
-        <Container>
+        <StyledText>Seed: {settings.seed.trim()}</StyledText>
+        <Container style={tinyLayout ? { gap: 6 } : undefined}>
           <Row>
             <StyledText>Appearance</StyledText>
             <SegmentedButton
@@ -222,7 +235,7 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
             />
           </Row>
           <ToggleButton label="Vibration" value={settings.vibrationEnabled} onValueChange={value => onSettingsChange({ vibrationEnabled: value })} />
-          <ToggleButton label="Reduce motion" value={settings.reducedMotion} onValueChange={value => onSettingsChange({ reducedMotion: value })} />
+          <ToggleButton label="Left-handed controls" value={settings.handedness === "left"} onValueChange={value => onSettingsChange({ handedness: value ? "left" : "right" })} />
         </Container>
         {tinyLayout ? <NormalButton accessibilityLabel="Open dungeon map" accessibilityRole="button" label="Dungeon Map" onPress={() => { setIsMenuOpen(false); setIsMapOpen(true); }} /> : null}
         {settings.microgamesEnabled ? <NormalButton accessibilityLabel="Practice attack microgame" accessibilityRole="button" label="Practice Attack" onPress={() => { setIsMenuOpen(false); startMicrogame(); }} /> : null}
@@ -241,6 +254,18 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
         <Title>Dungeon Map</Title>
         <DungeonMap currentRoomId={game.currentRoomId} map={game.visibleDungeonMap} />
         <PrimaryButton accessibilityLabel="Close map" accessibilityRole="button" label="Close map" onPress={() => setIsMapOpen(false)} />
+      </StyledModal>
+      <StyledModal accessibilityLabel="Level cleared" accessibilityRole="dialog" animationType="fade" onRequestClose={() => setIsLevelCleared(false)} visible={isLevelCleared}>
+        <Title>Level Cleared!</Title>
+        <PrimaryButton
+          accessibilityLabel="Continue to next level"
+          accessibilityRole="button"
+          label="Continue"
+          onPress={() => {
+            setIsLevelCleared(false);
+            game.descend();
+          }}
+        />
       </StyledModal>
     </ScreenShell>
   );

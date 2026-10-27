@@ -41,12 +41,6 @@ export default function SettingsRoute() {
                 updateSettings({ vibrationEnabled: value });
               }}
             />
-            <ToggleButton
-              label="Reduce motion"
-              value={settings.reducedMotion}
-              onValueChange={(value) => updateSettings({ reducedMotion: value })}
-            />
-            <StyledText>Skips room slides, doorway pulsing, and idle enemy bobbing.</StyledText>
           </Container>
         </Container>
       </ScreenShell>

@@ -52,7 +52,7 @@ describe("dungeon invalid-state errors", () => {
 
   it("uses catalog item names as labels so held items stay identifiable", () => {
     expect(getItemLabel("key")).toBe("Key");
-    expect(getItemLabel("silver-bullet")).toBe("Silver Bullet");
+    expect(getItemLabel("silver-bullet")).toBe("Silver Arrow");
   });
 
   it("throws when a requested room is absent", () => {

@@ -32,6 +32,7 @@ export type PlayerAction = {
   target?: string;
   charged?: boolean;
   microgameScore?: number;
+  defenseScore?: number;
 };
 export type MultiplayerPlayer = {
   id: string;
@@ -268,7 +269,7 @@ export function resolveMultiplayerTurn(
           });
         const damageApplied = Math.min(monster.currentHealth, damage > 0 ? damage + player.nextAttackBonus : 0);
         if (damageApplied > 0) player.nextAttackBonus = 0;
-        console.info(`[combat] Player ${player.id} dealt ${damageApplied} damage to ${monster.name}${silver ? " with a Silver Bullet" : monster.chases ? " (immune to ordinary attacks)" : ""}.`);
+        console.info(`[combat] Player ${player.id} dealt ${damageApplied} damage to ${monster.name}${silver ? " with a Silver Arrow" : monster.chases ? " (immune to ordinary attacks)" : ""}.`);
         state.map = damageMonsterInRoom(
           state.map,
           player.roomId,
@@ -317,12 +318,14 @@ export function resolveMultiplayerTurn(
       const protector = player.vanguardSource ? state.players[player.vanguardSource] : null;
       const recipient = protector && protector.health > 0 && protector.roomId === player.roomId ? protector : player;
       const recipientClassDefense = recipient.classId === "warrior" ? 15 : GAME_PARAMETERS.player.defense;
-      const incomingDamage = applyDefense(
+      const armoredDamage = applyDefense(
         enemy.damage,
         recipientClassDefense +
           getEquipmentStats(recipient.equipment).defense +
           recipient.defenseBuff,
       );
+      const defenseScore = actions.get(recipient.id)?.defenseScore ?? 0;
+      const incomingDamage = Math.ceil(armoredDamage * (100 - Math.max(0, Math.min(100, defenseScore))) / 100);
       console.info(
         `[combat] ${enemy.name} dealt ${incomingDamage} damage to Player ${recipient.id} (${incomingDamage === 0 ? "blocked" : `base ${enemy.damage}, reduced by ${enemy.damage - incomingDamage} defense`}).`,
       );

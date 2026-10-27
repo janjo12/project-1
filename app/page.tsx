@@ -112,7 +112,7 @@ export default function Home() {
           <ScreenShell>
             <Container>
               <Title>Game Over</Title>
-              <Title>{score} Floors Cleared</Title>
+              <Title>{score} Floor{score === 1 ? "" : "s"} Cleared</Title>
               <PrimaryButton accessibilityLabel="Return to Title" accessibilityRole="button" label="Return to Title" onPress={() => setPage("title")} />
             </Container>
           </ScreenShell>

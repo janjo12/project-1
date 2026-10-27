@@ -3,6 +3,17 @@ export type ScenePosition = "top" | "bottom" | "left" | "right" | "center";
 export const SCENE_WIDTH = 384;
 export const SCENE_HEIGHT = 288;
 export const SPRITE_SIZE = 32;
+// Tune this once to resize the player and other human-form sprites together.
+export const HUMAN_FORM_SPRITE_SIZE = 56;
+export const CREATURE_SPRITE_SIZE = 48;
+const HUMAN_FORM_SPRITES = new Set([
+  "warrior_graphic", "cleric_graphic", "thief_graphic",
+  "zombie_graphic", "vampire_graphic", "werewolf_graphic",
+]);
+
+export function getActorSpriteSize(sprite: string) {
+  return HUMAN_FORM_SPRITES.has(sprite) ? HUMAN_FORM_SPRITE_SIZE : CREATURE_SPRITE_SIZE;
+}
 // Includes attack travel, bounce, and health-bar space.
 export const ACTOR_ENVELOPE = 80;
 export type SceneSlot = { x: number; y: number; size: number };
@@ -38,6 +49,17 @@ export function layoutRoomActors(actors: { id: string; position?: ScenePosition 
     });
   }
   return slots;
+}
+
+/** Keep human-form sprites the same size when their actors move between room regions. */
+export function getHumanFormScale(playerCount: number) {
+  const count = Math.max(1, Math.floor(playerCount));
+  const players = Array.from({ length: count }, (_, index) => ({
+    id: `human-player-${index}`,
+    position: "center" as const,
+  }));
+  const slots = layoutRoomActors(players);
+  return Math.min(1, slots["human-player-0"].size / HUMAN_FORM_SPRITE_SIZE);
 }
 
 

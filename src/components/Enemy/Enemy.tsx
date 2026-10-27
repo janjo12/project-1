@@ -1,4 +1,5 @@
 import { PixelSprite } from "@/components/Common/PixelSprite";
+import { useMemo } from "react";
 import { StyleSheet, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { GAME_PARAMETERS } from "@/game/config/gameparameters";
@@ -14,6 +15,7 @@ type CombatantSpriteProps = {
   attackProgress?: number | null;
   damageProgress?: number | null;
   animationsPaused?: boolean;
+  idleAnimationPaused?: boolean;
   reducedMotion?: boolean;
   sprite: string;
   scale?: number;
@@ -26,6 +28,7 @@ export function CombatantSprite({
   attackProgress = null,
   damageProgress = null,
   animationsPaused = false,
+  idleAnimationPaused,
   reducedMotion = false,
   sprite,
   scale = 1,
@@ -33,20 +36,24 @@ export function CombatantSprite({
 }: CombatantSpriteProps) {
   const attackOffset = getAttackOffset(attackProgress, attackDirection);
   const opacity = getDamageOpacity(damageProgress);
+  const pauseIdleAnimation = idleAnimationPaused ?? animationsPaused;
+  const idleAnimationStyle = useMemo(() => reducedMotion ? null : ({
+    animationName: IDLE_BOB,
+    animationDuration: `${GAME_PARAMETERS.animation.bounceDurationMs / 2}ms`,
+    animationDirection: "alternate" as const,
+    animationIterationCount: "infinite" as const,
+    animationTimingFunction: "ease-in-out" as const,
+    animationPlayState: pauseIdleAnimation ? "paused" as const : "running" as const,
+  }), [pauseIdleAnimation, reducedMotion]);
+  const containerStyle = useMemo(() => [
+    { width: size, height: size, alignItems: "center" as const, justifyContent: "center" as const, flexShrink: 0 as const, overflow: "visible" as const },
+    idleAnimationStyle,
+  ], [idleAnimationStyle, size]);
 
   return (
     <Animated.View
-      style={[
-        { width: size, height: size, alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "visible" },
-        !reducedMotion && {
-          animationName: IDLE_BOB,
-          animationDuration: `${GAME_PARAMETERS.animation.bounceDurationMs / 2}ms`,
-          animationDirection: "alternate",
-          animationIterationCount: "infinite",
-          animationTimingFunction: "ease-in-out",
-          animationPlayState: animationsPaused ? "paused" : "running",
-        },
-      ]}
+      testID="combatant-sprite-idle-layer"
+      style={containerStyle}
     >
       <View
         style={[

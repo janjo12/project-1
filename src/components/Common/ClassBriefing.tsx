@@ -121,6 +121,9 @@ export function ClassBriefing({
           ) : (
             <StyledText>Attack microgames are off. Attacks use full damage without timing bonuses.</StyledText>
           )}
+          <Text style={{ color: colors.ink, fontSize: compactLayout ? 15 : 17, textAlign: "center" }}>
+            Defense game · Tap when BLOCK! appears. Better timing reduces incoming damage.
+          </Text>
           <Text style={{ color: colors.ink, fontSize: compactLayout ? 18 : 20, textAlign: "center" }}>
             Damage: {damage}
           </Text>

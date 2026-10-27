@@ -14,6 +14,8 @@ test("empty inventory slots are hidden and occupied item and equipment slots app
   const empty = renderThemed(<><ItemControl /><EquipmentControl /></>);
   expect(empty.queryByTestId("item-status")).toBeNull();
   expect(empty.queryByTestId("equipment-slot")).toBeNull();
+  expect(empty.getByTestId("item-flight-target").props.style.opacity).toBe(0);
+  expect(empty.getByTestId("equipment-flight-target").props.style.opacity).toBe(0);
   empty.unmount();
 
   renderThemed(<>
@@ -29,15 +31,15 @@ test("item and equipment details menus show replacement and activation instructi
   function InventoryMenuHarness() {
     const [menu, setMenu] = useState<"item" | "equipment" | null>(null);
     return <>
-      <ItemControl itemLabel="Silver Bullet" activationDescription="Automatically defeats the Werewolf." onDrop={() => setMenu("item")} />
+      <ItemControl itemLabel="Silver Arrow" activationDescription="Automatically defeats the Werewolf." onDrop={() => setMenu("item")} />
       <EquipmentControl label="Spyglass" description="Reveals the full map." onDrop={() => setMenu("equipment")} />
-      <ItemDetailsMenu visible={menu === "item"} label="Silver Bullet" description="A rare shot." activationDescription="Automatically defeats the Werewolf." onClose={() => setMenu(null)} />
+      <ItemDetailsMenu visible={menu === "item"} label="Silver Arrow" description="A rare shot." activationDescription="Automatically defeats the Werewolf." onClose={() => setMenu(null)} />
       <EquipmentDetailsMenu visible={menu === "equipment"} label="Spyglass" description="Reveals the full map." onDrop={() => { dropEquipment(); setMenu(null); }} onClose={() => setMenu(null)} />
     </>;
   }
 
   renderThemed(<InventoryMenuHarness />);
-  fireEvent.press(screen.getByRole("button", { name: "Silver Bullet. Drop item" }));
+  fireEvent.press(screen.getByRole("button", { name: "Silver Arrow. Drop item" }));
   expect(screen.getByText("A rare shot.")).toBeTruthy();
   expect(screen.getAllByText("Automatically defeats the Werewolf.").length).toBeGreaterThan(1);
   expect(screen.getByText(/Pick up another item at any time/)).toBeTruthy();
@@ -54,7 +56,7 @@ test("instructions are kept behind the Instructions option in the pause menu", (
   renderThemed(<PauseMenu
     onBackToGame={jest.fn()} onQuitToTitle={jest.fn()} onPractice={jest.fn()}
     onSettingsChange={jest.fn()} microgamesEnabled level={3} microgameAverage={76}
-    settings={DEFAULT_GAME_SETTINGS} visible
+    settings={DEFAULT_GAME_SETTINGS} seed={DEFAULT_GAME_SETTINGS.seed} visible
   />);
   expect(screen.queryByText(/Each action advances the turn/)).toBeNull();
   fireEvent.press(screen.getByRole("button", { name: "Open instructions" }));

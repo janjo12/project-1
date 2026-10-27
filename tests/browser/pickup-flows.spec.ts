@@ -9,8 +9,15 @@ test("picking up a floor item fills the singleplayer item slot and animates the 
   await page.getByRole("button", { name: /Tap right doorway to move/ }).last().click();
   const key = page.getByRole("button", { name: "Key", exact: true });
   await expect(key).toBeVisible();
+  const emptySlotTarget = await page.getByTestId("item-flight-target").boundingBox();
+  expect(emptySlotTarget).not.toBeNull();
   await key.click();
-  await expect(page.getByRole("button", { name: "Key. Drop item" })).toBeVisible();
+  const carriedItem = page.getByRole("button", { name: "Key. Drop item" });
+  await expect(carriedItem).toBeVisible();
+  const carriedItemBounds = await page.getByTestId("item-status").boundingBox();
+  expect(carriedItemBounds).not.toBeNull();
+  expectWithinOnePixel(carriedItemBounds!.x + carriedItemBounds!.width / 2, emptySlotTarget!.x + emptySlotTarget!.width / 2);
+  expectWithinOnePixel(carriedItemBounds!.y + carriedItemBounds!.height / 2, emptySlotTarget!.y + emptySlotTarget!.height / 2);
   await expect(page.getByTestId("sprite-flight-animation")).toBeVisible();
 });
 
@@ -34,3 +41,7 @@ test("replacing a carried item drops it in the room and picks up the replacement
   await expect(page.getByRole("button", { name: "Health Potion. Drop item" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Stamina Meal", exact: true })).toBeVisible();
 });
+
+function expectWithinOnePixel(actual: number, expected: number) {
+  expect(Math.abs(actual - expected), `${actual} should align with ${expected}`).toBeLessThanOrEqual(1);
+}

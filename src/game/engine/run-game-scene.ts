@@ -1,5 +1,5 @@
 import type { RoomDoorways, RoomSceneActor, ScenePosition } from "@/components/Dungeon/GameViewPanel";
-import { type DungeonMap, type WorldMonster } from "@/game/dungeon/types";
+import { getDoorwayGuardPlacements, type DungeonMap, type WorldMonster } from "@/game/dungeon/types";
 import {
   getCurrentRoom, getTargetableRoomMonsterRefs,
 } from "@/game/dungeon/rooms";
@@ -56,11 +56,15 @@ export function getRoomSceneActors({
     }
   }
 
-  for (const guard of Object.values(dungeonMap.entities.doorwayGuards).filter(candidate => candidate.roomId === room.id)) {
-    const monster = dungeonMap.entities.monsters[guard.monsterId];
-    if (!monster || monster.currentHealth <= 0 || seenMonsterIds.has(monster.id)) continue;
-    seenMonsterIds.add(monster.id);
-    sceneActors.push(createMonsterSceneActor(monster, monster.id === currentMonsterId, directionScenePositions[guard.direction]));
+  for (const direction of ["north", "east", "south", "west"] as const) {
+    // Combat includes guards registered from either side of a doorway; render that same set
+    // so every monster that can attack from this room has a visible, clickable actor.
+    for (const guard of getDoorwayGuardPlacements(dungeonMap, room.id, direction)) {
+      const monster = dungeonMap.entities.monsters[guard.monsterId];
+      if (!monster || monster.currentHealth <= 0 || seenMonsterIds.has(monster.id)) continue;
+      seenMonsterIds.add(monster.id);
+      sceneActors.push(createMonsterSceneActor(monster, monster.id === currentMonsterId, directionScenePositions[direction]));
+    }
   }
 
   return sceneActors.sort((left, right) => Number(Boolean(left.isActive)) - Number(Boolean(right.isActive)));

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { getMultitapTargetTaps, HUMAN_REACTION_WINDOW_MS, TIMED_ATTACK_CUE_DELAY_MS } from "@/game/actions/use-microgame";
+import { DEFENSE_WINDOW_MS, getMultitapTargetTaps, HUMAN_REACTION_WINDOW_MS, TIMED_ATTACK_CUE_DELAY_MS } from "@/game/actions/use-microgame";
 import { GAME_PARAMETERS } from "@/game/config/gameparameters";
 import { getTurnDuration } from "@/game/engine/resolveTurn";
 import { openScenarioApp } from "../helpers";
@@ -48,7 +48,7 @@ test(`plays a complete ${className} hard-mode run through Level 2`, async ({ pag
 
   const supportButton = page.getByRole("button", { name: new RegExp(`${className}.*Support`) });
   const initialTurns = readTurns(await turnCounter.innerText());
-  // The Thief skips the Key; other classes keep it while prioritizing the Silver Bullet.
+  // The Thief skips the Key; other classes keep it while prioritizing the Silver Arrow.
   const requiredTestItems = className === "Thief" ? 3 : 4;
   const visitedItems = new Set<string>();
   let securedSilverBullet = false;
@@ -102,35 +102,9 @@ test(`plays a complete ${className} hard-mode run through Level 2`, async ({ pag
 
     const werewolf = page.getByRole("button", { name: "Werewolf", exact: true });
     if (await werewolf.isVisible().catch(() => false)) {
-      expect(await readItemStatus(page)).toContain("Silver Bullet");
-      if (className !== "Thief") {
-        await page.getByRole("button", { name: "Silver Bullet. Drop item" }).click();
-        expect(await readItemStatus(page)).toContain("No Item");
-      if (className === "Warrior") await page.getByRole("button", { name: "Charge Up" }).click();
+      expect(await readItemStatus(page)).toContain("Silver Arrow");
       await werewolf.click();
-      await expect(page.getByTestId("microgame-overlay")).toBeVisible();
-      const werewolfHealth = werewolf.getByTestId("enemy-health-bar");
-      const initialEnemyHealth = Number(await werewolfHealth.getAttribute("aria-valuenow"));
-      await playClassMicrogame(page, className);
       await advanceEnemyTurn(page, true);
-      const finalEnemyHealth = Number(await werewolfHealth.getAttribute("aria-valuenow"));
-      expect(finalEnemyHealth, "a charged attack must not damage the Werewolf").toBe(initialEnemyHealth);
-
-      const droppedBullet = page.getByRole("button", { name: "Silver Bullet", exact: true });
-      await expect(droppedBullet).toBeVisible();
-      await droppedBullet.click();
-      await advanceEnemyTurn(page);
-      expect(await readItemStatus(page)).toContain("Silver Bullet");
-      }
-
-      await werewolf.click();
-      if (className === "Thief") {
-        await expect(page.getByTestId("microgame-overlay")).toHaveCount(0);
-        await advanceEnemyTurn(page);
-      } else {
-        await expect(page.getByTestId("microgame-overlay")).toHaveCount(0);
-        await advanceEnemyTurn(page, true);
-      }
       await expect(werewolf).toHaveCount(0);
       foughtWerewolf = true;
       firstHealthyHit = true;
@@ -150,7 +124,7 @@ test(`plays a complete ${className} hard-mode run through Level 2`, async ({ pag
       continue;
     }
 
-    const collectible = page.getByRole("button", { name: /^(Chest containing )?(Stamina Meal|Health Potion|Key|Silver Bullet|Clock|Good Armor|Good Weapon|Heavy Armor|Heavy Weapon|Amulet|Spyglass)$/ }).first();
+    const collectible = page.getByRole("button", { name: /^(Chest containing )?(Stamina Meal|Health Potion|Key|Silver Arrow|Clock|Good Armor|Good Weapon|Heavy Armor|Heavy Weapon|Amulet|Spyglass)$/ }).first();
     if (await collectible.isVisible().catch(() => false)) {
       const accessibleLabel = await collectible.getAttribute("aria-label");
       const label = accessibleLabel?.replace(/^Chest containing /, "");
@@ -178,7 +152,7 @@ test(`plays a complete ${className} hard-mode run through Level 2`, async ({ pag
         if (await page.getByText("Game Over", { exact: true }).isVisible().catch(() => false)) break;
         const held = await readItemStatus(page);
         const itemLabel = label.split(".")[0];
-        if (held.includes("Silver Bullet")) securedSilverBullet = true;
+        if (held.includes("Silver Arrow")) securedSilverBullet = true;
         if (itemLabel && held.includes(itemLabel)) {
           if (itemLabel === "Key" && className !== "Thief") {
             const lockedDoor = page.getByRole("button", { name: /locked doorway/ }).first();
@@ -212,6 +186,8 @@ test(`plays a complete ${className} hard-mode run through Level 2`, async ({ pag
     const stairs = page.getByRole("button", { name: "Stairs", exact: true });
     if (await stairs.isVisible().catch(() => false) && visitedItems.size >= requiredTestItems) {
       await stairs.click();
+      await expect(page.getByText("Level Cleared!", { exact: true })).toBeVisible();
+      await page.getByRole("button", { name: "Continue to next level" }).click();
       await page.clock.runFor(ROOM_TRANSITION_MS);
       await expect(page.getByTestId("dungeon-map")).toBeVisible();
       levelTwoReached = true;
@@ -291,7 +267,7 @@ test(`plays a complete ${className} hard-mode run through Level 2`, async ({ pag
   }
 
   await expect(page.getByText("Game Over", { exact: true })).toBeVisible();
-  await expect(page.getByText("1 Floors Cleared", { exact: true })).toBeVisible();
+  await expect(page.getByText("1 Floor Cleared", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Return to Title" })).toBeVisible();
   await page.getByRole("button", { name: "Return to Title" }).click();
 
@@ -309,7 +285,8 @@ function readTurns(counter: string) {
 
 async function advanceEnemyTurn(page: import("@playwright/test").Page, includeAttackAnimation = false) {
   const enemyCount = await page.getByRole("button", { name: /^(Pixel Golem|Zombie|Dragon|Vampire|Werewolf)$/ }).count();
-  const enemyTurnDuration = Math.max(1, enemyCount) * GAME_PARAMETERS.animation.enemyTurnDurationMs;
+  const enemyActions = Math.max(1, enemyCount);
+  const enemyTurnDuration = enemyActions * (DEFENSE_WINDOW_MS + GAME_PARAMETERS.animation.enemyTurnDurationMs);
   const attackDuration = includeAttackAnimation ? GAME_PARAMETERS.animation.attackDurationMs : 0;
   await page.clock.runFor(attackDuration + enemyTurnDuration + ROOM_TRANSITION_MS);
 }

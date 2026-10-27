@@ -118,7 +118,7 @@ test("multiplayer ordinary and charged attacks cannot damage a Werewolf", () => 
   expect(uncharged.map.entities.monsters.werewolf.currentHealth).toBe(60);
 });
 
-test("multiplayer Silver Bullet kills the Werewolf without needing attack damage", () => {
+test("multiplayer Silver Arrow kills the Werewolf without needing attack damage", () => {
   const state = initial();
   const room = getRoom(state.map, state.players.host.roomId)!;
   room.contents = [{ type: "monster", id: "werewolf" }];

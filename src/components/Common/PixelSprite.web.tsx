@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Image, Text, View, type ImageStyle, type StyleProp, type ViewStyle } from "react-native";
 import monsters from "../../../assets/32rogues/monsters.png";
 import tiles from "../../../assets/32rogues/tiles.png";
@@ -25,8 +25,26 @@ const sprites: Record<string, Tile> = {
   heavy_armor_graphic: item(12, 5), heavy_weapon_graphic: item(3, 3), amulet_graphic: item(16, 0), lock_graphic: item(22, 0),
 };
 
+const atlasUris = [...new Set([tiles, rogues, monsters, items]
+  .map(source => source.src)
+  .filter((uri): uri is string => Boolean(uri)))];
+let atlasPreload: Promise<void> | null = null;
+
+function preloadAtlases() {
+  if (atlasPreload) return atlasPreload;
+  atlasPreload = Promise.all(atlasUris.map(uri => new Promise<void>(resolve => {
+    const image = new window.Image();
+    image.onload = () => { void image.decode().catch(() => undefined).then(() => resolve()); };
+    image.onerror = () => resolve();
+    image.src = uri;
+    if (image.complete) resolve();
+  }))).then(() => undefined);
+  return atlasPreload;
+}
+
 export function PixelSprite({ sprite, label, size = 32, style }: { sprite: string; label: string; size?: number; style?: StyleProp<ViewStyle> }) {
   const [failed, setFailed] = useState(false);
+  useEffect(() => { void preloadAtlases(); }, []);
   const tile = sprites[sprite];
   if (!tile || failed) return <View style={[{ width: size, height: size, alignItems: "center", justifyContent: "center" }, style]}><Text accessibilityLabel={label} accessibilityRole="image" allowFontScaling={false} style={{ fontSize: Math.max(12, size * 0.8), lineHeight: Math.max(14, size), textAlign: "center" }}>{emojiSprites[sprite] ?? (sprite.endsWith("_graphic") ? "❔" : sprite)}</Text></View>;
   const uri = tile.source.uri ?? tile.source.src;

@@ -95,16 +95,11 @@ test("setup does not offer class selection and starts with a random class", asyn
   });
 });
 
-test("settings exposes the persisted reduced-motion preference", async () => {
+test("settings no longer exposes the reduce-motion option", async () => {
   const screen = renderWithSafeArea(<SettingsRoute />);
-  expect(await screen.findByText("Reduce motion")).toBeTruthy();
-  expect(screen.getByText("Skips room slides, doorway pulsing, and idle enemy bobbing.")).toBeTruthy();
-  fireEvent(screen.getByLabelText("Reduce motion"), "valueChange", true);
-
-  await waitFor(async () => {
-    const saved = JSON.parse((await AsyncStorage.getItem("project-1:game-settings")) ?? "{}");
-    expect(saved.reducedMotion).toBe(true);
-  });
+  expect(await screen.findByText("Settings")).toBeTruthy();
+  expect(screen.queryByText("Reduce motion")).toBeNull();
+  expect(screen.queryByText("Skips room slides, doorway pulsing, and idle enemy bobbing.")).toBeNull();
 });
 
 test("settings can restore system appearance after choosing a fixed theme", async () => {

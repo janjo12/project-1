@@ -601,7 +601,7 @@ function placeOptionalLoot(
   equipmentCount: number,
 ) {
   // Keep floor reward counts stable, but use dead ends before ordinary rooms for chest placement.
-  const candidates = shuffle([...context.allRoomIds].filter(id => {
+  const candidates = shuffle(reachableRoomIds.filter(id => {
     const room = findRoomInGrid(context.rooms, id);
     return room && !room.isCurrentPosition && !room.contents.some(content => content.type === "stairs" || content.type === "item" || content.type === "equipment");
   }), context.random);
@@ -632,15 +632,28 @@ function getDeadEndRoomIds(context: DungeonGenerationContext) {
 }
 
 function getOptionalLootCounts(context: DungeonGenerationContext, reachableRoomIds: string[]) {
-  const eligibleCount = reachableRoomIds.filter(roomId => {
+  // Guaranteed quest items (keys and silver arrows) occupy rooms, but are not
+  // part of the floor's optional item/equipment budget. Scale expected loot
+  // with the total generated room count, then cap placements to reachable,
+  // empty rooms. Randomized rounding lets small floors roll fractional counts.
+  const availableRoomCount = reachableRoomIds.filter(roomId => {
     const room = findRoomInGrid(context.rooms, roomId);
     return room && !room.isCurrentPosition && !room.contents.some(content =>
       content.type === "stairs" || content.type === "item" || content.type === "equipment",
     );
   }).length;
-  const itemCount = Math.min(eligibleCount, Math.floor(reachableRoomIds.length * GAME_PARAMETERS.dungeon.itemRoomChance));
-  const equipmentCount = Math.min(eligibleCount - itemCount, Math.floor(reachableRoomIds.length * GAME_PARAMETERS.dungeon.equipmentRoomChance));
+  const totalRoomCount = context.allRoomIds.size;
+  const desiredItemCount = roundLootCount(totalRoomCount * GAME_PARAMETERS.dungeon.itemRoomChance, context.random);
+  const desiredEquipmentCount = roundLootCount(totalRoomCount * GAME_PARAMETERS.dungeon.equipmentRoomChance, context.random);
+  const itemCount = Math.min(availableRoomCount, desiredItemCount);
+  const equipmentCount = Math.min(availableRoomCount - itemCount, desiredEquipmentCount);
   return { itemCount, equipmentCount };
+}
+
+function roundLootCount(expectedCount: number, random: () => number) {
+  const wholeCount = Math.floor(expectedCount);
+  const fractionalCount = expectedCount - wholeCount;
+  return wholeCount + (fractionalCount > 0 && random() < fractionalCount ? 1 : 0);
 }
 
 function getRoomDistances(context: DungeonGenerationContext, originRoomId: string) {

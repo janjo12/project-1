@@ -37,10 +37,9 @@ export function DungeonMap({
   };
   const hasRevealedConnection = (room: ReturnType<typeof getRooms>[number], direction: "north" | "east" | "south" | "west") => {
     const neighborId = adjacentRoomId(room.id, direction);
-    if (!neighborId || !room.isRevealed || room[direction] !== "open") return false;
-    const neighbor = roomMap.get(neighborId);
-    const opposite = ({ north: "south", east: "west", south: "north", west: "east" } as const)[direction];
-    return Boolean(neighbor?.isRevealed && neighbor[opposite] === "open");
+    // Only open doorways show hallway segments. Locked and guarded doorways use
+    // their lock/guard marker until they are unlocked or cleared.
+    return Boolean(neighborId && room.isRevealed && room[direction] === "open");
   };
   if (!roomMap.has(currentRoomId)) {
     throw new Error(`Current room ${currentRoomId} is missing from the dungeon map`);

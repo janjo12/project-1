@@ -66,7 +66,7 @@ export function canUseInventoryItem({
   currentRoomId: string; dungeonMap: DungeonMap; inventoryItem: ItemId | null;
   monster: WorldMonster | null; playerEnergy: number; playerHealth: number;
 }) {
-  // Items activate only when their trigger applies; keys and silver bullets depend on the current room.
+  // Items activate only when their trigger applies; keys and silver arrows depend on the current room.
   if (!inventoryItem) return false;
   if (inventoryItem === "health-potion") return playerHealth < PLAYER_MAX_HEALTH;
   if (inventoryItem === "energy-meal") return playerEnergy < PLAYER_MAX_ENERGY;

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { Animated, Easing, Platform, View } from "react-native";
+import { Animated, Easing, Platform, View, type ViewInstance } from "react-native";
 
 import { PixelSprite } from "@/components/Common/PixelSprite";
 import { GAME_PARAMETERS } from "@/game/config/gameparameters";
@@ -17,16 +17,16 @@ export function animateSpriteFlight(request: SpriteFlightRequest) {
   flightListeners.forEach(listener => listener());
 }
 
-export function measureViewCenterNow(view: View | null): ScreenPoint | null {
+export function measureViewCenterNow(view: ViewInstance | null): ScreenPoint | null {
   if (!view) return null;
   const element = view as unknown as { getBoundingClientRect?: () => DOMRect };
   if (typeof element.getBoundingClientRect !== "function") return null;
   const rect = element.getBoundingClientRect();
   if (rect.width <= 0 || rect.height <= 0) return null;
-  return { x: rect.left + rect.width / 2 + window.scrollX, y: rect.top + rect.height / 2 + window.scrollY };
+  return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
 }
 
-export function measureViewCenter(view: View | null): Promise<ScreenPoint | null> {
+export function measureViewCenter(view: ViewInstance | null): Promise<ScreenPoint | null> {
   return new Promise(resolve => {
     if (!view) {
       resolve(null);
@@ -72,7 +72,7 @@ function finishFlight(id: number) {
 export function SpriteFlightLayer() {
   const flight = useSyncExternalStore(subscribeToFlight, () => activeFlight, () => null);
   const [translation] = useState(() => new Animated.ValueXY());
-  const layerRef = useRef<View>(null);
+  const layerRef = useRef<ViewInstance>(null);
   const [origin, setOrigin] = useState<ScreenPoint>({ x: 0, y: 0 });
 
   useEffect(() => {

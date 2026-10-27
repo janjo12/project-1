@@ -136,7 +136,7 @@ test("two live multiplayer players reach Level 2 after a ghost reveals and suppo
     expect(finalWolfStep).toBeTruthy();
 
     // Travel through the real test floor, collect the key, give the guest a health potion,
-    // and let the host carry the Silver Bullet for the final Werewolf encounter.
+    // and let the host carry the Silver Arrow for the final Werewolf encounter.
     for (let stepIndex = 0; stepIndex < pathToWolf.length; stepIndex += 1) {
       const currentRoomId = state.players.host.roomId;
       expect(state.players[victimId].roomId).toBe(currentRoomId);
@@ -203,13 +203,13 @@ test("two live multiplayer players reach Level 2 after a ghost reveals and suppo
     // The guest keeps attacking the immune Werewolf while the host waits safely next door.
     // This makes the guest's death a real consequence of live combat; the health potion saves once.
     const retreatDirection = reverseDirection(finalWolfStep.direction);
-    for (let hit = 0; state.players[victimId].health > 0 && hit < 18; hit += 1) {
+    for (let hit = 0; state.players[victimId].health > 0 && hit < 30; hit += 1) {
       state = await takeTurn(request, roomCode, state, {
         host: hit === 0 ? { type: "MOVE", target: retreatDirection } : { type: "SUPPORT" },
         [victimId]: { type: "ATTACK", target: wolfId!, microgameScore: 100 },
       });
     }
-    expect(state.players[victimId].health, "the Werewolf should kill the player who keeps attacking without the Silver Bullet").toBe(0);
+    expect(state.players[victimId].health, "the Werewolf should kill the player who keeps attacking without the Silver Arrow").toBe(0);
     expect(state.players.host.health).toBeGreaterThan(0);
     await expect(guestPage.getByText(/You are a ghost/)).toBeVisible();
 
@@ -227,7 +227,7 @@ test("two live multiplayer players reach Level 2 after a ghost reveals and suppo
     expect(getRoom(state.map, ghostForward.to).isRevealed).toBe(true);
     await waitForVisibleRoom(page, ghostForward.to);
 
-    // Bring the host to the Werewolf and let the ghost's support accompany the Silver Bullet hit.
+    // Bring the host to the Werewolf and let the ghost's support accompany the Silver Arrow hit.
     const directionToWolf = reverseDirection(ghostForward.direction);
     state = await takeTurn(request, roomCode, state, {
       host: { type: "MOVE", target: finalWolfStep.direction },

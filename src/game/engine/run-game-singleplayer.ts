@@ -49,7 +49,7 @@ import {
   applyWerewolfChaseAfterAction,
   getHardTurnLimit, hasTurnLimit, resolveTurnLoss
 } from "@/game/engine/resolveTurn";
-import { getPlayerAttackDamage, resolveAttackDamage } from "@/game/engine/combat";
+import { getPlayerAttackDamage, getPotentialAttackDamage } from "@/game/engine/combat";
 import { restartAnimations, swapRoomItemWithInventory } from "@/game/engine/run-game-helpers";
 import {
   getNextLevelState,
@@ -74,6 +74,7 @@ export function useRunGame({
   difficulty,
   istest,
   onGameOver,
+  onDefenseRequested,
   seed,
   vibrationEnabled,
 }: UseGameRunOptions) {
@@ -420,12 +421,9 @@ export function useRunGame({
         // Vanguard's reflected damage is consumed by the first enemy that attacks this turn.
         const reflects = vanguardRef.current > 0;
         const classBaseDefense = GAME_PARAMETERS.player.defense + (playerClass.id === "warrior" ? 5 : 0);
-        const damageTaken = applyDefense(
+        const damageAfterEquipment = applyDefense(
           monster.damage,
           classBaseDefense + getEquipmentStats(equipment).defense + defenseBuffRef.current,
-        );
-        console.info(
-          `[combat] ${monster.name} dealt ${damageTaken} damage to Player (${damageTaken === 0 ? "blocked" : `base ${monster.damage}, reduced by ${monster.damage - damageTaken} defense`}).`,
         );
 
         if (reflects) {
@@ -434,7 +432,7 @@ export function useRunGame({
             GAME_PARAMETERS.combat.warriorRiposteDamage,
           );
           console.info(`[combat] Player reflected ${reflectedDamage} damage to ${monster.name}.`);
-          setEnemyHealthLossAmount(reflectedDamage);
+          setEnemyHealthLossAmount(GAME_PARAMETERS.combat.warriorRiposteDamage);
           restartAnimations(setAnimationFrame, ["playerAttackElapsed", "enemyDamageElapsed", "enemyHealthLossElapsed"]);
           resolvedMap = commitMap(
             map => damageMonsterInRoom(map, roomId, monsterId, reflectedDamage),
@@ -443,34 +441,45 @@ export function useRunGame({
           vanguardRef.current = 0;
         }
 
-        schedule(GAME_PARAMETERS.animation.attackImpactDelayMs, () => {
-          setPlayerHealthLossAmount(damageTaken);
-          restartAnimations(setAnimationFrame, ["playerDamageElapsed", "playerHealthLossElapsed"]);
-          triggerDamageHaptic();
-        });
+        const resolveAttack = (defenseScore: number) => {
+          const safeScore = Math.max(0, Math.min(100, defenseScore));
+          const damageTaken = Math.ceil(damageAfterEquipment * (100 - safeScore) / 100);
+          console.info(
+            `[combat] ${monster.name} dealt ${damageTaken} damage to Player (${damageTaken === 0 ? "blocked" : `base ${monster.damage}, reduced by ${monster.damage - damageTaken} defense and reaction`}).`,
+          );
 
-        schedule(GAME_PARAMETERS.animation.enemyTurnDurationMs, () => {
-          const finalMap = resolvedMap;
-          setPlayerHealth(health => {
-            const { nextHealth, usesPotion } = resolveHealthLoss(health, damageTaken, inventoryItemRef.current);
-            if (usesPotion) setInventoryItem(null);
-            if (nextHealth <= 0 && !usesPotion && playerClass.id === "cleric" && playerEnergy > 0) {
-              const miracleHealth = playerEnergy;
-              setPlayerEnergy(0);
-              return miracleHealth;
-            }
-            if (nextHealth <= 0 && !usesPotion) schedule(0, () => onGameOver(clearedLevelsRef.current));
-            return nextHealth;
+          schedule(GAME_PARAMETERS.animation.attackImpactDelayMs, () => {
+            setPlayerHealthLossAmount(damageTaken);
+            restartAnimations(setAnimationFrame, ["playerDamageElapsed", "playerHealthLossElapsed"]);
+            if (damageTaken > 0) triggerDamageHaptic();
           });
 
-          if (index + 1 < enemyIds.length) takeEnemyTurn(index + 1, finalMap);
-          else finishNonMoveTurn({ mapAtEnd: finalMap, roomId });
-        });
+          schedule(GAME_PARAMETERS.animation.enemyTurnDurationMs, () => {
+            const finalMap = resolvedMap;
+            setPlayerHealth(health => {
+              const { nextHealth, usesPotion } = resolveHealthLoss(health, damageTaken, inventoryItemRef.current);
+              if (usesPotion) setInventoryItem(null);
+              if (nextHealth <= 0 && !usesPotion && playerClass.id === "cleric" && playerEnergy > 0) {
+                const miracleHealth = playerEnergy;
+                setPlayerEnergy(0);
+                return miracleHealth;
+              }
+              if (nextHealth <= 0 && !usesPotion) schedule(0, () => onGameOver(clearedLevelsRef.current));
+              return nextHealth;
+            });
+
+            if (index + 1 < enemyIds.length) takeEnemyTurn(index + 1, finalMap);
+            else finishNonMoveTurn({ mapAtEnd: finalMap, roomId });
+          });
+        };
+
+        if (onDefenseRequested) onDefenseRequested(resolveAttack);
+        else resolveAttack(0);
       };
 
       takeEnemyTurn(0, mapAtEnd);
     },
-    [commitMap, dungeonMap, finishNonMoveTurn, equipment, playerClass, playerEnergy, onGameOver, schedule, setInventoryItem, setPlayerEnergy, setPlayerHealth, triggerDamageHaptic, setAnimationFrame],
+    [commitMap, dungeonMap, finishNonMoveTurn, equipment, onDefenseRequested, playerClass, playerEnergy, onGameOver, schedule, setInventoryItem, setPlayerEnergy, setPlayerHealth, triggerDamageHaptic, setAnimationFrame],
   );
 
   const finishPlayerAction = useCallback(
@@ -517,11 +526,11 @@ export function useRunGame({
     }
   }, [equipment, hasLost, isResolving, playerEnergy, setAnimationFrame, setPlayerEnergy]);
 
-  const animatePlayerAttack = useCallback((healthLost: number) => {
+  const animatePlayerAttack = useCallback((damageAmount: number) => {
     restartAnimations(setAnimationFrame, ["playerAttackElapsed"]);
 
     schedule(GAME_PARAMETERS.animation.attackImpactDelayMs, () => {
-      setEnemyHealthLossAmount(healthLost);
+      setEnemyHealthLossAmount(damageAmount);
       restartAnimations(setAnimationFrame, [
         "enemyDamageElapsed",
         "enemyHealthLossElapsed",
@@ -612,9 +621,9 @@ export function useRunGame({
 
       const usesSilverBullet = monster.chases && inventoryItem === "silver-bullet";
       const hasEnergy = chargedRef.current;
-      const rawDamage = usesSilverBullet
+      const totalDamage = usesSilverBullet
         ? monster.currentHealth
-        : resolveAttackDamage({
+        : getPotentialAttackDamage({
           profile: getPlayerAttackDamage(monster, hasEnergy),
           score: attackScore ?? 100,
           equipmentAttack: getEquipmentStats(equipment).attack,
@@ -622,10 +631,10 @@ export function useRunGame({
           target: monster,
         });
       lastActionRefundsChargeRef.current = false;
-      const damage = rawDamage;
-      const healthLost = Math.min(monster.currentHealth, damage);
+      const damage = Math.min(monster.currentHealth, totalDamage);
+      const healthLost = damage;
       console.info(
-        `[combat] Player dealt ${healthLost} damage to ${monster.name}${usesSilverBullet ? " with a Silver Bullet" : monster.chases ? " (immune to ordinary attacks)" : ""}.`,
+        `[combat] Player dealt ${healthLost} damage to ${monster.name}${usesSilverBullet ? " with a Silver Arrow" : monster.chases ? " (immune to ordinary attacks)" : ""}.`,
       );
 
       setTurnTimeRemaining(0);
@@ -636,7 +645,7 @@ export function useRunGame({
         setInventoryItem(null);
       }
 
-      animatePlayerAttack(healthLost);
+      animatePlayerAttack(totalDamage);
       commitPlayerAttack(monster, damage);
     },
     [

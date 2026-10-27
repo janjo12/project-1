@@ -4,7 +4,8 @@ import { createNumberStore } from "@/game/state/numberStore";
 import { GAME_PARAMETERS } from "@/game/config/gameparameters";
 import type { Difficulty } from "@/utils/settings-storage";
 
-export type MicrogameKind = "concentration" | "timed-attack" | "multitap";
+export type MicrogameKind = "concentration" | "timed-attack" | "multitap" | "defense";
+export type MultitapTargetSpot = { x: number; y: number };
 export type MicrogameOptions = { difficulty?: Difficulty; level?: number };
 export const HUMAN_REACTION_WINDOW_MS = 250;
 export const MICROGAME_MAX_DURATION_MS = 1500;
@@ -12,6 +13,9 @@ export const CONCENTRATION_TARGET_DURATION_MS = MICROGAME_MAX_DURATION_MS;
 export const TIMED_ATTACK_CUE_DELAY_MS = 1000;
 export const TIMED_ATTACK_WINDOW_MS = TIMED_ATTACK_CUE_DELAY_MS + HUMAN_REACTION_WINDOW_MS + 500;
 export const MULTITAP_WINDOW_MS = 3000;
+export const DEFENSE_CUE_DELAY_MS = 120;
+export const DEFENSE_WINDOW_MS = 700;
+export const MULTITAP_DOT_DIAMETER = 44;
 const now = () => globalThis.performance?.now?.() ?? Date.now();
 const scoreWithinRange = (score: number) => Math.max(0, Math.min(100, Math.round(score)));
 
@@ -35,6 +39,39 @@ export function getMultitapScore(clicks: number, targetTaps: number) {
   return scoreWithinRange(clicks * 100 / Math.max(1, targetTaps));
 }
 
+export function getMultitapGrid(trackWidth: number, trackHeight: number, requestedDiameter: number) {
+  const diameter = Math.max(1, Math.min(requestedDiameter, trackWidth * 0.16, trackHeight / 2));
+  return {
+    diameter,
+    columns: Math.max(1, Math.floor((trackWidth / 2) / diameter)),
+    rows: Math.max(2, Math.floor(trackHeight / diameter)),
+  };
+}
+
+export function getNextMultitapTargetSpot(currentSpot: MultitapTargetSpot, handedness: "left" | "right", trackWidth: number, trackHeight: number, dotDiameter: number, nextTap: number): MultitapTargetSpot {
+  if (trackWidth <= 0 || trackHeight <= 0) return currentSpot;
+  const { diameter, columns, rows } = getMultitapGrid(trackWidth, trackHeight, dotDiameter);
+  const cellWidth = (trackWidth / 2) / columns;
+  const cellHeight = trackHeight / rows;
+  const cellCount = columns * rows;
+
+  // Each cell holds one dot. Cycling from a different cell guarantees that the
+  // new dot cannot overlap the previous one, including on compact screens.
+  for (let offset = 0; offset < cellCount; offset += 1) {
+    const cellIndex = (nextTap + offset) % cellCount;
+    const column = cellIndex % columns;
+    const row = Math.floor(cellIndex / columns);
+    const x = handedness === "left"
+      ? ((column + 0.5) * cellWidth) / trackWidth
+      : 0.5 + ((column + 0.5) * cellWidth) / trackWidth;
+    const y = (row + 0.5) / rows;
+    if (Math.hypot((x - currentSpot.x) * trackWidth, (y - currentSpot.y) * trackHeight) >= diameter) {
+      return { x, y };
+    }
+  }
+  return currentSpot;
+}
+
 export function useMicrogame(onComplete: (score: number) => void) {
   const [active, setActive] = useState(false);
   const [kind, setKind] = useState<MicrogameKind>("concentration");
@@ -42,6 +79,7 @@ export function useMicrogame(onComplete: (score: number) => void) {
   const [targetDelay, setTargetDelay] = useState(500);
   const [targetTaps, setTargetTaps] = useState(() => getMultitapTargetTaps("normal", 1));
   const [targetSpot, setTargetSpot] = useState(0.76);
+  const [multitapTargetSpot, setMultitapTargetSpot] = useState<MultitapTargetSpot>({ x: 0.76, y: 0.5 });
   const startedAt = useRef(0);
   const leftHandedRef = useRef(false);
   const nowRef = useRef(now);
@@ -64,29 +102,33 @@ export function useMicrogame(onComplete: (score: number) => void) {
       setKind(gameKind);
       elapsedStore.setSnapshot(0);
       clickCount.current = 0;
-      setTargetDelay(gameKind === "timed-attack" ? TIMED_ATTACK_CUE_DELAY_MS : 200 + Math.floor(Math.random() * 401));
+      setTargetDelay(gameKind === "timed-attack" ? TIMED_ATTACK_CUE_DELAY_MS : gameKind === "defense" ? DEFENSE_CUE_DELAY_MS : 200 + Math.floor(Math.random() * 401));
       setTargetTaps(getMultitapTargetTaps(options?.difficulty ?? "normal", options?.level ?? 1));
       leftHandedRef.current = handedness === "left";
-      setTargetSpot(handedness === "right" ? 0.24 : 0.76);
+      const handednessSpot = handedness === "right" ? 0.2 : 0.8;
+      setTargetSpot(handednessSpot);
+      setMultitapTargetSpot({ x: handedness === "right" ? 0.76 : 0.24, y: 0.5 });
       startedAt.current = nowRef.current();
       setActive(true);
     },
     [elapsedStore],
   );
-  const tap = useCallback(() => {
+  const tap = useCallback((trackWidth = 0, dotDiameter = MULTITAP_DOT_DIAMETER, trackHeight = 0) => {
     if (!active || completed.current) return;
     const elapsedMs = nowRef.current() - startedAt.current;
     if (kind === "multitap") {
       const next = clickCount.current + 1;
       clickCount.current = next;
-      setTargetSpot(leftHandedRef.current ? 0.58 + ((next * 0.137) % 0.32) : 0.1 + ((next * 0.137) % 0.32));
+      setMultitapTargetSpot(currentSpot => getNextMultitapTargetSpot(currentSpot, leftHandedRef.current ? "left" : "right", trackWidth, trackHeight, dotDiameter, next));
       if (next >= targetTaps) finish(getMultitapScore(next, targetTaps));
       return;
     }
     const targetProgress = leftHandedRef.current ? (targetSpot - 0.1) / 0.8 : (0.9 - targetSpot) / 0.8;
     const score = kind === "concentration"
       ? getConcentrationScore(elapsedMs, targetProgress * CONCENTRATION_TARGET_DURATION_MS)
-      : getTimedAttackScore(elapsedMs - targetDelay);
+      : kind === "defense" && elapsedMs < targetDelay
+        ? 0
+        : getTimedAttackScore(elapsedMs - targetDelay);
     finish(score);
   }, [active, finish, kind, targetDelay, targetSpot, targetTaps]);
   useEffect(() => {
@@ -108,12 +150,14 @@ export function useMicrogame(onComplete: (score: number) => void) {
     elapsedStore,
     targetDelay,
     targetSpot,
+    multitapTargetSpot,
     start,
     tap,
   };
 }
 
 export function getMicrogameWindow(kind: MicrogameKind) {
+  if (kind === "defense") return DEFENSE_WINDOW_MS;
   if (kind === "timed-attack") return TIMED_ATTACK_WINDOW_MS;
   if (kind === "multitap") return MULTITAP_WINDOW_MS;
   return MICROGAME_MAX_DURATION_MS;

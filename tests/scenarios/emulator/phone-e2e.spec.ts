@@ -48,6 +48,8 @@ test("phone: setup, settings, game menu, and seeded run reach level 2 without re
     const stairs = page.getByRole("button", { name: "Stairs", exact: true });
     if (await stairs.isVisible().catch(() => false)) {
       await stairs.click();
+      await expect(page.getByText("Level Cleared!", { exact: true })).toBeVisible();
+      await page.getByRole("button", { name: "Continue to next level" }).click();
       await expect(page.getByText("Level 2 Map", { exact: true })).toBeVisible({ timeout: 10_000 });
       reachedLevelTwo = true;
       break;

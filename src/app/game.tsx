@@ -1,6 +1,6 @@
 import { router } from "expo-router";
 import { useRef, useState } from "react";
-import { Alert, Text, View, useWindowDimensions } from "react-native";
+import { Alert, Text, View, useWindowDimensions, type ViewInstance } from "react-native";
 
 import { Header, Row, StyledModal, Title } from "@/components/Common/Displays";
 import { PauseMenu } from "@/components/Common/PauseMenu";
@@ -54,9 +54,12 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
   const compactLayout = height < 800;
   const tinyLayout = height < 500;
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isLevelCleared, setIsLevelCleared] = useState(false);
   const [itemMenuOpen, setItemMenuOpen] = useState(false);
   const [equipmentMenuOpen, setEquipmentMenuOpen] = useState(false);
   const colors = useThemeColors();
+  const pendingDefense = useRef<((score: number) => void) | null>(null);
+  const startDefenseMicrogame = useRef<(resolve: (score: number) => void) => void>(() => undefined);
   const game = useRunGame({
     difficulty: settings.difficulty,
     istest: isTestSeed(settings.seed),
@@ -65,6 +68,7 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
         pathname: "/game-over",
         params: { score: String(score) },
       }),
+    onDefenseRequested: resolve => startDefenseMicrogame.current(resolve),
     seed: settings.seed.trim(),
     vibrationEnabled: settings.vibrationEnabled,
   });
@@ -75,11 +79,17 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
   const [classIntroPage, setClassIntroPage] = useState(0);
   const [isMapOpen, setIsMapOpen] = useState(false);
   const pendingAttack = useRef<string | null>(null);
-  const controlsRef = useRef<View>(null);
-  const itemTargetRef = useRef<View>(null);
-  const equipmentTargetRef = useRef<View>(null);
-  const actorTargetRef = useRef<View>(null);
+  const controlsRef = useRef<ViewInstance>(null);
+  const itemTargetRef = useRef<ViewInstance>(null);
+  const equipmentTargetRef = useRef<ViewInstance>(null);
+  const actorTargetRef = useRef<ViewInstance>(null);
   const microgame = useMicrogame(score => {
+    const resolveDefense = pendingDefense.current;
+    if (resolveDefense) {
+      pendingDefense.current = null;
+      resolveDefense(score);
+      return;
+    }
     setMicrogameScore(score);
     setMicrogameScoreTotal(total => total + score);
     setMicrogameCount(count => count + 1);
@@ -87,9 +97,13 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
     pendingAttack.current = null;
     if (target) game.attackMonster(target, score);
   });
+  startDefenseMicrogame.current = resolve => {
+    pendingDefense.current = resolve;
+    microgame.start("defense", settings.handedness);
+  };
   useGameLoopDriver({
     enabled: isRunGameLoopEnabled({
-      running: game.isGameLoopRunning(), pauseMenuOpen: isMenuOpen, itemMenuOpen,
+      running: game.isGameLoopRunning(), pauseMenuOpen: isMenuOpen || isLevelCleared, itemMenuOpen,
       equipmentMenuOpen, mapOpen: isMapOpen, microgameActive: microgame.active,
       classIntroOpen: classIntroPage >= 0,
     }),
@@ -109,8 +123,6 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
     <View ref={controlsRef} style={{ flex: 1, gap: 4, position: "relative" }}>
       <EquipmentControl label={game.equipmentLabel} description={game.equipmentDescription} sprite={game.equipmentSprite} targetRef={equipmentTargetRef} onDrop={() => setEquipmentMenuOpen(true)} />
       <ItemControl activationDescription={game.inventoryItemActivationDescription} itemLabel={game.inventoryItemLabel} itemSprite={game.inventoryItemSprite} targetRef={itemTargetRef} onDrop={() => setItemMenuOpen(true)} />
-      {!game.equipmentLabel ? <View ref={equipmentTargetRef} pointerEvents="none" style={{ position: "absolute", top: 0, right: 0, width: 72, height: 72, opacity: 0 }} testID="equipment-flight-target" /> : null}
-      {!game.inventoryItemLabel ? <View ref={itemTargetRef} pointerEvents="none" style={{ position: "absolute", bottom: 0, right: 0, width: "100%", height: 72, opacity: 0 }} testID="item-flight-target" /> : null}
     </View>
   );
   const chargeCost = getEquipmentStats(game.equipment).chargeCost;
@@ -119,7 +131,7 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
     if (actor.kind === "enemy") {
       const werewolfWithSilver = !!game.dungeonMap.entities.monsters[actor.id]?.chases && game.inventoryItem === "silver-bullet";
       if (werewolfWithSilver) {
-        setCombatMessage("Silver Bullet worked! The Werewolf is defeated.");
+        setCombatMessage("Silver Arrow worked! The Werewolf is defeated.");
         game.attackMonster(actor.id);
       } else if (settings.microgamesEnabled) {
         pendingAttack.current = actor.id;
@@ -138,7 +150,7 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
       requestPickupSpriteFlight(actor, start, end, animateSpriteFlight);
       game.pickupEquipment();
     } else {
-      game.descend();
+      setIsLevelCleared(true);
     }
   }
 
@@ -267,6 +279,7 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
         elapsedStore={microgame.elapsedStore}
         targetDelay={microgame.targetDelay}
         targetSpot={microgame.targetSpot}
+        multitapTargetSpot={microgame.multitapTargetSpot}
         leftHanded={settings.handedness === "left"}
         onTap={microgame.tap}
       />
@@ -296,6 +309,7 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
         onOpenMap={tinyLayout ? () => { setIsMenuOpen(false); setIsMapOpen(true); } : undefined}
         onSettingsChange={onSettingsChange}
         settings={settings}
+        seed={settings.seed.trim()}
         visible={isMenuOpen}
       />
       <ItemDetailsMenu visible={itemMenuOpen} label={game.inventoryItemLabel ?? "Item"}
@@ -309,6 +323,18 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
         <Title>Dungeon Map</Title>
         <DungeonMap currentRoomId={game.currentRoomId} map={game.visibleDungeonMap} />
         <PrimaryButton accessibilityLabel="Close map" accessibilityRole="button" label="Close map" onPress={() => setIsMapOpen(false)} />
+      </StyledModal>
+      <StyledModal accessibilityLabel="Level cleared" accessibilityRole="dialog" animationType="fade" onRequestClose={() => setIsLevelCleared(false)} visible={isLevelCleared}>
+        <Title>Level Cleared!</Title>
+        <PrimaryButton
+          accessibilityLabel="Continue to next level"
+          accessibilityRole="button"
+          label="Continue"
+          onPress={() => {
+            setIsLevelCleared(false);
+            game.descend();
+          }}
+        />
       </StyledModal>
     </ScreenShell>
   );

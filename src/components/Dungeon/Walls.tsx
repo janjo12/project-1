@@ -37,6 +37,7 @@ export function RoomWalls({
   canPassBlockedDoorways = false,
   disabled,
   doorways,
+  playerPosition = "center",
   onPress,
   reducedMotion = false,
   animationsPaused = false,
@@ -45,6 +46,7 @@ export function RoomWalls({
   canPassBlockedDoorways?: boolean;
   disabled: boolean;
   doorways: RoomDoorways;
+  playerPosition?: DoorPosition | "center";
   onPress?: (position: DoorPosition) => void;
   reducedMotion?: boolean;
   animationsPaused?: boolean;
@@ -80,6 +82,7 @@ export function RoomWalls({
               position === "bottom" && styles.bottomDoorwayGap,
               position === "left" && styles.leftDoorwayGap,
               position === "right" && styles.rightDoorwayGap,
+              position === playerPosition && (position === "top" || position === "bottom" ? { height: 24 } : { width: 24 }),
               pressed && styles.pressedActor,
             ]}
           >
@@ -100,7 +103,7 @@ export function RoomWalls({
               >
                 {DOOR_ARROWS[position]}
               </Animated.Text>
-            ) : null}
+            ) : state === "locked" ? <Text accessible={false} style={[styles.doorwayIcon, styles.lockedDoorwayIcon]}>🔒</Text> : null}
           </Pressable>
         );
       })}

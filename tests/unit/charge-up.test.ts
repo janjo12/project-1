@@ -67,7 +67,7 @@ async function setup(enemy = false, meal = false, enemyHealth = 20, enemyDamage 
   }
   if (silverBullet) {
     map.entities.items.bullet = {
-      id: "bullet", itemId: "silver-bullet", label: "Silver Bullet", sprite: "bullet", type: "item",
+      id: "bullet", itemId: "silver-bullet", label: "Silver Arrow", sprite: "bullet", type: "item",
     };
     getRoom(map, "A1")!.contents.push({ id: "bullet", isChest: true, type: "item" });
   }
@@ -139,7 +139,7 @@ test("singleplayer attacks damage a doorway guard and defeating it opens the doo
   expect(getRoom(result.current.dungeonMap, "A1")!.east).toBe("open");
 });
 
-test("singleplayer Werewolf has one HP, ignores ordinary attacks, and dies to a Silver Bullet", async () => {
+test("singleplayer Werewolf has one HP, ignores ordinary attacks, and dies to a Silver Arrow", async () => {
   const { result } = await setup(false, false, 60, 19, "easy", "charge-test", false, 1, false, true, true);
 
   await act(async () => { await result.current.pickupItem(); });
