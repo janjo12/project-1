@@ -112,6 +112,11 @@ async function startPractice(page: import("@playwright/test").Page, seed: string
   await page.getByRole("button", { name: "hard", exact: true }).click();
   await page.getByRole("textbox", { name: "Seed" }).fill(seed);
   await page.getByRole("button", { name: "Start", exact: true }).click();
+  const nextClassInstructions = page.getByRole("button", { name: "Next class instructions", exact: true });
+  if (await nextClassInstructions.isVisible().catch(() => false)) {
+    await nextClassInstructions.click();
+    await page.getByRole("button", { name: "Start playing", exact: true }).click();
+  }
   await page.getByRole("button", { name: "Menu" }).click();
   await page.getByRole("dialog", { name: "Game menu" }).getByRole("button", { name: "Practice attack microgame" }).click();
   await expect(page.getByTestId("microgame-overlay")).toBeVisible();

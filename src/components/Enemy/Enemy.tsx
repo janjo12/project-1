@@ -49,11 +49,14 @@ export function CombatantSprite({
     { width: size, height: size, alignItems: "center" as const, justifyContent: "center" as const, flexShrink: 0 as const, overflow: "visible" as const },
     idleAnimationStyle,
   ], [idleAnimationStyle, size]);
+  // React Native Web adds CSS animation properties that are intentionally not
+  // part of React Native's cross-platform ViewStyle definition.
+  const animatedContainerStyle = containerStyle as unknown as React.ComponentProps<typeof Animated.View>["style"];
 
   return (
     <Animated.View
       testID="combatant-sprite-idle-layer"
-      style={containerStyle}
+      style={animatedContainerStyle}
     >
       <View
         style={[

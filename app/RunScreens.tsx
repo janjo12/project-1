@@ -5,6 +5,7 @@ import { Text, View, useWindowDimensions, type ViewInstance } from "react-native
 
 import { Container, Footer, Header, Row, StyledModal, StyledText, Title } from "@/components/Common/Displays";
 import { MicrogameOverlay } from "@/components/Common/MicrogameOverlay";
+import { ClassBriefing } from "@/components/Common/ClassBriefing";
 import { ScreenShell } from "@/components/Common/ScreenShell";
 import { animateSpriteFlight, measureViewCenterNow } from "@/components/Common/SpriteFlight";
 import { useThemeColors } from "@/components/Common/theme";
@@ -116,6 +117,7 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
   const [isMapOpen, setIsMapOpen] = useState(false);
   const [itemMenuOpen, setItemMenuOpen] = useState(false);
   const [equipmentMenuOpen, setEquipmentMenuOpen] = useState(false);
+  const [classIntroPage, setClassIntroPage] = useState(0);
   const [combatMessage, setCombatMessage] = useState("");
   const [tutorial, setTutorial] = useState<{ enemyRoomId: string | null; chestRoomId: string | null; visitedRooms: string[] }>({ enemyRoomId: null, chestRoomId: null, visitedRooms: [] });
   const [supportEffect, setSupportEffect] = useState<{ targetId: string | null; emoji: string; label: string; key: number } | null>(null);
@@ -153,7 +155,7 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
     };
   }, [startMicrogameAction, settings.handedness]);
   useGameLoopDriver({
-    enabled: game.isGameLoopRunning() && !isMenuOpen && !isLevelCleared && !microgame.active && !itemMenuOpen && !equipmentMenuOpen,
+    enabled: game.isGameLoopRunning() && !isMenuOpen && !isLevelCleared && !microgame.active && !itemMenuOpen && !equipmentMenuOpen && classIntroPage < 0,
     isTurnClockActive: game.isTurnClockActive,
     onExpire: game.expireTurn,
     onFrame: game.updateGameFrame,
@@ -277,6 +279,20 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
       />
       <MicrogameOverlay visible={microgame.active} kind={microgame.kind} elapsedStore={microgame.elapsedStore} targetDelay={microgame.targetDelay} targetSpot={microgame.targetSpot} multitapTargetSpot={microgame.multitapTargetSpot} leftHanded={settings.handedness === "left"} onTap={microgame.tap} />
       </View>
+      {classIntroPage >= 0 && !(classIntroPage === 1 && !settings.microgamesEnabled) ? (
+        <ClassBriefing
+          page={classIntroPage}
+          classId={game.playerClass.id}
+          damage={game.playerAttack}
+          multiplayer={false}
+          microgamesEnabled={settings.microgamesEnabled}
+          onExit={onBackToSetup}
+          onNext={() => setClassIntroPage(settings.microgamesEnabled ? 1 : -1)}
+          onBack={() => setClassIntroPage(0)}
+          onPractice={() => microgame.start(game.playerClass.microgame, settings.handedness, { difficulty: settings.difficulty, level: game.level })}
+          onStart={() => setClassIntroPage(-1)}
+        />
+      ) : null}
       <ItemDetailsMenu visible={itemMenuOpen && !!game.inventoryItemLabel} label={game.inventoryItemLabel ?? "Item"} description={game.inventoryItemDescription ?? "A useful item."} activationDescription={game.inventoryItemActivationDescription ?? "This item activates automatically when its condition is met."} onClose={() => setItemMenuOpen(false)} />
       <EquipmentDetailsMenu visible={equipmentMenuOpen && !!game.equipmentLabel} label={game.equipmentLabel ?? "Equipment"} description={game.equipmentDescription ?? "Equipment provides its listed effects while carried."} dropDisabled={game.isResolving || game.hasLost || microgame.active} onDrop={() => { game.dropEquipment(); setEquipmentMenuOpen(false); }} onClose={() => setEquipmentMenuOpen(false)} />
       <StyledModal accessibilityLabel="Game menu" accessibilityRole="dialog" animationType="fade" onRequestClose={() => setIsMenuOpen(false)} visible={isMenuOpen}>

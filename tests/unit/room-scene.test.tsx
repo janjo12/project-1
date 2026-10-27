@@ -244,6 +244,31 @@ test("player idle animation style stays stable as combat progress updates", asyn
   expect(screen.getByTestId("combatant-sprite-idle-layer").props.style).toBe(idleStyle);
 });
 
+test("idle bob web animation styles survive the Animated.View style boundary", async () => {
+  const screen = await render(
+    <CombatantSprite
+      accessibilityLabel="Warrior"
+      animationsPaused
+      damageProgress={null}
+      idleAnimationPaused
+      sprite="warrior_graphic"
+    />,
+  );
+  const idleStyle = screen.getByTestId("combatant-sprite-idle-layer").props.style[1];
+
+  expect(idleStyle).toEqual({
+    animationName: {
+      from: { transform: [{ translateY: -GAME_PARAMETERS.animation.bounceDistance }] },
+      to: { transform: [{ translateY: GAME_PARAMETERS.animation.bounceDistance }] },
+    },
+    animationDuration: `${GAME_PARAMETERS.animation.bounceDurationMs / 2}ms`,
+    animationDirection: "alternate",
+    animationIterationCount: "infinite",
+    animationTimingFunction: "ease-in-out",
+    animationPlayState: "paused",
+  });
+});
+
 test("player idle bob keeps running while gameplay effects are paused", async () => {
   const screen = await render(
     <RoomScene
