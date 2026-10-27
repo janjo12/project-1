@@ -31,6 +31,12 @@ test(`plays a complete ${className} hard-mode run through Level 2`, async ({ pag
   await expect(page.getByRole("button", { name: "Start", exact: true })).toBeEnabled();
   await page.getByRole("button", { name: "Start", exact: true }).click();
 
+  const nextClassInstructions = page.getByRole("button", { name: "Next class instructions", exact: true });
+  if (await nextClassInstructions.isVisible().catch(() => false)) {
+    await nextClassInstructions.click();
+    await page.getByRole("button", { name: "Start playing", exact: true }).click();
+  }
+
   await page.clock.runFor(ROOM_TRANSITION_MS);
 
   const turnCounter = page.getByTestId("hard-turn-counter");
@@ -102,6 +108,30 @@ test(`plays a complete ${className} hard-mode run through Level 2`, async ({ pag
 
     const werewolf = page.getByRole("button", { name: "Werewolf", exact: true });
     if (await werewolf.isVisible().catch(() => false)) {
+      if (!securedSilverBullet && !String(await readItemStatus(page)).includes("Silver Arrow")) {
+        const silverPickup = page.getByRole("button", { name: /^(Chest containing )?Silver Arrow$/ }).first();
+        if (await silverPickup.isVisible().catch(() => false)) {
+          const chestLabel = await silverPickup.getAttribute("aria-label") ?? "";
+          const hasItem = !(await readItemStatus(page)).includes("No Item");
+          await silverPickup.click();
+          if (chestLabel.startsWith("Chest containing ") && hasItem) {
+            const revealedArrow = page.getByRole("button", { name: "Silver Arrow", exact: true }).first();
+            await expect(revealedArrow).toBeVisible();
+            await revealedArrow.click();
+          }
+          await page.clock.runFor(Math.max(ROOM_TRANSITION_MS, 500));
+          securedSilverBullet = (await readItemStatus(page)).includes("Silver Arrow");
+          if (securedSilverBullet) continue;
+        }
+        const currentRoomId = await readRoomId(page);
+        const backDirection = previousRoomId ? directionBetween(currentRoomId, previousRoomId) : null;
+        if (await clickOnwardDoor(page, backDirection, currentRoomId, visitedRoomIds)) {
+          await page.clock.runFor(ROOM_MOVE_DURATION_MS);
+          previousRoomId = currentRoomId;
+          visitedRoomIds.add(await readRoomId(page));
+          continue;
+        }
+      }
       expect(await readItemStatus(page)).toContain("Silver Arrow");
       await werewolf.click();
       await advanceEnemyTurn(page, true);
@@ -115,8 +145,6 @@ test(`plays a complete ${className} hard-mode run through Level 2`, async ({ pag
         await supportButton.evaluate(button => (button as HTMLButtonElement).click());
         await advanceEnemyTurn(page);
         if (className === "Thief") {
-          const keyDrop = page.getByRole("button", { name: "Key. Drop item" });
-          if (await keyDrop.isVisible().catch(() => false)) await keyDrop.click();
           expect(await readItemStatus(page)).not.toContain("Key");
         }
         usedClassSupport = true;
@@ -196,9 +224,7 @@ test(`plays a complete ${className} hard-mode run through Level 2`, async ({ pag
 
     const lockedDoor = page.getByRole("button", { name: /locked doorway/ }).first();
     if (className === "Thief" && await lockedDoor.isVisible().catch(() => false)) {
-      const heldKey = page.getByRole("button", { name: "Key. Drop item" });
-      if (await heldKey.isVisible().catch(() => false)) await heldKey.click();
-      expect(await readItemStatus(page)).toContain("No Item");
+      expect(await readItemStatus(page)).not.toContain("Key");
       const roomBeforeLockPick = await readRoomId(page);
       if (!thiefUnlockedWithoutKey) {
         await lockedDoor.click();
