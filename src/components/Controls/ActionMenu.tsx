@@ -19,7 +19,7 @@ export function ItemControl({
 }: ItemControlProps) {
   const styles = createStyles(useThemeColors());
 
-  if (!itemLabel) return <View ref={targetRef} accessible={false} pointerEvents="none" style={{ flex: 1, height: 72, opacity: 0 }} testID="item-flight-target" />;
+  if (!itemLabel) return <View ref={targetRef} accessible={false} pointerEvents="none" style={{ flex: 1, minWidth: 0, height: 72, opacity: 0 }} testID="item-flight-target" />;
 
   return <Pressable accessibilityRole="button" accessibilityLabel={itemLabel} accessibilityHint="Open item details" onPress={onPress} style={styles.itemPanel}>
     <View ref={targetRef} style={styles.slotContents} testID="item-status">
@@ -34,7 +34,7 @@ export function EquipmentControl({ label, sprite, onPress, disabled = false, tar
 }) {
   const colors = useThemeColors();
   const styles = createStyles(colors);
-  if (!label) return <View ref={targetRef} accessible={false} pointerEvents="none" style={{ flex: 1, height: 72, opacity: 0 }} testID="equipment-flight-target" />;
+  if (!label) return <View ref={targetRef} accessible={false} pointerEvents="none" style={{ flex: 1, alignItems: "center", justifyContent: "center", height: 72, opacity: 0 }} testID="equipment-flight-target" />;
   return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityHint="Open equipment details" disabled={disabled} onPress={onPress}
       testID="equipment-slot" style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.paperLight,
       borderColor: colors.sepia, borderWidth: 2, borderRadius: 12, height: 72, padding: 6, overflow: "hidden", opacity: disabled ? 0.5 : 1 }}>
@@ -61,17 +61,17 @@ export function ChargeControl({ charged, chargeCost, disabled, onPress }: {
       onPress={onPress}
       testID="charge-up-button"
       style={({ pressed }) => ({
-        flex: 1, minHeight: 48, borderRadius: 12, padding: 6,
+        flex: 1, minWidth: 0, minHeight: 48, borderRadius: 12, padding: 4,
         justifyContent: "center", alignItems: "center",
         backgroundColor: charged ? "#14532d" : "#21833e",
         borderColor: charged ? "#a3e635" : "#166534",
         borderWidth: 2, opacity: disabled ? 0.45 : pressed ? 0.75 : 1,
       })}
     >
-      <Text style={{ color: "white", fontSize: 15, fontWeight: "800" }}>
+      <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={{ color: "white", fontSize: 15, fontWeight: "800", textAlign: "center" }}>
         {charged ? "Charged ⚡ · Cancel" : "Charge Up ⚡"}
       </Text>
-      <Text style={{ color: "#ecfccb", fontSize: 10, textAlign: "center" }}>
+      <Text numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.8} style={{ color: "#ecfccb", fontSize: 10, textAlign: "center" }}>
         {charged ? `Tap to refund ${chargeCost} Energy` : `Next action · ${chargeCost} Energy`}
       </Text>
     </Pressable>
@@ -87,16 +87,17 @@ function createStyles(colors: ThemeColors) {
       borderRadius: 12,
       borderWidth: 2,
       flex: 1,
+      minWidth: 0,
       height: 72,
       justifyContent: "center",
       overflow: "hidden",
-      padding: 6,
+      padding: 4,
     },
-    slotContents: { alignItems: "center", flexDirection: "row", gap: 8, justifyContent: "center", width: "100%" },
+    slotContents: { alignItems: "center", flexDirection: "row", gap: 4, justifyContent: "center", width: "100%" },
     label: {
       color: colors.ink,
       flexShrink: 1,
-      fontSize: 12,
+      fontSize: 11,
       fontWeight: "900",
       textAlign: "left",
     },

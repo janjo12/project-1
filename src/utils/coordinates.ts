@@ -7,7 +7,7 @@ export const SPRITE_SIZE = 32;
 export const HUMAN_FORM_SPRITE_SIZE = 56;
 export const CREATURE_SPRITE_SIZE = 48;
 const HUMAN_FORM_SPRITES = new Set([
-  "warrior_graphic", "cleric_graphic", "thief_graphic",
+  "warrior_graphic", "cleric_graphic", "thief_graphic", "archer_graphic", "wizard_graphic",
   "zombie_graphic", "vampire_graphic", "werewolf_graphic",
 ]);
 

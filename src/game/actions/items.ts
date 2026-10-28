@@ -60,6 +60,16 @@ export function getInventoryItemSprite(itemId: ItemId | null) {
   return itemId ? (POSSIBLE_ITEMS.find((item) => item.id === itemId)?.sprite ?? null) : null;
 }
 
+export function supportsImmediateItemUse(itemId: ItemId | null): boolean {
+  return itemId === "health-potion" || itemId === "energy-meal" || itemId === "clock";
+}
+
+export function canUseInventoryItemImmediately(itemId: ItemId | null, playerHealth: number, playerEnergy: number): boolean {
+  if (itemId === "health-potion") return playerHealth < PLAYER_MAX_HEALTH;
+  if (itemId === "energy-meal") return playerEnergy < PLAYER_MAX_ENERGY;
+  return itemId === "clock";
+}
+
 export function canUseInventoryItem({
   currentRoomId, dungeonMap, inventoryItem, monster, playerEnergy, playerHealth,
 }: {

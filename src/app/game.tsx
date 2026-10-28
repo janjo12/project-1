@@ -28,6 +28,7 @@ import { requestPickupSpriteFlight } from "@/game/actions/pickup-flight";
 import { useGameSettings } from "@/hooks/use-game-settings";
 import { MicrogameOverlay } from "@/components/Common/MicrogameOverlay";
 import { useMicrogame } from "@/game/actions/use-microgame";
+import { scaleMicrogameScore } from "@/game/engine/combat";
 import type { GameSettings } from "@/utils/settings-storage";
 import { isTestSeed } from "@/utils/seed";
 type GameContentProps = {
@@ -100,9 +101,9 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
   useEffect(() => {
     startDefenseMicrogame.current = resolve => {
       pendingDefense.current = resolve;
-      startMicrogameAction("defense", settings.handedness);
+      startMicrogameAction("defense", settings.handedness, { difficulty: settings.difficulty, level: game.level, easeLevel: game.microgameEaseLevel });
     };
-  }, [startMicrogameAction, settings.handedness]);
+  }, [game.level, game.microgameEaseLevel, settings.difficulty, settings.handedness, startMicrogameAction]);
   useGameLoopDriver({
     enabled: isRunGameLoopEnabled({
       running: game.isGameLoopRunning(), pauseMenuOpen: isMenuOpen || isLevelCleared, itemMenuOpen,
@@ -131,7 +132,7 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
         game.attackMonster(actor.id);
       } else if (settings.microgamesEnabled) {
         pendingAttack.current = actor.id;
-        microgame.start(game.playerClass.microgame, settings.handedness, { difficulty: settings.difficulty, level: game.level });
+        microgame.start(game.playerClass.microgame, settings.handedness, { difficulty: settings.difficulty, level: game.level, easeLevel: game.microgameEaseLevel });
       } else {
         game.attackMonster(actor.id);
       }
@@ -278,21 +279,27 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
         targetDelay={microgame.targetDelay}
         targetSpot={microgame.targetSpot}
         multitapTargetSpot={microgame.multitapTargetSpot}
+        multiswipeTarget={microgame.multiswipeTarget}
         leftHanded={settings.handedness === "left"}
         onTap={microgame.tap}
+        onSwipeStart={microgame.startSwipe}
+        onSwipeEnd={microgame.endSwipe}
+        onMultiswipeLayout={microgame.updateMultiswipeTarget}
+        onRuneProgress={microgame.updateRuneProgress}
+        onRuneComplete={progress => microgame.finishRuneTracer(true, progress)}
       />
       </View>
       {classIntroPage >= 0 && !(classIntroPage === 1 && !settings.microgamesEnabled) ? (
         <ClassBriefing
           page={classIntroPage}
           classId={game.playerClass.id}
-          damage={microgameScore === null ? game.playerAttack : Math.max(1, Math.floor(game.playerAttack * microgameScore / 100))}
+          damage={microgameScore === null ? game.playerAttack : Math.max(1, Math.floor(game.playerAttack * scaleMicrogameScore(microgameScore, settings.difficulty) / 100))}
           multiplayer={false}
           microgamesEnabled={settings.microgamesEnabled}
           onExit={() => router.replace({ pathname: "/setup", params: { mode: "singleplayer" } })}
           onNext={() => setClassIntroPage(settings.microgamesEnabled ? 1 : -1)}
           onBack={() => setClassIntroPage(0)}
-          onPractice={() => microgame.start(game.playerClass.microgame, settings.handedness, { difficulty: settings.difficulty, level: game.level })}
+          onPractice={() => microgame.start(game.playerClass.microgame, settings.handedness, { difficulty: settings.difficulty, level: game.level, easeLevel: game.microgameEaseLevel })}
           onStart={() => setClassIntroPage(-1)}
         />
       ) : null}
@@ -300,7 +307,8 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
       <PauseMenu
         onBackToGame={() => setIsMenuOpen(false)}
         onQuitToTitle={confirmQuitToTitle}
-        onPractice={() => { setIsMenuOpen(false); microgame.start(game.playerClass.microgame, settings.handedness, { difficulty: settings.difficulty, level: game.level }); }}
+        onPractice={() => { setIsMenuOpen(false); microgame.start(game.playerClass.microgame, settings.handedness, { difficulty: settings.difficulty, level: game.level, easeLevel: game.microgameEaseLevel }); }}
+        onPracticeRuneTracer={() => { setIsMenuOpen(false); microgame.start("rune-tracer", settings.handedness, { difficulty: settings.difficulty, level: game.level }); }}
         level={game.level}
         classId={game.playerClass.id}
         microgameAverage={microgameCount ? microgameScoreTotal / microgameCount : null}
@@ -314,6 +322,9 @@ function GameContent({ onSettingsChange, settings }: GameContentProps) {
       <ItemDetailsMenu visible={itemMenuOpen} label={game.inventoryItemLabel ?? "Item"}
         description={game.inventoryItemDescription ?? "A useful item."}
         activationDescription={game.inventoryItemActivationDescription ?? "This item activates automatically when its condition is met."}
+        showUseNow={game.showUseItemNow}
+        useNowDisabled={!game.canUseItemNow || game.isResolving || game.hasLost}
+        onUseNow={() => { if (game.useItemNow()) setItemMenuOpen(false); }}
         onClose={() => setItemMenuOpen(false)} />
       <EquipmentDetailsMenu visible={equipmentMenuOpen} label={game.equipmentLabel ?? "Equipment"}
         description={game.equipmentDescription ?? "Equipment provides its listed effects while carried."}

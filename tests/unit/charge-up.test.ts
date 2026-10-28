@@ -38,7 +38,7 @@ function fixture(): DungeonMap {
   return map;
 }
 
-async function setup(enemy = false, meal = false, enemyHealth = 20, enemyDamage = 2, difficulty: "easy" | "normal" | "hard" = "normal", seed = "charge-test", lockedDoor = false, enemyCount = 1, doorwayGuard = false, werewolf = false, silverBullet = false) {
+async function setup(enemy = false, meal = false, enemyHealth = 20, enemyDamage = 2, difficulty: "easy" | "normal" | "hard" = "normal", seed = "charge-test", lockedDoor = false, enemyCount = 1, doorwayGuard = false, werewolf = false, silverBullet = false, defenseScore = 0) {
   const map = fixture();
   if (lockedDoor) {
     getRoom(map, "A1")!.east = "locked";
@@ -77,7 +77,14 @@ async function setup(enemy = false, meal = false, enemyHealth = 20, enemyDamage 
   }
   require("@/game/engine/run-game-helpers").createLevelMap.mockReturnValue(map);
   require("@/game/dungeon/mapStorage").createAndSaveSeededDungeonMap.mockResolvedValue(map);
-  const hook = await renderHook(() => useRunGame({ difficulty, istest: false, seed, vibrationEnabled: false, onGameOver: jest.fn() }));
+  const hook = await renderHook(() => useRunGame({
+    difficulty,
+    istest: false,
+    seed,
+    vibrationEnabled: false,
+    onGameOver: jest.fn(),
+    onDefenseRequested: resolve => resolve(defenseScore),
+  }));
   await act(async () => {});
   return hook;
 }
@@ -104,7 +111,7 @@ test("charge can be cancelled and re-enabled without advancing the turn", async 
 test("an attack damages its target, then every living enemy attacks once", async () => {
   const enemyCount = 3;
   const enemyDamage = 30;
-  const { result } = await setup(true, false, 100, enemyDamage, "easy", "testwarrior", false, enemyCount);
+  const { result } = await setup(true, false, 100, enemyDamage, "hard", "testwarrior", false, enemyCount);
   const startingPlayerHealth = result.current.playerHealth;
   const startingTargetHealth = result.current.dungeonMap.entities.monsters.zombie.currentHealth;
 
@@ -115,7 +122,7 @@ test("an attack damages its target, then every living enemy attacks once", async
   expect(result.current.playerHealth).toBe(startingPlayerHealth);
   expect(result.current.isResolving).toBe(true);
 
-  await act(async () => { jest.advanceTimersByTime(enemyCount * GAME_PARAMETERS.animation.enemyTurnDurationMs); });
+  await act(async () => { jest.advanceTimersByTime(enemyCount * (GAME_PARAMETERS.animation.enemyTurnDurationMs + 1000)); });
   const warriorDefense = GAME_PARAMETERS.player.defense + 5;
   const expectedDamage = enemyCount * applyDefense(enemyDamage, warriorDefense);
   expect(result.current.playerHealth).toBe(startingPlayerHealth - expectedDamage);
@@ -124,7 +131,7 @@ test("an attack damages its target, then every living enemy attacks once", async
 });
 
 test("singleplayer attacks damage a doorway guard and defeating it opens the doorway", async () => {
-  const { result } = await setup(false, false, 20, 2, "easy", "charge-test", false, 1, true);
+  const { result } = await setup(false, false, 20, 2, "hard", "testwarrior", false, 1, true);
 
   await act(async () => { result.current.attackMonster("doorway-golem"); });
   await act(async () => { jest.runAllTimers(); });
@@ -261,7 +268,7 @@ test.each([
 });
 
 test("charged Cleric support spends energy and restores health", async () => {
-  const { result } = await setup(true, false, 100, 20, "easy", "testcleric");
+  const { result } = await setup(true, false, 100, 20, "hard", "testcleric");
   await act(async () => { result.current.attackMonster("zombie"); });
   await act(async () => { jest.runAllTimers(); });
   const healthBeforeSupport = result.current.playerHealth;
@@ -276,7 +283,7 @@ test("charged Cleric support spends energy and restores health", async () => {
 });
 
 test("Cleric support grants five defense through its next turn", async () => {
-  const { result } = await setup(true, false, 100, 20, "easy", "testcleric");
+  const { result } = await setup(true, false, 100, 20, "hard", "testcleric");
   await act(async () => { result.current.supportSelf(); });
   await act(async () => { jest.runAllTimers(); });
   expect(result.current.playerHealth).toBe(95);
@@ -288,8 +295,25 @@ test("Cleric support grants five defense through its next turn", async () => {
   expect(result.current.playerDefense).toBe(10);
 });
 
+test("singleplayer Miracle restores half Health without spending Energy and resets on the next level", async () => {
+  const { result } = await setup(true, false, 100, 200, "hard", "testcleric");
+
+  await act(async () => { result.current.attackMonster("zombie"); });
+  await act(async () => { jest.runAllTimers(); });
+  expect(result.current.playerHealth).toBe(50);
+  expect(result.current.playerEnergy).toBe(PLAYER_MAX_ENERGY);
+
+  await act(async () => { result.current.descend(); });
+  expect(result.current.level).toBe(2);
+  expect(result.current.playerHealth).toBe(100);
+  await act(async () => { result.current.attackMonster("zombie"); });
+  await act(async () => { jest.runAllTimers(); });
+  expect(result.current.playerHealth).toBe(50);
+  expect(result.current.playerEnergy).toBe(PLAYER_MAX_ENERGY);
+});
+
 test("charged Warrior support raises defense and deals only a small riposte", async () => {
-  const { result } = await setup(true, false, 100, 24, "easy", "testwarrior");
+  const { result } = await setup(true, false, 100, 24, "hard", "testwarrior");
   await act(async () => { result.current.toggleCharge(); });
   await act(async () => { result.current.supportSelf(); });
   await act(async () => { jest.runAllTimers(); });
@@ -300,7 +324,7 @@ test("charged Warrior support raises defense and deals only a small riposte", as
 });
 
 test("uncharged Warrior support riposte is smaller than a normal attack", async () => {
-  const { result } = await setup(true, false, 100, 24, "easy", "testwarrior");
+  const { result } = await setup(true, false, 100, 24, "hard", "testwarrior");
   await act(async () => { result.current.supportSelf(); });
   await act(async () => { jest.runAllTimers(); });
 

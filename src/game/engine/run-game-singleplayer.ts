@@ -12,12 +12,12 @@ import {
 
 import type { ScenePosition } from "@/components/Dungeon/GameViewPanel";
 import {
-  applyDefense, getEquipmentStats,
+  applyDefense, canUseInventoryItemImmediately, getEquipmentStats, recoverStat,
   resetRoomFeedback,
   resolveEnergyLoss, resolveHealthLoss,
 } from "@/game/actions/items";
 import { validateAction } from "@/game/actions/validateAction";
-import { gameClassForSeed } from "@/game/config/game-classes";
+import { gameClassForSeed, getMicrogameEaseLevel } from "@/game/config/game-classes";
 import { GAME_PARAMETERS } from "@/game/config/gameparameters";
 import {
   createAndSaveSeededDungeonMap,
@@ -32,6 +32,7 @@ import {
   getRoomEquipmentById,
   getRoomItemById,
   getRoomMonster,
+  getWerewolf,
   getTargetableMonsters,
   revealRoomLootChest,
   removeEquipmentFromRoom
@@ -49,7 +50,9 @@ import {
   applyWerewolfChaseAfterAction,
   getHardTurnLimit, hasTurnLimit, resolveTurnLoss
 } from "@/game/engine/resolveTurn";
-import { getPlayerAttackDamage, getPotentialAttackDamage } from "@/game/engine/combat";
+import { getPlayerAttackDamage, getPotentialAttackDamage, scaleMicrogameScore } from "@/game/engine/combat";
+import { resolveClericMiracle } from "@/game/engine/cleric-miracle";
+import { getWerewolfEntryPosition } from "@/game/engine/werewolf-transition";
 import { restartAnimations, swapRoomItemWithInventory } from "@/game/engine/run-game-helpers";
 import {
   getNextLevelState,
@@ -60,6 +63,7 @@ import { gameReducer, type GameStateAction } from "@/game/state/gameReducer";
 import { createInitialGameState } from "@/game/state/initialGameState";
 import { createNumberStore } from "@/game/state/numberStore";
 import { PLAYER_MAX_ENERGY, PLAYER_MAX_HEALTH, directionScenePositions, playerEntryPositions, type GameState, type UseGameRunOptions } from "@/game/state/types";
+import type { EntryPosition } from "@/components/Dungeon/RoomEntryAnimation";
 export {
   applyWerewolfChaseAfterAction,
   getHardTurnLimit,
@@ -125,8 +129,11 @@ export function useRunGame({
   }, [setInventoryItemState]);
   const timeoutIds = useRef<ReturnType<typeof setTimeout>[]>([]);
   const clearedLevelsRef = useRef(0);
+  const clericMiracleUsedRef = useRef(false);
   const hardTurnGameOverScheduledRef = useRef(false);
   const werewolfHasBeenEncounteredRef = useRef(false);
+  const werewolfEntryKey = useRef(0);
+  const [werewolfEntry, setWerewolfEntry] = useState<{ roomId: string; position: EntryPosition; key: number } | null>(null);
   const nextLevelStartingPositionRef = useRef<GridPosition | null>(null);
   const [sceneFrameStore] = useState(createSceneFrameStore);
   const setAnimationFrame = sceneFrameStore.setFrame;
@@ -140,6 +147,11 @@ export function useRunGame({
   const [playerEnergyLossAmount, setPlayerEnergyLossAmount] = useState(0);
   const setPlayerHealth = useCallback((value: SetStateAction<number>) => setGameField("playerHealth", value), [setGameField]);
   const [defenseBuff, setDefenseBuff] = useState(0);
+  const [focusBoost, setFocusBoost] = useState(0);
+  const focusBoostRef = useRef(0);
+  const focusTurnsRef = useRef(0);
+  const empoweredAttackBonusRef = useRef(0);
+  const empoweredAttackTurnsRef = useRef(0);
   const defenseBuffRef = useRef(0);
   const defenseBuffTurnsRef = useRef(0);
   const vanguardRef = useRef(0);
@@ -171,6 +183,8 @@ export function useRunGame({
     inventoryItemLabel,
     inventoryItemDescription,
     inventoryItemActivationDescription,
+    showUseItemNow,
+    canUseItemNow,
     inventoryItemSprite,
     roomDoorways,
     roomHasStairs,
@@ -220,6 +234,7 @@ export function useRunGame({
 
       if (isMounted) {
         werewolfHasBeenEncounteredRef.current = false;
+        setWerewolfEntry(null);
         setDungeonMap(nextMap);
         setTurnCounter(
           getHardTurnLimit({
@@ -295,6 +310,12 @@ export function useRunGame({
 
       nextLevelStartingPositionRef.current = startingPosition ?? null;
       clearedLevelsRef.current = nextClearedLevels;
+      clericMiracleUsedRef.current = false;
+      focusTurnsRef.current = 0;
+      focusBoostRef.current = 0;
+      setFocusBoost(0);
+      empoweredAttackTurnsRef.current = 0;
+      empoweredAttackBonusRef.current = 0;
       setClearedLevels(nextClearedLevels);
       setLevel(nextLevel);
       setDungeonMap(nextMap);
@@ -308,6 +329,7 @@ export function useRunGame({
       setTurnCounter(nextTurnCounter);
       hardTurnGameOverScheduledRef.current = false;
       werewolfHasBeenEncounteredRef.current = false;
+      setWerewolfEntry(null);
       setTurnTimeRemaining(nextTurnDuration);
       setTurnNumber((number) => number + 1);
     },
@@ -331,6 +353,17 @@ export function useRunGame({
         setDefenseBuff(0);
       }
     }
+    if (focusTurnsRef.current > 0) {
+      focusTurnsRef.current -= 1;
+      if (focusTurnsRef.current === 0 && focusBoostRef.current !== 0) {
+        focusBoostRef.current = 0;
+        setFocusBoost(0);
+      }
+    }
+    if (empoweredAttackTurnsRef.current > 0) {
+      empoweredAttackTurnsRef.current -= 1;
+      if (empoweredAttackTurnsRef.current === 0) empoweredAttackBonusRef.current = 0;
+    }
     vanguardRef.current = Math.max(0, vanguardRef.current - 1);
     if (!chargedMovementOrPickup && playerEnergy === 0 && inventoryItemRef.current === "energy-meal") {
       setPlayerEnergy(resolveEnergyLoss(0, 0, inventoryItemRef.current).nextEnergy);
@@ -340,7 +373,7 @@ export function useRunGame({
 
     if (hasTurnLimit(difficulty)) {
       setTurnCounter((counter) => {
-        const { nextCounter, usesClock } = resolveTurnLoss(counter, inventoryItem, level);
+        const { nextCounter, usesClock } = resolveTurnLoss(counter, inventoryItemRef.current, level);
 
         if (usesClock) {
           setInventoryItem(null);
@@ -355,7 +388,7 @@ export function useRunGame({
         return nextCounter;
       });
     }
-  }, [difficulty, inventoryItem, level, onGameOver, playerEnergy, schedule, setInventoryItem, setPlayerEnergy, setTurnCounter, setTurnNumber, setTurnTimeRemaining, turnDuration]);
+  }, [difficulty, level, onGameOver, playerEnergy, schedule, setInventoryItem, setPlayerEnergy, setTurnCounter, setTurnNumber, setTurnTimeRemaining, turnDuration]);
 
   const finishNonMoveTurn = useCallback(
     ({
@@ -366,6 +399,18 @@ export function useRunGame({
       roomId: string;
     }) => {
       if (werewolfHasBeenEncounteredRef.current) {
+        const mapBeforeChase = mapAtEnd ?? dungeonMap;
+        const werewolf = getWerewolf(mapBeforeChase);
+        const previousRoom = werewolf
+          ? mapBeforeChase.rooms.flat().find(room => room.contents.some(content => content.type === "monster" && content.id === werewolf.id))
+          : undefined;
+        if (previousRoom && previousRoom.id !== roomId) {
+          const key = ++werewolfEntryKey.current;
+          setWerewolfEntry({ roomId, position: getWerewolfEntryPosition(previousRoom.id, roomId), key });
+          schedule(GAME_PARAMETERS.animation.roomEntryDurationMs, () => {
+            setWerewolfEntry(current => current?.key === key ? null : current);
+          });
+        }
         commitMap(
           (map) =>
             applyWerewolfChaseAfterAction({
@@ -380,19 +425,22 @@ export function useRunGame({
       if (getEquipmentStats(equipmentRef.current).turnDamage > 0) {
         const damage = getEquipmentStats(equipmentRef.current).turnDamage;
         setPlayerHealth(health => {
-          let result = resolveHealthLoss(health, damage, inventoryItemRef.current);
+          const result = resolveHealthLoss(health, damage, inventoryItemRef.current);
           if (result.usesPotion) setInventoryItem(null);
-          if (result.nextHealth <= 0 && !result.usesPotion && playerClass.id === "cleric" && playerEnergy > 0) {
-            setPlayerEnergy(0);
-            result = { nextHealth: playerEnergy, usesPotion: false };
-          }
-          if (result.nextHealth <= 0 && !result.usesPotion) schedule(0, () => onGameOver(clearedLevelsRef.current));
-          return result.nextHealth;
+          const miracle = resolveClericMiracle({
+            alreadyUsed: clericMiracleUsedRef.current,
+            classId: playerClass.id,
+            healthAfterDamage: result.nextHealth,
+            usedPotion: result.usesPotion,
+          });
+          if (miracle.triggered) clericMiracleUsedRef.current = true;
+          if (miracle.health <= 0 && !result.usesPotion) schedule(0, () => onGameOver(clearedLevelsRef.current));
+          return miracle.health;
         });
       }
       finishTurn();
     },
-    [commitMap, finishTurn, onGameOver, playerClass, playerEnergy, schedule, setInventoryItem, setPlayerEnergy, setPlayerHealth],
+    [commitMap, dungeonMap, finishTurn, onGameOver, playerClass, schedule, setInventoryItem, setPlayerHealth],
   );
 
   const startEnemyMove = useCallback(
@@ -442,7 +490,7 @@ export function useRunGame({
         }
 
         const resolveAttack = (defenseScore: number) => {
-          const safeScore = Math.max(0, Math.min(100, defenseScore));
+          const safeScore = Math.max(0, Math.min(100, scaleMicrogameScore(defenseScore, difficulty)));
           const damageTaken = Math.ceil(damageAfterEquipment * (100 - safeScore) / 100);
           console.info(
             `[combat] ${monster.name} dealt ${damageTaken} damage to Player (${damageTaken === 0 ? "blocked" : `base ${monster.damage}, reduced by ${monster.damage - damageTaken} defense and reaction`}).`,
@@ -459,13 +507,15 @@ export function useRunGame({
             setPlayerHealth(health => {
               const { nextHealth, usesPotion } = resolveHealthLoss(health, damageTaken, inventoryItemRef.current);
               if (usesPotion) setInventoryItem(null);
-              if (nextHealth <= 0 && !usesPotion && playerClass.id === "cleric" && playerEnergy > 0) {
-                const miracleHealth = playerEnergy;
-                setPlayerEnergy(0);
-                return miracleHealth;
-              }
-              if (nextHealth <= 0 && !usesPotion) schedule(0, () => onGameOver(clearedLevelsRef.current));
-              return nextHealth;
+              const miracle = resolveClericMiracle({
+                alreadyUsed: clericMiracleUsedRef.current,
+                classId: playerClass.id,
+                healthAfterDamage: nextHealth,
+                usedPotion: usesPotion,
+              });
+              if (miracle.triggered) clericMiracleUsedRef.current = true;
+              if (miracle.health <= 0 && !usesPotion) schedule(0, () => onGameOver(clearedLevelsRef.current));
+              return miracle.health;
             });
 
             if (index + 1 < enemyIds.length) takeEnemyTurn(index + 1, finalMap);
@@ -479,7 +529,7 @@ export function useRunGame({
 
       takeEnemyTurn(0, mapAtEnd);
     },
-    [commitMap, dungeonMap, finishNonMoveTurn, equipment, onDefenseRequested, playerClass, playerEnergy, onGameOver, schedule, setInventoryItem, setPlayerEnergy, setPlayerHealth, triggerDamageHaptic, setAnimationFrame],
+    [commitMap, dungeonMap, finishNonMoveTurn, equipment, onDefenseRequested, playerClass, onGameOver, schedule, setInventoryItem, setPlayerHealth, triggerDamageHaptic, setAnimationFrame],
   );
 
   const finishPlayerAction = useCallback(
@@ -546,19 +596,44 @@ export function useRunGame({
     setPlayerEnergyLossAmount(0);
   }, [equipment, setPlayerEnergy]);
 
-  const commitPlayerAttack = useCallback((monster: WorldMonster, damage: number) => {
+  const useItemNow = useCallback(() => {
+    const item = inventoryItemRef.current;
+    if (isResolving || hasLost || !canUseInventoryItemImmediately(item, playerHealth, playerEnergy)) return false;
+
+    cancelCharge();
+    lastActionRefundsChargeRef.current = false;
+    setInventoryItem(null);
+    if (item === "health-potion") setPlayerHealth(health => recoverStat(health, PLAYER_MAX_HEALTH));
+    else if (item === "energy-meal") setPlayerEnergy(energy => recoverStat(energy, PLAYER_MAX_ENERGY));
+    else if (item === "clock") {
+      setTurnCounter(counter => counter + GAME_PARAMETERS.turn.clockBaseTurns + level);
+      hardTurnGameOverScheduledRef.current = false;
+    }
+
+    finishPlayerAction({ startedRoomId: currentRoomId });
+    return true;
+  }, [cancelCharge, currentRoomId, finishPlayerAction, hasLost, isResolving, level, playerEnergy, playerHealth, setInventoryItem, setPlayerEnergy, setPlayerHealth, setTurnCounter]);
+
+  const commitPlayerAttack = useCallback((monster: WorldMonster, damage: number, chainTargets: WorldMonster[] = []) => {
     lastActionRefundsChargeRef.current = false;
     schedule(GAME_PARAMETERS.animation.attackDurationMs, () => {
-      const nextMap = commitMap((map) =>
-        damageMonsterInRoom(map, currentRoomId, monster.id, damage),
-      );
+      const nextMap = commitMap(map => {
+        let attackedMap = damageMonsterInRoom(map, currentRoomId, monster.id, damage);
+        const chainDamage = Math.floor(damage / 2);
+        if (playerClass.id === "wizard" && chainDamage > 0) {
+          for (const chainTarget of chainTargets) {
+            attackedMap = damageMonsterInRoom(attackedMap, currentRoomId, chainTarget.id, chainDamage);
+          }
+        }
+        return attackedMap;
+      });
 
       finishPlayerAction({
         mapAtEnd: nextMap,
         startedRoomId: currentRoomId,
       });
     });
-  }, [commitMap, currentRoomId, finishPlayerAction, schedule]);
+  }, [commitMap, currentRoomId, finishPlayerAction, playerClass.id, schedule]);
 
   // This is the sole player-triggered support action; its effect comes from the selected class.
   const supportSelf = useCallback(() => {
@@ -586,6 +661,13 @@ export function useRunGame({
       defenseBuffTurnsRef.current = Math.max(defenseBuffTurnsRef.current, 2);
       setDefenseBuff(defenseBuffRef.current);
       if (chargedRef.current) setPlayerHealth(health => Math.min(PLAYER_MAX_HEALTH, health + 10));
+    } else if (playerClass.id === "archer") {
+      focusBoostRef.current = Math.max(focusBoostRef.current, chargedRef.current ? 3 : 2);
+      focusTurnsRef.current = Math.max(focusTurnsRef.current, 2);
+      setFocusBoost(focusBoostRef.current);
+    } else if (playerClass.id === "wizard") {
+      empoweredAttackBonusRef.current = Math.max(empoweredAttackBonusRef.current, chargedRef.current ? 10 : 5);
+      empoweredAttackTurnsRef.current = Math.max(empoweredAttackTurnsRef.current, 3);
     } else {
       vanguardRef.current = 1;
       if (chargedRef.current) {
@@ -604,7 +686,7 @@ export function useRunGame({
   const attackMonster = useCallback(
     (monsterId: string, attackScore?: number) => {
       if (isResolving || hasLost) {
-        return;
+        return false;
       }
 
       if (!validateAction({
@@ -614,24 +696,28 @@ export function useRunGame({
         isThief: playerClass.id === "thief",
         map: dungeonMap,
       })) {
-        return;
+        return false;
       }
       const monster = dungeonMap.entities.monsters[monsterId];
-      if (!monster || monster.currentHealth <= 0) return;
+      if (!monster || monster.currentHealth <= 0) return false;
 
       const usesSilverBullet = monster.chases && inventoryItem === "silver-bullet";
       const hasEnergy = chargedRef.current;
       const totalDamage = usesSilverBullet
         ? monster.currentHealth
         : getPotentialAttackDamage({
-          profile: getPlayerAttackDamage(monster, hasEnergy),
+          profile: getPlayerAttackDamage(monster, hasEnergy, playerClass.id) + empoweredAttackBonusRef.current,
           score: attackScore ?? 100,
           equipmentAttack: getEquipmentStats(equipment).attack,
           charged: hasEnergy,
+          difficulty,
           target: monster,
         });
       lastActionRefundsChargeRef.current = false;
       const damage = Math.min(monster.currentHealth, totalDamage);
+      const chainTargets = playerClass.id === "wizard" && damage > 0
+        ? getTargetableMonsters(dungeonMap, getCurrentRoom(dungeonMap)).filter(target => target.id !== monster.id)
+        : [];
       const healthLost = damage;
       console.info(
         `[combat] Player dealt ${healthLost} damage to ${monster.name}${usesSilverBullet ? " with a Silver Arrow" : monster.chases ? " (immune to ordinary attacks)" : ""}.`,
@@ -646,7 +732,8 @@ export function useRunGame({
       }
 
       animatePlayerAttack(totalDamage);
-      commitPlayerAttack(monster, damage);
+      commitPlayerAttack(monster, damage, chainTargets);
+      return true;
     },
     [
       animatePlayerAttack,
@@ -691,19 +778,19 @@ export function useRunGame({
     cancelCharge();
     finishPlayerAction({ startedRoomId: currentRoomId });
   }, [cancelCharge, currentRoomId, finishPlayerAction, hasLost, isResolving, setTurnTimeRemaining]);
-  async function pickupItem(itemInstanceId?: string) {
+  async function pickupItem(itemInstanceId?: string): Promise<boolean> {
     const currentRoom = getCurrentRoom(dungeonMap);
     const selectedId = itemInstanceId ?? currentRoom.contents.find(content => content.type === "item")?.id;
     const selected = selectedId ? getRoomItemById(dungeonMap, currentRoom, selectedId) : null;
     const pickedItemObject = selected?.item ?? null;
     const pickedItemId = pickedItemObject?.itemId ?? null;
     if (isResolving || hasLost || !pickedItemId || !pickedItemObject) {
-    return;
+      return false;
     }
 
     if (selected?.reference.isChest && inventoryItemRef.current) {
       commitMap(map => revealRoomLootChest(map, currentRoomId, pickedItemObject.id, "item"));
-      return;
+      return false;
     }
 
     const wasCharged = chargedRef.current;
@@ -721,24 +808,26 @@ export function useRunGame({
     );
     setInventoryItem(nextInventoryItem);
     finishPlayerAction({ mapAtEnd: nextMap, startedRoomId: currentRoomId });
+    return true;
   }
 
-  function pickupEquipment(equipmentInstanceId?: string) {
-    if (isResolving || hasLost) return;
+  function pickupEquipment(equipmentInstanceId?: string): boolean {
+    if (isResolving || hasLost) return false;
     const currentRoom = getCurrentRoom(dungeonMap);
     const selectedId = equipmentInstanceId ?? currentRoom.contents.find(content => content.type === "equipment")?.id;
     const selected = selectedId ? getRoomEquipmentById(dungeonMap, currentRoom, selectedId) : null;
     const item = selected?.equipment ?? null;
-    if (!item) return;
+    if (!item) return false;
     if (selected?.reference.isChest && equipment) {
       commitMap(map => revealRoomLootChest(map, currentRoomId, item.id, "equipment"));
-      return;
+      return false;
     }
     const without = removeEquipmentFromRoom(dungeonMap, currentRoomId, item.id);
     const nextMap = equipment ? addEquipmentToRoom(without, currentRoomId, equipment, false) : without;
     commitMap(() => nextMap);
     setHeldEquipment(item.equipmentId);
     finishPlayerAction({ mapAtEnd: nextMap, startedRoomId: currentRoomId });
+    return true;
   }
 
   function openLootChest(id: string, type: "item" | "equipment") {
@@ -762,7 +851,7 @@ export function useRunGame({
 
   async function moveToRoom(direction: Direction) {
     if (isResolving || hasLost) {
-      return;
+      return false;
     }
 
     const movement = resolveRoomMovement({
@@ -781,7 +870,7 @@ export function useRunGame({
       isThief: playerClass.id === "thief",
       map: dungeonMap,
     })) {
-      return;
+      return false;
     }
 
     const wasCharged = chargedRef.current;
@@ -798,23 +887,30 @@ export function useRunGame({
         if (movement.startingPosition) nextLevelStartingPositionRef.current = movement.startingPosition;
         schedule(GAME_PARAMETERS.animation.roomTransitionDurationMs, finishTurn);
       });
-      return;
+      return true;
     }
 
     commitMap(() => movement.map);
     if (movement.usedKey) setInventoryItem(null);
     finishTurn();
+    return movement.roomId !== currentRoomId;
   }
+
+  const visibleRoomSceneActors = roomSceneActors.map(actor => actor.isWerewolf && werewolfEntry?.roomId === currentRoomId
+    ? { ...actor, isEntering: true, entryPosition: werewolfEntry.position }
+    : actor);
 
   return {
     istest,
     playerClass,
     playerLabel: `${playerClass.sprite} ${playerClass.name} · Support`,
     supportSelf,
-    playerAttack: GAME_PARAMETERS.combat.normalAttackDamage + getEquipmentStats(equipment).attack,
+    playerAttack: GAME_PARAMETERS.combat.normalAttackDamage + (playerClass.id === "wizard" ? 3 : 0) + getEquipmentStats(equipment).attack,
     playerDefense: GAME_PARAMETERS.player.defense + (playerClass.id === "warrior" ? 5 : 0) + getEquipmentStats(equipment).defense + defenseBuff,
     isCharged,
     toggleCharge,
+    microgameEaseLevel: getMicrogameEaseLevel(playerClass.id, focusBoost),
+    useItemNow,
     sceneFrameStore,
     currentEnemy,
     currentEnemyMaxHitPoints,
@@ -823,7 +919,7 @@ export function useRunGame({
     currentRoomItemSprite,
     currentRoomId,
     roomDoorways,
-    roomSceneActors,
+    roomSceneActors: visibleRoomSceneActors,
     disabledDirections,
     dungeonMap,
     enemyHealthLossAmount,
@@ -844,6 +940,8 @@ export function useRunGame({
     inventoryItemLabel,
     inventoryItemDescription,
     inventoryItemActivationDescription,
+    showUseItemNow,
+    canUseItemNow,
     inventoryItemSprite,
     isResolving,
     level,

@@ -9,6 +9,7 @@ import { ClassBriefing } from "@/components/Common/ClassBriefing";
 import { ScreenShell } from "@/components/Common/ScreenShell";
 import { animateSpriteFlight, measureViewCenterNow } from "@/components/Common/SpriteFlight";
 import { useThemeColors } from "@/components/Common/theme";
+import { getGridPosition, getNeighborInGrid, getRoomId } from "@/game/dungeon/types";
 import { CancelButton, DestructiveButton, HelpButton, NormalButton, PrimaryButton, SegmentedButton, TextEntry, ToggleButton } from "@/components/Controls/ActionButton";
 import { ChargeControl, EquipmentControl, ItemControl } from "@/components/Controls/ActionMenu";
 import { EquipmentDetailsMenu, ItemDetailsMenu } from "@/components/Controls/InventoryDetailsMenu";
@@ -22,9 +23,8 @@ import { PLAYER_MAX_ENERGY, PLAYER_MAX_HEALTH, useRunGame } from "@/game/engine/
 import { useGameLoopDriver } from "@/game/engine/use-game-loop-driver";
 import type { GameSettings } from "@/utils/settings-storage";
 import { isTestSeed } from "@/utils/seed";
-import { getConnectedRoomId, getRoom, getRooms } from "@/game/dungeon/rooms";
-import { getRoomSceneActors } from "@/game/engine/run-game-scene";
 import { getSupportFeedback } from "@/game/engine/support-feedback";
+import { createTutorialHintsState, leaveTutorialRoom, markTutorialAttack, markTutorialPickup } from "@/game/engine/tutorial-hints";
 export function SetupScreen({ settings, onBack, onSettings, onUpdate, onStart, showSeed = true }: {
   settings: GameSettings;
   onBack: () => void;
@@ -119,7 +119,7 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
   const [equipmentMenuOpen, setEquipmentMenuOpen] = useState(false);
   const [classIntroPage, setClassIntroPage] = useState(0);
   const [combatMessage, setCombatMessage] = useState("");
-  const [tutorial, setTutorial] = useState<{ enemyRoomId: string | null; chestRoomId: string | null; visitedRooms: string[] }>({ enemyRoomId: null, chestRoomId: null, visitedRooms: [] });
+  const [tutorial, setTutorial] = useState(createTutorialHintsState);
   const [supportEffect, setSupportEffect] = useState<{ targetId: string | null; emoji: string; label: string; key: number } | null>(null);
   const colors = useThemeColors();
   const pendingDefense = useRef<((score: number) => void) | null>(null);
@@ -145,7 +145,9 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
     }
     const target = pendingAttack.current;
     pendingAttack.current = null;
-    if (target) game.attackMonster(target, damageScore);
+    if (target && game.attackMonster(target, damageScore)) {
+      setTutorial(previous => markTutorialAttack(previous));
+    }
   });
   const startMicrogameAction = microgame.start;
   useEffect(() => {
@@ -166,27 +168,28 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
 
   const chargeCost = getEquipmentStats(game.equipment).chargeCost;
   const tutorialEnabled = game.level === 1;
-  const currentRoom = getRooms(game.dungeonMap).find(room => room.id === game.currentRoomId);
   const tutorialRoomIds = new Set([game.dungeonMap.startingRoomId, ...tutorial.visitedRooms].slice(0, 4));
   const isFirstRoom = game.currentRoomId === game.dungeonMap.startingRoomId;
-  const firstRoomHasEnemy = isFirstRoom && game.roomSceneActors.some(actor => actor.kind === "enemy");
-  const firstRoomHasChest = isFirstRoom && !!currentRoom?.contents.some(content => (content.type === "item" || content.type === "equipment") && content.isChest);
-  const shouldShowAttackHint = tutorialEnabled && (tutorial.enemyRoomId === game.currentRoomId || (tutorial.enemyRoomId === null && firstRoomHasEnemy));
-  const shouldShowGetHint = tutorialEnabled && (tutorial.chestRoomId === game.currentRoomId || (tutorial.chestRoomId === null && firstRoomHasChest));
-  const moveToTutorialRoom = (position: "top" | "bottom" | "left" | "right") => {
+  const currentRoomHasEnemy = game.roomSceneActors.some(actor => actor.kind === "enemy");
+  const currentRoomHasGettable = game.roomSceneActors.some(actor => actor.kind === "item" || actor.kind === "equipment");
+  const completedTutorialHints = [
+    ...(tutorial.attackPending && tutorial.attackedInCurrentRoom && !currentRoomHasEnemy ? ["Attack" as const] : []),
+    ...(tutorial.getPending && tutorial.gotSomethingInCurrentRoom && !currentRoomHasGettable ? ["Get" as const] : []),
+  ];
+  const moveToTutorialRoom = async (position: "top" | "bottom" | "left" | "right") => {
     const direction = ({ bottom: "south", left: "west", right: "east", top: "north" } as const)[position];
-    const nextRoomId = getConnectedRoomId(game.dungeonMap, game.currentRoomId, direction);
-    const nextRoom = nextRoomId ? getRoom(game.dungeonMap, nextRoomId) : null;
-    if (tutorialEnabled && nextRoom) {
-      const hasEnemy = getRoomSceneActors({ currentMonsterId: null, dungeonMap: game.dungeonMap, room: nextRoom }).some(actor => actor.kind === "enemy");
-      const hasChest = nextRoom.contents.some(content => (content.type === "item" || content.type === "equipment") && content.isChest);
-      setTutorial(previous => ({
-        enemyRoomId: previous.enemyRoomId ?? (hasEnemy ? nextRoom.id : null),
-        chestRoomId: previous.chestRoomId ?? (hasChest ? nextRoom.id : null),
-        visitedRooms: previous.visitedRooms.includes(nextRoom.id) ? previous.visitedRooms : [...previous.visitedRooms, nextRoom.id],
+    const fromRoomId = game.currentRoomId;
+    const nextRoom = getNeighborInGrid(game.dungeonMap.rooms, getGridPosition(fromRoomId), direction);
+    const nextRoomId = nextRoom ? getRoomId(nextRoom) : null;
+    const didLeaveRoom = await game.moveToRoom(direction);
+    if (didLeaveRoom && nextRoomId) {
+      setTutorial(previous => leaveTutorialRoom(previous, {
+        fromRoomId,
+        startingRoomId: game.dungeonMap.startingRoomId,
+        nextRoomId,
+        level: game.level,
       }));
     }
-    void game.moveToRoom(direction);
   };
   const startMicrogame = () => microgame.start(game.playerClass.microgame, settings.handedness, { difficulty: settings.difficulty, level: game.level });
 
@@ -228,21 +231,22 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
         enemyHealthLossAmount={game.enemyHealthLossAmount}
         hardTurnCounter={game.hardTurnCounter}
         showStairsObjective
-        showMoveHints={tutorialEnabled && isFirstRoom}
-        showAttackHints={shouldShowAttackHint}
-        showGetHint={shouldShowGetHint}
+        showMoveHints={tutorialEnabled && isFirstRoom && !tutorial.moveHintDismissed}
+        showAttackHints={tutorial.attackPending}
+        showGetHint={tutorial.getPending}
+        completedTutorialHints={completedTutorialHints}
         supportEffect={supportEffect}
         onActorPress={(actor, source) => {
           if (actor.kind === "enemy") {
             const werewolfWithSilver = !!game.dungeonMap.entities.monsters[actor.id]?.chases && game.inventoryItem === "silver-bullet";
             if (werewolfWithSilver) {
               setCombatMessage("Silver Bullet worked! The Werewolf is defeated.");
-              game.attackMonster(actor.id);
+              if (game.attackMonster(actor.id)) setTutorial(previous => markTutorialAttack(previous));
             } else if (settings.microgamesEnabled) {
               pendingAttack.current = actor.id;
               startMicrogame();
             } else {
-              game.attackMonster(actor.id);
+              if (game.attackMonster(actor.id)) setTutorial(previous => markTutorialAttack(previous));
             }
           }
           else if (actor.kind === "item" || actor.kind === "equipment") {
@@ -257,8 +261,13 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
                 ?? { x: (source?.x ?? 0) + 48, y: (source?.y ?? 0) + 48 };
               animateSpriteFlight({ start: source ?? { x: 0, y: 0 }, end: target, sprite: actor.contentSprite, label: actor.label });
             }
-            if (isEquipment) game.pickupEquipment(actor.id);
-            else void game.pickupItem(actor.id);
+            if (isEquipment) {
+              if (game.pickupEquipment(actor.id)) setTutorial(previous => markTutorialPickup(previous));
+            } else {
+              void game.pickupItem(actor.id).then(pickedUp => {
+                if (pickedUp) setTutorial(previous => markTutorialPickup(previous));
+              });
+            }
           }
           else if (actor.kind === "stairs") setIsLevelCleared(true);
         }}
@@ -277,7 +286,10 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
         playerEnergyLossAmount={game.playerEnergyLossAmount}
         playerHealthLossAmount={game.playerHealthLossAmount}
       />
-      <MicrogameOverlay visible={microgame.active} kind={microgame.kind} elapsedStore={microgame.elapsedStore} targetDelay={microgame.targetDelay} targetSpot={microgame.targetSpot} multitapTargetSpot={microgame.multitapTargetSpot} leftHanded={settings.handedness === "left"} onTap={microgame.tap} />
+      <MicrogameOverlay visible={microgame.active} kind={microgame.kind} elapsedStore={microgame.elapsedStore} targetDelay={microgame.targetDelay} targetSpot={microgame.targetSpot} multitapTargetSpot={microgame.multitapTargetSpot} multiswipeTarget={microgame.multiswipeTarget} leftHanded={settings.handedness === "left"} onTap={microgame.tap} onSwipeStart={microgame.startSwipe} onSwipeEnd={microgame.endSwipe}
+        onMultiswipeLayout={microgame.updateMultiswipeTarget}
+        onRuneProgress={microgame.updateRuneProgress}
+        onRuneComplete={progress => microgame.finishRuneTracer(true, progress)} />
       </View>
       {classIntroPage >= 0 && !(classIntroPage === 1 && !settings.microgamesEnabled) ? (
         <ClassBriefing
@@ -312,6 +324,7 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
         </Container>
         {tinyLayout ? <NormalButton accessibilityLabel="Open dungeon map" accessibilityRole="button" label="Dungeon Map" onPress={() => { setIsMenuOpen(false); setIsMapOpen(true); }} /> : null}
         {settings.microgamesEnabled ? <NormalButton accessibilityLabel="Practice attack microgame" accessibilityRole="button" label="Practice Attack" onPress={() => { setIsMenuOpen(false); startMicrogame(); }} /> : null}
+        {settings.microgamesEnabled ? <NormalButton accessibilityLabel="Practice Rune Tracer microgame" accessibilityRole="button" label="Practice Rune Tracer" onPress={() => { setIsMenuOpen(false); microgame.start("rune-tracer", settings.handedness, { difficulty: settings.difficulty, level: game.level }); }} /> : null}
         <PrimaryButton accessibilityLabel="Back to Game" accessibilityRole="button" label="Back to Game" onPress={() => setIsMenuOpen(false)} />
         <DestructiveButton accessibilityLabel="Quit to Title" accessibilityRole="button" label="Quit to Title" onPress={() => setIsQuitConfirmOpen(true)} />
       </StyledModal>

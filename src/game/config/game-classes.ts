@@ -1,6 +1,6 @@
 import type { MicrogameKind } from "@/game/actions/use-microgame";
 
-export type GameClassId = "warrior" | "cleric" | "thief";
+export type GameClassId = "warrior" | "cleric" | "thief" | "archer" | "wizard";
 
 type GameClass = {
   id: GameClassId;
@@ -31,8 +31,8 @@ export const GAME_CLASSES: Record<GameClassId, GameClass> = {
       ].join(" "),
     },
     special: "Shield: Take less damage from attacks. Warriors start with 15 Defense.",
-    microgame: "multitap",
-    microgameText: "Tap the circles as quickly as you can. Each hit increases your attack score.",
+    microgame: "multiswipe",
+    microgameText: "Swipe from either dot to the other dot to complete bars. Each completed swipe is worth three taps.",
   },
   cleric: {
     id: "cleric",
@@ -45,10 +45,7 @@ export const GAME_CLASSES: Record<GameClassId, GameClass> = {
         "Charge Up first to also restore 10 Health.",
       ].join(" "),
     },
-    special: [
-      "Miracle: If you would die without a Health Potion, spend all remaining Energy",
-      "and survive with Health equal to that Energy.",
-    ].join(" "),
+    special: "Miracle: Once per level, if you would die without a Health Potion, survive with half your maximum Health. It does not use Energy.",
     microgame: "concentration",
     microgameText: "Tap when the filled circle perfectly fills the outline.",
   },
@@ -73,7 +70,35 @@ export const GAME_CLASSES: Record<GameClassId, GameClass> = {
     microgame: "timed-attack",
     microgameText: "Tap...",
   },
+  archer: {
+    id: "archer",
+    name: "Ranger",
+    sprite: "archer_graphic",
+    support: {
+      singleplayer: "Raise Focus: Tap yourself to make microgames easier for the next 2 turns. Charge Up first to make them much easier.",
+      multiplayer: "Raise Focus: Tap yourself or an ally in the same room to make microgames easier for the next 2 turns. Charge Up first to make them much easier.",
+    },
+    special: "Enhanced Focus: Your microgames have more forgiving scoring and a higher minimum score.",
+    microgame: "multitap",
+    microgameText: "Tap the circles as quickly as you can. Enhanced Focus lowers the tap requirement and guarantees a minimum score.",
+  },
+  wizard: {
+    id: "wizard",
+    name: "Wizard",
+    sprite: "wizard_graphic",
+    support: {
+      singleplayer: "Empower Attacks: Tap yourself to gain +5 base attack damage for your next 2 turns. Charge Up first to gain +10 instead.",
+      multiplayer: "Empower Attacks: Tap yourself or an ally in the same room to gain +5 base attack damage for the next 2 turns. Charge Up first to grant +10 instead.",
+    },
+    special: "Chain Lightning: Your base attack is 3 higher. Other enemies in the room take half the damage dealt to your chosen target, rounded down.",
+    microgame: "rune-tracer",
+    microgameText: "Trace the connected rune from any dot or bar. Complete it quickly for a higher score; unfinished tracing still scores by progress.",
+  },
 };
+
+export function getMicrogameEaseLevel(classId: GameClassId, focusBoost = 0) {
+  return Math.min(4, (classId === "archer" ? 1 : 0) + focusBoost);
+}
 
 export function randomGameClass() {
   const classIds = Object.keys(GAME_CLASSES) as GameClassId[];
@@ -87,6 +112,9 @@ export function gameClassForSeed(seed: string) {
     testwarrior: "warrior",
     testthief: "thief",
     testcleric: "cleric",
+    testarcher: "archer",
+    testranger: "archer",
+    testwizard: "wizard",
   };
 
   const normalizedSeed = seed.trim().toLowerCase();
@@ -101,4 +129,8 @@ export function getGameClass(id: GameClassId) {
 
 export function getSupportDescription(id: GameClassId, multiplayer: boolean) {
   return GAME_CLASSES[id].support[multiplayer ? "multiplayer" : "singleplayer"];
+}
+
+export function getSpecialDescription(id: GameClassId) {
+  return GAME_CLASSES[id].special;
 }

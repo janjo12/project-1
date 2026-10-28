@@ -28,6 +28,7 @@ type GameViewPanelProps = {
   showMoveHints?: boolean;
   showAttackHints?: boolean;
   showGetHint?: boolean;
+  completedTutorialHints?: ("Attack" | "Get")[];
   supportEffect?: SupportEffect | null;
   playerPosition?: ScenePosition;
   playerLabel?: string;
@@ -66,6 +67,7 @@ export function GameViewPanel({
   showMoveHints = false,
   showAttackHints = false,
   showGetHint = false,
+  completedTutorialHints = [],
   supportEffect = null,
   playerPosition = "center",
   playerLabel = "Player",
@@ -141,6 +143,7 @@ export function GameViewPanel({
           showMoveHints={showMoveHints}
           showAttackHints={showAttackHints}
           showGetHint={showGetHint}
+          completedTutorialHints={completedTutorialHints}
           supportEffect={supportEffect}
           onPlayerPress={onPlayerPress}
         />

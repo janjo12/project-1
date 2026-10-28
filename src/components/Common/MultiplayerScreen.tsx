@@ -15,7 +15,7 @@ import { EquipmentDetailsMenu, ItemDetailsMenu } from "@/components/Controls/Inv
 import { ResourceBar, ResourceBarGroup } from "@/components/Player/PlayerHUD";
 import { getEquipmentStats } from "@/game/actions/items";
 import { useMicrogame } from "@/game/actions/use-microgame";
-import { getGameClass } from "@/game/config/game-classes";
+import { getGameClass, getMicrogameEaseLevel } from "@/game/config/game-classes";
 import { getConnectedRoomId, getRoom, getRoomMonster, unlockDoor } from "@/game/dungeon/rooms";
 import { getPlayerAttackDamage, resolveAttackDamage } from "@/game/engine/combat";
 import { useRunMultiplayerGame } from "@/game/engine/run-game-multiplayer";
@@ -145,10 +145,11 @@ function Multiplayer({ settings, onLeave, onHostSelect, onOptionsSelect, startAs
         const damage = target.chases && player.item === "silver-bullet"
           ? target.currentHealth
           : resolveAttackDamage({
-            profile: getPlayerAttackDamage(target, action.charged ?? charged),
+            profile: getPlayerAttackDamage(target, action.charged ?? charged, player.classId) + (player.empoweredAttackBonus ?? 0),
             score: Math.max(0, action.microgameScore ?? 100),
             equipmentAttack: getEquipmentStats(player.equipment).attack,
             charged: action.charged ?? charged,
+            difficulty: state.difficulty,
             target,
           });
         if (damage >= target.currentHealth) return false;
@@ -165,7 +166,7 @@ function Multiplayer({ settings, onLeave, onHostSelect, onOptionsSelect, startAs
     }
     pendingDefenseAction.current = action;
     microgameMode.current = "defense";
-    microgame.start("defense", settings.handedness, { difficulty: state!.difficulty, level: state!.level });
+    microgame.start("defense", settings.handedness, { difficulty: state!.difficulty, level: state!.level, easeLevel: getMicrogameEaseLevel(player!.classId, player!.focusBoost) });
   }
 
   return (
@@ -375,7 +376,7 @@ function Multiplayer({ settings, onLeave, onHostSelect, onOptionsSelect, startAs
                 } else if (player.health > 0 && settings.microgamesEnabled) {
                   pendingAttack.current = actor.id;
                   microgameMode.current = "attack";
-                  microgame.start(getGameClass(player.classId).microgame, settings.handedness, { difficulty: state.difficulty, level: state.level });
+                  microgame.start(getGameClass(player.classId).microgame, settings.handedness, { difficulty: state.difficulty, level: state.level, easeLevel: getMicrogameEaseLevel(player.classId, player.focusBoost) });
                 } else {
                   submitAfterDefense({ type: "ATTACK", target: actor.id });
                 }
@@ -403,10 +404,16 @@ function Multiplayer({ settings, onLeave, onHostSelect, onOptionsSelect, startAs
             targetDelay={microgame.targetDelay}
             targetSpot={microgame.targetSpot}
             multitapTargetSpot={microgame.multitapTargetSpot}
+            multiswipeTarget={microgame.multiswipeTarget}
             leftHanded={settings.handedness === "left"}
             onTap={microgame.tap}
+            onSwipeStart={microgame.startSwipe}
+            onSwipeEnd={microgame.endSwipe}
+        onMultiswipeLayout={microgame.updateMultiswipeTarget}
+        onRuneProgress={microgame.updateRuneProgress}
+        onRuneComplete={progress => microgame.finishRuneTracer(true, progress)}
           />
-          <ItemDetailsMenu visible={itemDetailsOpen && !!snapshot.inventoryItemLabel} label={snapshot.inventoryItemLabel ?? "Item"} description={snapshot.inventoryItemDescription ?? "A useful item."} activationDescription={snapshot.inventoryItemActivationDescription ?? "This item activates automatically when its condition is met."} onClose={() => setItemDetailsOpen(false)} />
+          <ItemDetailsMenu visible={itemDetailsOpen && !!snapshot.inventoryItemLabel} label={snapshot.inventoryItemLabel ?? "Item"} description={snapshot.inventoryItemDescription ?? "A useful item."} activationDescription={snapshot.inventoryItemActivationDescription ?? "This item activates automatically when its condition is met."} showUseNow={snapshot.showUseItemNow} useNowDisabled={!snapshot.canUseItemNow || submitted === state.turn || player.health <= 0 || state.ended} onUseNow={() => { submitAfterDefense({ type: "USE_ITEM" }); setItemDetailsOpen(false); }} onClose={() => setItemDetailsOpen(false)} />
           <EquipmentDetailsMenu visible={equipmentDetailsOpen && !!snapshot.equipmentLabel} label={snapshot.equipmentLabel ?? "Equipment"} description={snapshot.equipmentDescription ?? "Equipment provides its listed effects while carried."} dropDisabled={submitted === state.turn || player.health <= 0 || state.ended} onDrop={() => { submitAfterDefense({ type: "DROP_EQUIPMENT" }); setEquipmentDetailsOpen(false); }} onClose={() => setEquipmentDetailsOpen(false)} />
           </View>
 
@@ -422,7 +429,7 @@ function Multiplayer({ settings, onLeave, onHostSelect, onOptionsSelect, startAs
               microgamesEnabled={settings.microgamesEnabled}
               onNext={() => setIntroPage(1)}
               onBack={() => setIntroPage(0)}
-              onPractice={() => microgame.start(getGameClass(player.classId).microgame, settings.handedness, { difficulty: state.difficulty, level: state.level })}
+              onPractice={() => microgame.start(getGameClass(player.classId).microgame, settings.handedness, { difficulty: state.difficulty, level: state.level, easeLevel: getMicrogameEaseLevel(player.classId, player.focusBoost) })}
               onStart={() => {
                 setIntroPage(-1);
                 submit({ type: "CLASS_READY" });

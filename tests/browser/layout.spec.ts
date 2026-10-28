@@ -17,6 +17,9 @@ for (const viewport of [
     await page.getByRole("button", { name: /Tap right doorway to move/ }).last().click();
     await expect(page.getByTestId("tutorial-move")).toHaveCount(0);
     await expect(page.getByTestId("tutorial-you-are-here")).toBeVisible();
+    await page.getByRole("button", { name: /Tap left doorway to move/ }).last().click();
+    await expect(page.getByRole("button", { name: /Tap right doorway to move/ }).last()).toBeVisible();
+    await expect(page.getByTestId("tutorial-move")).toHaveCount(0);
 
     const viewportBounds = { width: viewport.width, height: viewport.height };
     const gameBounds = await page.getByTestId("dungeon-room-frame").boundingBox();

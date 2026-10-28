@@ -18,6 +18,8 @@ const sprites: Record<string, Tile> = {
   warrior_graphic: { source: rogues, width: 224, height: 224, row: 1, column: 0 },
   cleric_graphic: { source: rogues, width: 224, height: 224, row: 2, column: 2 },
   thief_graphic: { source: rogues, width: 224, height: 224, row: 0, column: 3 },
+  archer_graphic: { source: rogues, width: 224, height: 224, row: 0, column: 2 },
+  wizard_graphic: { source: rogues, width: 224, height: 224, row: 4, column: 1 },
   stamina_meal_graphic: item(25, 2), silver_bullet_graphic: item(23, 2),
   pixel_golem_graphic: monster(7, 2), zombie_graphic: monster(4, 4), dragon_graphic: monster(8, 2),
   vampire_graphic: monster(3, 1), werewolf_graphic: monster(6, 5), health_potion_graphic: item(19, 1),

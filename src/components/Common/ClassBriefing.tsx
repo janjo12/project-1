@@ -5,6 +5,7 @@ import { PlayerAura } from "@/components/Common/PlayerAura";
 import { useThemeColors } from "@/components/Common/theme";
 import { NormalButton, PrimaryButton } from "@/components/Controls/ActionButton";
 import { getGameClass, getSupportDescription, type GameClassId } from "@/game/config/game-classes";
+import { getRuneTracerPattern } from "@/game/actions/use-microgame";
 import { Text, View, useWindowDimensions } from "react-native";
 
 type ClassBriefingProps = {
@@ -110,10 +111,17 @@ export function ClassBriefing({
                   <MicrogameCircle size={32} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />
                   <MicrogameCircle size={32} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />
                 </View>
+              ) : gameClass.microgame === "multiswipe" ? (
+                <View style={{ alignItems: "center", flexDirection: "row", height: 42, justifyContent: "center", width: 126 }}>
+                  <MicrogameCircle size={28} style={{ position: "absolute", left: 0 }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />
+                  <View style={{ backgroundColor: colors.accent, height: 8, width: 72 }} />
+                  <MicrogameCircle size={28} style={{ position: "absolute", right: 0 }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />
+                </View>
               ) : null}
               {gameClass.microgame === "timed-attack" ? (
                 <Text style={{ color: colors.accent, fontSize: 36, fontWeight: "900" }}>NOW!</Text>
               ) : null}
+              {gameClass.microgame === "rune-tracer" ? <RuneTracerPreview /> : null}
               <Text style={{ color: colors.ink, fontSize: compactLayout ? 15 : 17 }}>
                 Attack game · {gameClass.microgameText}
               </Text>
@@ -151,6 +159,29 @@ export function ClassBriefing({
           </View>
         </>
       )}
+    </View>
+  );
+}
+
+function RuneTracerPreview() {
+  const colors = useThemeColors();
+  const width = 180;
+  const height = 112;
+  const pattern = getRuneTracerPattern(width, height, "right", 16);
+  return (
+    <View testID="rune-tracer-preview" style={{ height, position: "relative", width }}>
+      {pattern.edges.map(edge => {
+        const from = pattern.nodes.find(node => node.id === edge.from)!.point;
+        const to = pattern.nodes.find(node => node.id === edge.to)!.point;
+        const x1 = from.x * width;
+        const y1 = from.y * height;
+        const x2 = to.x * width;
+        const y2 = to.y * height;
+        const length = Math.hypot(x2 - x1, y2 - y1);
+        const angle = Math.atan2(y2 - y1, x2 - x1);
+        return <View key={edge.id} style={{ backgroundColor: colors.accent, borderRadius: 3, height: 6, left: (x1 + x2) / 2 - length / 2, position: "absolute", top: (y1 + y2) / 2 - 3, transform: [{ rotate: `${angle}rad` }], width: length }} />;
+      })}
+      {pattern.nodes.map(node => <View key={node.id} style={{ position: "absolute", left: node.point.x * width - 8, top: node.point.y * height - 8 }}><MicrogameCircle size={16} /></View>)}
     </View>
   );
 }

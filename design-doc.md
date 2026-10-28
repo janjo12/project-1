@@ -32,7 +32,7 @@ The game also has a same-local-network multiplayer mode. Multiple devices take s
 ### In scope
 
 - Title, setup, class briefing, gameplay, pause/settings, map, game-over, and multiplayer lobby/run flows.
-- Three classes, three attack microgames, items, equipment, five enemy types, procedural floors, and difficulty settings.
+- Five classes, five attack microgames, items, equipment, five enemy types, procedural floors, and difficulty settings.
 - Local persistence of settings; deterministic seed-based floor generation.
 - Same-Wi-Fi multiplayer using manual signaling exchange and WebRTC.
 - Reduced motion, appearance, vibration, handedness, responsive layout, and accessibility labels.
@@ -80,7 +80,7 @@ Show difficulty selection as three options, an editable Seed field, help for dif
 
 ### 4.3 Class briefing
 
-Every new run selects Warrior, Cleric, or Thief randomly, except reserved development/test seeds (see §10.4). The briefing identifies the class and has two pages:
+Every new run selects Warrior, Cleric, Thief, Ranger, or Wizard randomly, except reserved development/test seeds (see §10.4). The briefing identifies the class and has two pages:
 
 1. Support action and class special ability.
 2. Attack microgame instructions, example visual, displayed attack damage, Practice, Back, and Start.
@@ -185,8 +185,10 @@ Each run has one class. Ordinary seed text does not select the class. A seeded c
 | Class | Passive/special | Support (uncharged) | Support (charged) | Attack microgame |
 |---|---|---|---|---|
 | Warrior | Starts with +5 defense. | Vanguard lasts for one turn; enemies that attack trigger reflected damage to an attacker. | Also gains +5 defense for that turn. | Multitap |
-| Cleric | Miracle: if lethal damage occurs, no Health Potion saves the player, and Energy is positive, consume all remaining Energy and survive with Health equal to the Energy amount. | Aid grants +5 defense for two turns. | Also restores up to 10 Health. | Concentration |
+| Cleric | Miracle: once per level, if lethal damage occurs and no Health Potion saves the player, survive with half maximum Health. Miracle does not consume Energy. | Aid grants +5 defense for two turns. | Also restores up to 10 Health. | Concentration |
 | Thief | Can pick locked doors without a Key. | Enrich: 10% chance to generate a random item or equipment. If its corresponding slot is occupied, the reward is dropped in the current room. | Chance rises to 20%. | Timed Attack |
+| Ranger | Enhanced Focus: more forgiving microgame scoring, a lower tap requirement, and a higher minimum score. | Raise Focus makes microgames easier for two turns. | Makes them much easier. | Multitap |
+| Wizard | Chain Lightning: +3 base attack; other room enemies take half the actual damage to the selected target, rounded down. | Empower Attacks grants +5 base attack to self or ally for two turns. | Grants +10 instead. | Rune Tracer |
 
 ### 7.1 Charge Up
 
@@ -226,7 +228,7 @@ When attack microgames are enabled, each player attack against a monster runs th
 - Input at cue time (anticipating the human reaction) scores 50, rather than perfect. Inputs 500 ms or more away from ideal score 0.
 - “NOW!” text and accessible game screen button must appear together; the cue must be visible just before the expected tap.
 
-### 8.4 Multitap (Warrior)
+### 8.4 Multitap (Ranger)
 
 - A visible circular target changes position after each tap. Tap it as quickly as possible.
 - Each tap contributes approximately 16.67 points. Score is `clamp(round(taps × 100 / 6), 0, 100)`.
@@ -235,7 +237,19 @@ When attack microgames are enabled, each player attack against a monster runs th
 - Browser end-to-end input should space taps by about 250 ms to model a realistic player. Input outside the target is not a successful tap.
 - Handedness affects target placement/movement direction.
 
-### 8.5 Attack damage
+### 8.5 Multiswipe (Warrior)
+
+- Show a bar made from two dots placed three orthogonal grid cells apart; either endpoint may start a swipe, but a completed swipe must end in the opposite dot.
+- One completed swipe is worth three Multitap hits. Score is based on completed swipes during the 3,000 ms window and may exceed 100%.
+- Handedness selects the grid half used for the swipe target.
+
+### 8.6 Rune Tracer (Wizard)
+
+- Show a connected, closed rune with seven dots and eight bars on the handedness side of the Multitap grid. The path can start at any dot or bar and be traced in either direction.
+- Each fully traced bar changes to the completed color. Completing the rune scores by completion time; timing out scores by the fraction of bars completed.
+- Window: 3,000 ms. Wizard's class briefing and Practice button teach the gesture before the game can require it in combat.
+
+### 8.7 Attack damage
 
 Base attack damage before microgame score and equipment:
 
@@ -305,7 +319,7 @@ Room count formula: `min(72, 12 × 6, 7 + level + floor(random × 5))`. A candid
 
 ### 10.4 Reserved deterministic test seeds
 
-The case-insensitive exact normalized seeds `test`, `testwarrior`, `testcleric`, and `testthief` are development fixtures, not ordinary player seeds. All four pin Level 1 to the same authored single-corridor route and content. The class mapping is Warrior for `test` and `testwarrior`, Cleric for `testcleric`, and Thief for `testthief`. The route contains, in order after the start: the five catalog items with Key first, three Pixel Golems guarding successive doorway boundaries, a Werewolf, and stairs; a locked passage is positioned after the key. Level 2 uses normal seeded generation. These exact test seeds are reserved by the UI seed generator and may be special-cased in class selection and map construction.
+The case-insensitive exact normalized seeds `test`, `testwarrior`, `testcleric`, `testthief`, `testwizard`, and `testranger` are development fixtures, not ordinary player seeds. All six pin Level 1 to the same authored single-corridor route and content. The class mapping is Warrior for `test` and `testwarrior`, Cleric for `testcleric`, Thief for `testthief`, Wizard for `testwizard`, and Ranger for `testranger`. The legacy seed `testarcher` remains a class-only alias for Ranger. The route contains, in order after the start: the five catalog items with Key first, three Pixel Golems guarding successive doorway boundaries, a Werewolf, and stairs; a locked passage is positioned after the key. Level 2 uses normal seeded generation. These exact test seeds are reserved by the UI seed generator and may be special-cased in class selection and map construction.
 
 ### 10.5 Level transition
 
@@ -494,7 +508,7 @@ A remake claiming feature parity is ready for review when all of the following a
 
 - [ ] A new player can choose Singleplayer or Multiplayer from the title and start a run from setup.
 - [ ] Blank seeds become generated seeds; explicit seeds reproduce floor layouts; ordinary seeds do not pin class.
-- [ ] All three classes have their specified briefing, passive/special, support, charge variant, and attack microgame.
+- [ ] All five classes have their specified briefing, passive/special, support, charge variant, and attack microgame.
 - [ ] All five enemies, five items, and seven equipment entries behave as specified.
 - [ ] A player has exactly one item and one equipment slot, with predictable swap/drop behavior.
 - [ ] Movement respects walls, open edges, locks, keys, Thief lockpick, guards, stairs, and symmetric boundary state.
