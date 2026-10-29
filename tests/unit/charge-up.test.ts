@@ -38,7 +38,7 @@ function fixture(): DungeonMap {
   return map;
 }
 
-async function setup(enemy = false, meal = false, enemyHealth = 20, enemyDamage = 2, difficulty: "easy" | "normal" | "hard" = "normal", seed = "charge-test", lockedDoor = false, enemyCount = 1, doorwayGuard = false, werewolf = false, silverBullet = false, defenseScore = 0) {
+async function setup(enemy = false, meal = false, enemyHealth = 20, enemyDamage = 2, difficulty: "easy" | "normal" | "hard" = "normal", seed = "testwarrior", lockedDoor = false, enemyCount = 1, doorwayGuard = false, werewolf = false, silverBullet = false, defenseScore = 0) {
   const map = fixture();
   if (lockedDoor) {
     getRoom(map, "A1")!.east = "locked";

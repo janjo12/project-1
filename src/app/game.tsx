@@ -2,7 +2,7 @@ import { router } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { Alert, Text, View, useWindowDimensions, type ViewInstance } from "react-native";
 
-import { Header, Row, StyledModal, Title } from "@/components/Common/Displays";
+import { Header, StyledModal, Title } from "@/components/Common/Displays";
 import { PauseMenu } from "@/components/Common/PauseMenu";
 import { DungeonMap } from "@/components/Dungeon/DungeonMap";
 import { ChargeControl, EquipmentControl, ItemControl } from "@/components/Controls/ActionMenu";
