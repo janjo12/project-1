@@ -8,6 +8,21 @@ import { getGameClass } from "@/game/config/game-classes";
 import { GAME_PARAMETERS } from "@/game/config/gameparameters";
 
 const initial = () => { const state = createMultiplayerState("lan-test", "easy", ["host", "guest"]); state.phase = "playing"; return state; };
+test("multiplayer rolls a class independently for each player and keeps distinct auras for shared classes", () => {
+  const random = jest.spyOn(Math, "random")
+    .mockReturnValueOnce(0)
+    .mockReturnValueOnce(0.99);
+  try {
+    const state = createMultiplayerState("lan-test", "easy", ["host", "guest"]);
+    expect(state.players.host.classId).toBe("warrior");
+    expect(state.players.guest.classId).toBe("wizard");
+    expect(getMultiplayerPlayerAuraColor(Object.keys(state.players), "host"))
+      .not.toBe(getMultiplayerPlayerAuraColor(Object.keys(state.players), "guest"));
+  } finally {
+    random.mockRestore();
+  }
+});
+
 test("same-class allies appear as tappable room actors with distinct stable auras", () => {
   const state = initial();
   state.players.guest.classId = state.players.host.classId;

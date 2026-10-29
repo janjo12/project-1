@@ -25,7 +25,7 @@ import {
 } from "@/game/dungeon/rooms";
 import { applyDefense, getEquipmentStats, recoverStat, resolveEnergyLoss, resolveHealthLoss } from "@/game/actions/items";
 import { resolveClericMiracle } from "@/game/engine/cleric-miracle";
-import { gameClassForSeed, type GameClassId } from "@/game/config/game-classes";
+import { gameClassForSeed, randomGameClass, type GameClassId } from "@/game/config/game-classes";
 import { getPlayerAttackDamage, resolveAttackDamage, scaleMicrogameScore } from "@/game/engine/combat";
 import type { Difficulty } from "@/utils/settings-storage";
 
@@ -72,16 +72,20 @@ export type MultiplayerState = GameState & {
 };
 export function createMultiplayerState(seed: string, difficulty: Difficulty, ids: string[]): MultiplayerState {
   // Multiplayer starts from one shared level and gives every roster member independent character resources.
+  const isTestSeed = /^(?:test|testwarrior|testcleric|testthief|testwizard|testranger|testarcher)$/i.test(seed.trim());
+  const testClassId = isTestSeed ? gameClassForSeed(seed).id : null;
+  // Ordinary multiplayer runs roll independently for each player. Reserved test
+  // seeds keep their fixture class for every roster member.
+  const classIds = ids.map(() => testClassId ?? randomGameClass().id);
   const map = createLevelMap(seed, 1, undefined, difficulty !== "easy", ids.length);
-  const classId = gameClassForSeed(seed).id;
-  const players = Object.fromEntries(ids.map(id => [id, {
+  const players = Object.fromEntries(ids.map((id, index) => [id, {
     id,
     roomId: map.startingRoomId,
     health: PLAYER_MAX_HEALTH,
     energy: PLAYER_MAX_ENERGY,
     item: null,
     equipment: null,
-    classId,
+    classId: classIds[index],
     miracleUsed: false,
     focusTurns: 0,
     focusBoost: 0,

@@ -74,6 +74,10 @@ export { GameLoopTimer, runGameLoop } from "@/game/engine/run-game-loop";
 
 export { PLAYER_MAX_ENERGY, PLAYER_MAX_HEALTH } from "@/game/state/types";
 
+function randomValue() {
+  return Math.random();
+}
+
 export function useRunGame({
   difficulty,
   istest,
@@ -336,7 +340,7 @@ export function useRunGame({
     [difficulty, level, resetFeedback, seed, setClearedLevels, setDungeonMap, setLevel, setPlayerEnergy, setPlayerHealth, setTurnCounter, setTurnNumber, setTurnTimeRemaining],
   );
 
-  const finishTurn = useCallback(() => {
+  const finishTurn = () => {
     setActiveMonsterId(null);
     setTurnTimeRemaining(turnDuration);
     setIsResolving(false);
@@ -388,10 +392,9 @@ export function useRunGame({
         return nextCounter;
       });
     }
-  }, [difficulty, level, onGameOver, playerEnergy, schedule, setInventoryItem, setPlayerEnergy, setTurnCounter, setTurnNumber, setTurnTimeRemaining, turnDuration]);
+  };
 
-  const finishNonMoveTurn = useCallback(
-    ({
+  const finishNonMoveTurn = ({
       mapAtEnd,
       roomId,
     }: {
@@ -439,12 +442,9 @@ export function useRunGame({
         });
       }
       finishTurn();
-    },
-    [commitMap, dungeonMap, finishTurn, onGameOver, playerClass, schedule, setInventoryItem, setPlayerHealth],
-  );
+    };
 
-  const startEnemyMove = useCallback(
-    ({
+  const startEnemyMove = ({
       enemyIds,
       mapAtEnd,
       roomId,
@@ -528,12 +528,9 @@ export function useRunGame({
       };
 
       takeEnemyTurn(0, mapAtEnd);
-    },
-    [commitMap, dungeonMap, finishNonMoveTurn, equipment, onDefenseRequested, playerClass, onGameOver, schedule, setInventoryItem, setPlayerHealth, triggerDamageHaptic, setAnimationFrame],
-  );
+    };
 
-  const finishPlayerAction = useCallback(
-    ({
+  const finishPlayerAction = ({
       mapAtEnd,
       startedRoomId,
     }: {
@@ -555,11 +552,9 @@ export function useRunGame({
       }
 
       finishNonMoveTurn({ mapAtEnd, roomId: startedRoomId });
-    },
-    [dungeonMap, finishNonMoveTurn, startEnemyMove],
-  );
+    };
 
-  const toggleCharge = useCallback(() => {
+  const toggleCharge = () => {
     if (isResolving || hasLost) return;
     const cost = getEquipmentStats(equipment).chargeCost;
     if (chargedRef.current) {
@@ -574,7 +569,7 @@ export function useRunGame({
       setPlayerEnergyLossAmount(cost);
       restartAnimations(setAnimationFrame, ["playerEnergyLossElapsed"]);
     }
-  }, [equipment, hasLost, isResolving, playerEnergy, setAnimationFrame, setPlayerEnergy]);
+  };
 
   const animatePlayerAttack = useCallback((damageAmount: number) => {
     restartAnimations(setAnimationFrame, ["playerAttackElapsed"]);
@@ -596,7 +591,7 @@ export function useRunGame({
     setPlayerEnergyLossAmount(0);
   }, [equipment, setPlayerEnergy]);
 
-  const useItemNow = useCallback(() => {
+  const useItemNow = () => {
     const item = inventoryItemRef.current;
     if (isResolving || hasLost || !canUseInventoryItemImmediately(item, playerHealth, playerEnergy)) return false;
 
@@ -612,9 +607,9 @@ export function useRunGame({
 
     finishPlayerAction({ startedRoomId: currentRoomId });
     return true;
-  }, [cancelCharge, currentRoomId, finishPlayerAction, hasLost, isResolving, level, playerEnergy, playerHealth, setInventoryItem, setPlayerEnergy, setPlayerHealth, setTurnCounter]);
+  };
 
-  const commitPlayerAttack = useCallback((monster: WorldMonster, damage: number, chainTargets: WorldMonster[] = []) => {
+  const commitPlayerAttack = (monster: WorldMonster, damage: number, chainTargets: WorldMonster[] = []) => {
     lastActionRefundsChargeRef.current = false;
     schedule(GAME_PARAMETERS.animation.attackDurationMs, () => {
       const nextMap = commitMap(map => {
@@ -633,21 +628,21 @@ export function useRunGame({
         startedRoomId: currentRoomId,
       });
     });
-  }, [commitMap, currentRoomId, finishPlayerAction, playerClass.id, schedule]);
+  };
 
   // This is the sole player-triggered support action; its effect comes from the selected class.
-  const supportSelf = useCallback(() => {
+  const supportSelf = () => {
     if (isResolving || hasLost) return;
     if (playerClass.id === "thief") {
       const chance = chargedRef.current ? 0.2 : 0.1;
-      if (Math.random() < chance) {
-        if (Math.random() < 0.5) {
-          const found = POSSIBLE_ITEMS[Math.floor(Math.random() * POSSIBLE_ITEMS.length)];
+      if (randomValue() < chance) {
+        if (randomValue() < 0.5) {
+          const found = POSSIBLE_ITEMS[Math.floor(randomValue() * POSSIBLE_ITEMS.length)];
           if (inventoryItem) commitMap(map => addItemToRoom(map, currentRoomId, found.id));
           else setInventoryItem(found.id);
         } else {
           const list = GAME_PARAMETERS.equipment;
-          const found = list[Math.floor(Math.random() * list.length)];
+          const found = list[Math.floor(randomValue() * list.length)];
           if (equipment) commitMap(map => addEquipmentToRoom(map, currentRoomId, found.id));
           else setHeldEquipment(found.id);
         }
@@ -681,10 +676,9 @@ export function useRunGame({
       const enemy = getRoomMonster(dungeonMap, getCurrentRoom(dungeonMap));
       if (enemy) finishPlayerAction({ startedRoomId: currentRoomId });
     } else finishNonMoveTurn({ roomId: currentRoomId });
-  }, [isResolving, hasLost, playerClass.id, chargedRef, inventoryItem, equipment, currentRoomId, commitMap, setInventoryItem, setHeldEquipment, cancelCharge, finishNonMoveTurn, hasRoomEnemy, dungeonMap, finishPlayerAction, setPlayerHealth]);
+  };
 
-  const attackMonster = useCallback(
-    (monsterId: string, attackScore?: number) => {
+  const attackMonster = (monsterId: string, attackScore?: number) => {
       if (isResolving || hasLost) {
         return false;
       }
@@ -734,28 +728,11 @@ export function useRunGame({
       animatePlayerAttack(totalDamage);
       commitPlayerAttack(monster, damage, chainTargets);
       return true;
-    },
-    [
-      animatePlayerAttack,
-      commitPlayerAttack,
-      dungeonMap,
-      hasLost,
-      isResolving,
-      inventoryItem,
-      equipment,
-      playerClass,
-      currentRoomId,
-      setInventoryItem,
-      setTurnTimeRemaining,
-    ],
-  );
+    };
 
-  const isTurnClockActive = useCallback(
-    () => hasTurnTimer && !hasLost && !isResolving,
-    [hasLost, hasTurnTimer, isResolving],
-  );
+  const isTurnClockActive = () => hasTurnTimer && !hasLost && !isResolving;
 
-  const isGameLoopRunning = useCallback(() => !hasLost, [hasLost]);
+  const isGameLoopRunning = () => !hasLost;
 
   const updateGameFrame = useCallback(
     (delta: number, nextTurnTimeRemaining?: number) => {
@@ -770,14 +747,14 @@ export function useRunGame({
     [sceneFrameStore, setAnimationFrame, turnClockStore],
   );
 
-  const expireTurn = useCallback(() => {
+  const expireTurn = () => {
     if (isResolving || hasLost) return;
     setTurnTimeRemaining(0);
     lastActionRefundsChargeRef.current = false;
     // A timeout forfeits the action. It grants neither class support nor a generic defense bonus.
     cancelCharge();
     finishPlayerAction({ startedRoomId: currentRoomId });
-  }, [cancelCharge, currentRoomId, finishPlayerAction, hasLost, isResolving, setTurnTimeRemaining]);
+  };
   async function pickupItem(itemInstanceId?: string): Promise<boolean> {
     const currentRoom = getCurrentRoom(dungeonMap);
     const selectedId = itemInstanceId ?? currentRoom.contents.find(content => content.type === "item")?.id;

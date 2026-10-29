@@ -1,6 +1,7 @@
-import { useRef, useState, useSyncExternalStore } from "react";
-import { Pressable, Text, View, type ViewInstance } from "react-native";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { Animated, Easing, Pressable, Text, View, type ViewInstance } from "react-native";
 
+import { StyledText } from "@/components/Common/Displays";
 import { MicrogameCircle, MicrogameCircleOutline } from "@/components/Common/MicrogameCircle";
 import { useThemeColors } from "@/components/Common/theme";
 import { CONCENTRATION_TARGET_DURATION_MS, MULTITAP_DOT_DIAMETER, getMultitapGrid, getMultiswipeGrid, getRuneTracerPattern, isMultiswipeEndpoint, type MicrogameKind, type MultitapTargetSpot, type MultiswipeTarget, type RuneEdge } from "@/game/actions/use-microgame";
@@ -136,6 +137,21 @@ function MicrogameTrack({ children, testID }: { children?: React.ReactNode; test
   );
 }
 
+function IdleBounce({ children, style }: { children: React.ReactNode; style?: object }) {
+  const [offset] = useState(() => new Animated.Value(0));
+
+  useEffect(() => {
+    const animation = Animated.loop(Animated.sequence([
+      Animated.timing(offset, { toValue: -3, duration: 650, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      Animated.timing(offset, { toValue: 0, duration: 650, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+    ]));
+    animation.start();
+    return () => animation.stop();
+  }, [offset]);
+
+  return <Animated.View style={[style, { transform: [{ translateY: offset }] }]}>{children}</Animated.View>;
+}
+
 function ConcentrationMicrogame({ elapsed, targetSpot, leftHanded, onTap }: MicrogameContentProps) {
   const colors = useThemeColors();
   const progress = Math.max(0, Math.min(1, elapsed / CONCENTRATION_TARGET_DURATION_MS));
@@ -144,12 +160,14 @@ function ConcentrationMicrogame({ elapsed, targetSpot, leftHanded, onTap }: Micr
 
   return (
     <>
+      <IdleBounce>
       <View testID="concentration-instruction" accessible accessibilityRole="text" accessibilityLabel="Tap when the filled circle fills the target circle" style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 }}>
-        <Text style={{ color: colors.ink, fontSize: 20, fontWeight: "800" }}>Tap when</Text>
+        <StyledText style={{ color: colors.ink, fontSize: 20, fontWeight: "800", textAlign: "center" }}>Tap when</StyledText>
         <MicrogameCircle size={18} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />
-        <Text style={{ color: colors.ink, fontSize: 20, fontWeight: "800" }}>fills</Text>
+        <StyledText style={{ color: colors.ink, fontSize: 20, fontWeight: "800", textAlign: "center" }}>fills</StyledText>
         <MicrogameCircleOutline size={18} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />
       </View>
+      </IdleBounce>
       <MicrogameTrack testID="concentration-track">
         <MicrogameCircleOutline testID="concentration-target" accessibilityLabel="Target outline" pointerEvents="none" size={40} style={{ position: "absolute", left: `${targetSpot * 100}%`, top: "50%", marginLeft: -20, marginTop: -20 }} />
         <MicrogameCircle testID="concentration-mover" accessibilityLabel="Moving target" accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: movingSpot * 100 }} pointerEvents="none" size={44} style={{ position: "absolute", left: `${movingSpot * 100}%`, top: "50%", marginLeft: -22, marginTop: -22 }} />
@@ -163,7 +181,7 @@ function TimedAttackMicrogame({ elapsed, targetDelay }: MicrogameContentProps) {
   const cueVisible = elapsed >= targetDelay;
   return (
     <View style={{ alignItems: "center" }}>
-      <Text testID="timed-attack-instruction" pointerEvents="none" style={{ color: colors.ink, fontSize: 24, fontWeight: "800" }}>Tap...</Text>
+      <IdleBounce><View testID="timed-attack-instruction" pointerEvents="none"><StyledText style={{ color: colors.ink, fontSize: 24, fontWeight: "800", textAlign: "center" }}>Tap...</StyledText></View></IdleBounce>
       <View style={{ height: 68, alignItems: "center", justifyContent: "center" }}>
         {cueVisible ? (
           <Text testID="timed-attack-now" accessibilityRole="timer" accessibilityLabel="NOW cue" pointerEvents="none" style={{ color: colors.accent, fontSize: 56, fontWeight: "900" }}>NOW!</Text>
@@ -179,7 +197,7 @@ function DefenseMicrogame({ elapsed, targetDelay }: MicrogameContentProps) {
   const cueVisible = elapsed >= targetDelay;
   return (
     <View pointerEvents="none" style={{ alignItems: "center", justifyContent: "center", gap: 8 }}>
-      <Text testID="defense-instruction" accessibilityLabel="Tap to defend" style={{ color: colors.ink, fontSize: 24, fontWeight: "900" }}>Tap to defend</Text>
+      <IdleBounce><View testID="defense-instruction" accessibilityLabel="Tap to defend"><StyledText style={{ color: colors.ink, fontSize: 24, fontWeight: "900", textAlign: "center" }}>Tap to defend</StyledText></View></IdleBounce>
       <Text testID="defense-cue" accessibilityRole="timer" accessibilityLabel={cueVisible ? "Block now" : "Get ready to block"} style={{ color: cueVisible ? colors.accent : colors.sepia, fontSize: 36, fontWeight: "900" }}>
         {cueVisible ? "BLOCK!" : "…"}
       </Text>
@@ -198,10 +216,12 @@ function MultitapMicrogame({ multitapTargetSpot, leftHanded, onTap, panelHeight 
     : { left: "50%" as const, right: 0 };
   return (
     <>
+      <IdleBounce>
       <View testID="multitap-instruction" accessible accessibilityRole="text" accessibilityLabel="Tap the filled circle as quickly as you can" style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 8 }}>
-        <Text style={{ color: colors.ink, fontSize: 20, fontWeight: "800" }}>Tap</Text>
+        <StyledText style={{ color: colors.ink, fontSize: 20, fontWeight: "800", textAlign: "center" }}>Tap</StyledText>
         <MicrogameCircle size={18} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />
       </View>
+      </IdleBounce>
       <View testID="multitap-track" onLayout={event => {
         setTrackWidth(event.nativeEvent.layout.width);
         setTrackHeight(event.nativeEvent.layout.height);
@@ -233,10 +253,12 @@ function MultiswipeMicrogame({ multiswipeTarget, onSwipeStart, onSwipeEnd, onMul
     : { left: startX - 7, top: Math.min(startY, endY), width: 14, height: Math.abs(endY - startY) };
   return (
     <>
+      <IdleBounce>
       <View testID="multiswipe-instruction" accessible accessibilityRole="text" accessibilityLabel="Swipe Across" style={{ alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 8, marginBottom: 8 }}>
-        <Text style={{ color: colors.ink, fontSize: 20, fontWeight: "800" }}>Swipe Across</Text>
+        <StyledText style={{ color: colors.ink, fontSize: 20, fontWeight: "800", textAlign: "center" }}>Swipe Across</StyledText>
         <View testID="multiswipe-instruction-bar" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={{ width: 36, height: 8, borderRadius: 4, backgroundColor: colors.accent }} />
       </View>
+      </IdleBounce>
       <View
         ref={trackRef}
         testID="multiswipe-track"
@@ -380,9 +402,11 @@ function RuneTracerMicrogame({ leftHanded, onRuneProgress, onRuneComplete, panel
 
   return (
     <>
-      <View testID="rune-tracer-instruction" accessible accessibilityRole="text" accessibilityLabel="Trace the rune" style={{ alignItems: "center", marginBottom: 8 }}>
-        <Text style={{ color: colors.ink, fontSize: 20, fontWeight: "800" }}>Trace the Rune</Text>
+      <IdleBounce style={{ alignItems: "center", marginBottom: 8 }}>
+      <View testID="rune-tracer-instruction" accessible accessibilityRole="text" accessibilityLabel="Trace the rune" style={{ alignItems: "center" }}>
+        <StyledText style={{ color: colors.ink, fontSize: 20, fontWeight: "800", textAlign: "center" }}>Trace the Rune</StyledText>
       </View>
+      </IdleBounce>
       <View
         ref={trackRef}
         testID="rune-tracer-track"
