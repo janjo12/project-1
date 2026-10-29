@@ -6,12 +6,18 @@ export function ItemDetailsMenu({
   label,
   description,
   activationDescription,
+  onUseNow,
+  showUseNow = false,
+  useNowDisabled = false,
   onClose,
 }: {
   visible: boolean;
   label: string;
   description: string;
   activationDescription: string;
+  onUseNow?: () => void;
+  showUseNow?: boolean;
+  useNowDisabled?: boolean;
   onClose: () => void;
 }) {
   return <StyledModal accessibilityLabel="Item details" accessibilityRole="dialog" animationType="fade" onRequestClose={onClose} visible={visible}>
@@ -19,6 +25,7 @@ export function ItemDetailsMenu({
     <StyledText>{description}</StyledText>
     <StyledText>{activationDescription}</StyledText>
     <StyledText>Pick up another item at any time. The item you are carrying will be dropped on the ground in this room.</StyledText>
+    {showUseNow ? <NormalButton accessibilityLabel="Use item now" accessibilityRole="button" label="Use Item Now" disabled={useNowDisabled} onPress={onUseNow ?? onClose} /> : null}
     <PrimaryButton accessibilityLabel="Close item details" accessibilityRole="button" label="Close" onPress={onClose} />
   </StyledModal>;
 }

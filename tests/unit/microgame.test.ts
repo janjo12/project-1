@@ -1,4 +1,4 @@
-import { CONCENTRATION_TARGET_DURATION_MS, getConcentrationScore, getMicrogameWindow, getMultitapGrid, getMultitapScore, getMultitapTargetTaps, getNextMultitapTargetSpot, getTimedAttackScore, HUMAN_REACTION_WINDOW_MS, MICROGAME_MAX_DURATION_MS, MULTITAP_DOT_DIAMETER, MULTITAP_WINDOW_MS, TIMED_ATTACK_CUE_DELAY_MS, TIMED_ATTACK_WINDOW_MS } from "@/game/actions/use-microgame";
+import { CONCENTRATION_TARGET_DURATION_MS, getConcentrationScore, getMicrogameWindow, getMultitapGrid, getMultitapScore, getMultitapTargetTaps, getNextMultitapTargetSpot, getTimedAttackScore, HUMAN_REACTION_WINDOW_MS, MICROGAME_MAX_DURATION_MS, MULTITAP_DOT_DIAMETER, MULTITAP_WINDOW_MS, TIMED_ATTACK_CUE_DELAY_MS, TIMED_ATTACK_WINDOW_MS, getMultiswipeScore, getNextMultiswipeTarget, isMultiswipeEndpoint, MULTISWIPE_WINDOW_MS, getMultiswipeTargetBars, getMultiswipeGrid } from "@/game/actions/use-microgame";
 import { getGameClass } from "@/game/config/game-classes";
 
 test("microgames fit within a 1.5 second window and concentration targets the visible alignment", () => {
@@ -6,6 +6,7 @@ test("microgames fit within a 1.5 second window and concentration targets the vi
   expect(CONCENTRATION_TARGET_DURATION_MS).toBe(MICROGAME_MAX_DURATION_MS);
   expect(TIMED_ATTACK_WINDOW_MS - TIMED_ATTACK_CUE_DELAY_MS).toBeGreaterThanOrEqual(500);
   expect(getMicrogameWindow("multitap")).toBe(MULTITAP_WINDOW_MS);
+  expect(getMicrogameWindow("multiswipe")).toBe(MULTISWIPE_WINDOW_MS);
   expect(MULTITAP_WINDOW_MS).toBe(3000);
   expect(MULTITAP_WINDOW_MS).toBeGreaterThanOrEqual(getMultitapTargetTaps("hard", 10) * HUMAN_REACTION_WINDOW_MS);
 });
@@ -66,4 +67,26 @@ test("Multitap target selection maps random values to different cells without a 
 
 test("Thief attacks use the Timed Attack microgame", () => {
   expect(getGameClass("thief").microgame).toBe("timed-attack");
+});
+
+test("Warrior attacks use Multiswipe and each full swipe is worth three taps", () => {
+  expect(getGameClass("warrior").microgame).toBe("multiswipe");
+  const tapTarget = getMultitapTargetTaps("normal", 1);
+  const barTarget = getMultiswipeTargetBars("normal", 1);
+  expect(getMultiswipeScore(barTarget, tapTarget)).toBe(Math.round(barTarget * 300 / tapTarget));
+  expect(getMultiswipeScore(barTarget + 1, tapTarget)).toBeGreaterThan(100);
+});
+
+test("Multiswipe targets have endpoints exactly three grid steps apart", () => {
+  const width = 640;
+  const height = 450;
+  const { columns, rows } = getMultiswipeGrid(width, height, MULTITAP_DOT_DIAMETER);
+  const target = getNextMultiswipeTarget(width, height, MULTITAP_DOT_DIAMETER, () => 0.37);
+  const startColumn = Math.round(target.start.x * columns - 0.5);
+  const startRow = Math.round(target.start.y * rows - 0.5);
+  const endColumn = Math.round(target.end.x * columns - 0.5);
+  const endRow = Math.round(target.end.y * rows - 0.5);
+  expect(Math.abs(startColumn - endColumn) + Math.abs(startRow - endRow)).toBe(3);
+  expect(isMultiswipeEndpoint(target.start, target.start, width, height, MULTITAP_DOT_DIAMETER)).toBe(true);
+  expect(isMultiswipeEndpoint(target.end, target.start, width, height, MULTITAP_DOT_DIAMETER)).toBe(false);
 });

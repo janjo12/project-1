@@ -9,6 +9,8 @@ const enemy: WorldMonster = { id: "e", type: "monster", name: "Enemy", sprite: "
 describe("documented combat math", () => {
   it("selects ordinary attack profiles and leaves the Werewolf immune to ordinary attacks", () => {
     expect(getPlayerAttackDamage(enemy, false)).toBe(10);
+    expect(getPlayerAttackDamage(enemy, false, "wizard")).toBe(13);
+    expect(getPlayerAttackDamage(enemy, true, "wizard")).toBe(23);
     expect(getPlayerAttackDamage({ ...enemy, chases: true }, false)).toBe(0);
     expect(getPlayerAttackDamage({ ...enemy, chases: true }, true)).toBe(0);
     expect(resolveAttackDamage({ profile: 10, score: 100, target: { ...enemy, chases: true } })).toBe(0);

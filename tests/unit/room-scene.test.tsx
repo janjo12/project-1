@@ -160,6 +160,28 @@ test("pauses player idle bob until the room-entry slide reaches its spot", async
   }
 });
 
+test("werewolf uses the shared room-entry animation and pauses idle bob while entering", async () => {
+  const screen = await render(
+    <RoomScene
+      actors={[{ id: "werewolf", currentHealth: 4, isWerewolf: true, isEntering: true, entryPosition: "left", kind: "enemy", label: "Werewolf", maxHealth: 4, sprite: "werewolf_graphic" }]}
+      doorways={doorways}
+      enemyHealthLossAmount={0}
+      playerEnergyLossAmount={0}
+      playerHealthLossAmount={0}
+      playerPosition="center"
+      playerSprite="warrior_graphic"
+      roomId="A1"
+      sceneScale={1}
+    />,
+  );
+
+  const entryAnimation = screen.getByTestId("werewolf-room-entry-animation");
+  expect(entryAnimation.props.style.animationDuration).toBe(`${GAME_PARAMETERS.animation.roomEntryDurationMs}ms`);
+  expect(entryAnimation.props.style.animationName.from.transform).toEqual([{ translateX: -22 }, { translateY: 0 }]);
+  const idleLayers = screen.getAllByTestId("combatant-sprite-idle-layer");
+  expect(idleLayers[0].props.style[1].animationPlayState).toBe("paused");
+});
+
 test("pressing an enemy sends that actor to the game handler", async () => {
   const onActorPress = jest.fn();
   const zombie = {
@@ -183,6 +205,31 @@ test("pressing an enemy sends that actor to the game handler", async () => {
   expect(onActorPress).toHaveBeenCalledWith(zombie);
   expect(screen.queryByText("Zombie")).toBeNull();
   expect(screen.queryByText("Player")).toBeNull();
+});
+
+test("player and enemy press targets cover the full actor sprite envelope", async () => {
+  const enemy = { id: "zombie-hitbox", kind: "enemy" as const, label: "Zombie", sprite: "zombie_graphic", position: "center" as const };
+  const screen = await render(
+    <RoomScene
+      actors={[enemy]}
+      doorways={doorways}
+      enemyHealthLossAmount={0}
+      playerEnergyLossAmount={0}
+      playerHealthLossAmount={0}
+      playerPosition="center"
+      playerSprite="warrior_graphic"
+      roomId="A1"
+      sceneScale={1}
+    />,
+  );
+
+  for (const testID of ["local-player-actor", "room-actor-enemy-zombie-hitbox"]) {
+    const pressable = screen.getByTestId(testID);
+    const styles = Array.isArray(pressable.props.style) ? pressable.props.style : [pressable.props.style];
+    const dimensions = Object.assign({}, ...styles.filter(style => style && typeof style === "object"));
+    expect(dimensions.width).toBe(80);
+    expect(dimensions.height).toBe(80);
+  }
 });
 
 test("loot chests render only the chest sprite while keeping an accessible pickup name", async () => {

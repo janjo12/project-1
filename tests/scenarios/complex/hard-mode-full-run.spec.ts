@@ -11,6 +11,8 @@ for (const { seed, className } of [
   { seed: "testwarrior", className: "Warrior" },
   { seed: "testcleric", className: "Cleric" },
   { seed: "testthief", className: "Thief" },
+  { seed: "testwizard", className: "Wizard" },
+  { seed: "testranger", className: "Ranger" },
 ]) {
 test(`plays a complete ${className} hard-mode run through Level 2`, async ({ page }) => {
   test.setTimeout(300_000);
@@ -195,7 +197,7 @@ test(`plays a complete ${className} hard-mode run through Level 2`, async ({ pag
       }
     }
 
-    const currentEnemy = page.getByRole("button", { name: /^(Pixel Golem|Zombie|Dragon|Vampire)$/ }).first();
+    const currentEnemy = page.getByRole("button", { name: /^(Pixel Golem|Zombie|Dragon|Vampire|Werewolf)$/ }).first();
     if (await currentEnemy.isVisible().catch(() => false)) {
       const enemyRoomId = await readRoomId(page);
       const chargeUp = page.getByRole("button", { name: "Charge Up" });
@@ -319,12 +321,53 @@ async function advanceEnemyTurn(page: import("@playwright/test").Page, includeAt
 
 async function playClassMicrogame(page: import("@playwright/test").Page, className: string) {
   if (className === "Warrior") {
-    const target = page.getByRole("button", { name: "Tap circle" });
-    const startedAt = Date.now();
-    while (Date.now() - startedAt < MULTITAP_WINDOW_MS) {
+    const track = page.getByTestId("multiswipe-track");
+    for (let elapsed = 0; elapsed < MULTITAP_WINDOW_MS; elapsed += HUMAN_REACTION_WINDOW_MS) {
       await page.clock.runFor(HUMAN_REACTION_WINDOW_MS);
-      if (await target.isVisible()) await target.click();
+      if (!(await track.isVisible().catch(() => false))) break;
+      const start = await page.getByTestId("multiswipe-start-dot").boundingBox();
+      const end = await page.getByTestId("multiswipe-end-dot").boundingBox();
+      expect(start).not.toBeNull();
+      expect(end).not.toBeNull();
+      await page.mouse.move(start!.x + start!.width / 2, start!.y + start!.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(end!.x + end!.width / 2, end!.y + end!.height / 2, { steps: 6 });
+      await page.mouse.up();
     }
+    return;
+  }
+
+  if (className === "Ranger") {
+    const target = page.getByRole("button", { name: "Tap circle" });
+    for (let elapsed = 0; elapsed < MULTITAP_WINDOW_MS; elapsed += HUMAN_REACTION_WINDOW_MS) {
+      await page.clock.runFor(HUMAN_REACTION_WINDOW_MS);
+      if (await target.isVisible().catch(() => false)) await target.click();
+    }
+    return;
+  }
+
+  if (className === "Wizard") {
+    const nodeOrder = ["A", "B", "C", "D", "E", "A", "F", "G", "A"];
+    const first = await page.getByTestId(`rune-node-${nodeOrder[0]}`).boundingBox();
+    expect(first).not.toBeNull();
+    await page.mouse.move(first!.x + first!.width / 2, first!.y + first!.height / 2);
+    await page.mouse.down();
+    for (const [index, nodeId] of nodeOrder.slice(1).entries()) {
+      const node = await page.getByTestId(`rune-node-${nodeId}`).boundingBox();
+      const previousNode = await page.getByTestId(`rune-node-${nodeOrder[index]}`).boundingBox();
+      expect(node).not.toBeNull();
+      expect(previousNode).not.toBeNull();
+      const startX = previousNode!.x + previousNode!.width / 2;
+      const startY = previousNode!.y + previousNode!.height / 2;
+      const endX = node!.x + node!.width / 2;
+      const endY = node!.y + node!.height / 2;
+      const edge = await page.getByTestId("rune-tracer-track").boundingBox();
+      expect(edge).not.toBeNull();
+      await page.mouse.move((startX + endX) / 2, (startY + endY) / 2, { steps: 3 });
+      await page.mouse.move(endX, endY, { steps: 3 });
+    }
+    await page.mouse.up();
+    await expect(page.getByTestId("microgame-overlay")).toHaveCount(0);
     return;
   }
 

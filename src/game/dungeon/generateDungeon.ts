@@ -35,7 +35,7 @@ import {
 export function createSeededDungeonMap(seed: string, level: number, startingPosition?: GridPosition, includeClock = false, playerCount = 1) {
   // Deriving the stream from seed + level keeps each floor reproducible and independent of prior RNG calls.
   const normalizedSeed = seed.trim().toLowerCase();
-  const testDungeonSeeds = ["test", "testwarrior", "testcleric", "testthief"];
+  const testDungeonSeeds = ["test", "testwarrior", "testcleric", "testthief", "testwizard", "testranger"];
   const generationSeed = level === 1 && testDungeonSeeds.includes(normalizedSeed) ? "test" : seed;
   const testStartingPosition = level === 1 && testDungeonSeeds.includes(normalizedSeed)
     ? { column: "B", row: 5 }

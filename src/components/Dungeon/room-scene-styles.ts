@@ -15,6 +15,10 @@ export function createStyles(colors: ThemeColors) {
       alignItems: "center",
       justifyContent: "center",
       position: "absolute",
+      // The visual sprite can extend beyond its packed layout cell after scaling,
+      // so the press target covers the full 80px actor envelope.
+      minWidth: 80,
+      minHeight: 80,
     },
     pressedActor: {
       opacity: 0.7,

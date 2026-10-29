@@ -259,7 +259,7 @@ describe("run-game policies", () => {
     );
   });
 
-  it.each(["testwarrior", "testcleric", "testthief"])(
+  it.each(["testwarrior", "testcleric", "testthief", "testwizard", "testranger"])(
     "creates the same Level 1 test dungeon for %s",
     (seed) => {
       const reference = createSeededDungeonMap("test", 1, undefined, true);

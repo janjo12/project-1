@@ -2,7 +2,7 @@ import { CREATURE_SPRITE_SIZE, getActorSpriteSize, getHumanFormScale, HUMAN_FORM
 
 test("human-form actors share one adjustable sprite size", () => {
   const humanForms = [
-    "warrior_graphic", "cleric_graphic", "thief_graphic",
+    "warrior_graphic", "cleric_graphic", "thief_graphic", "archer_graphic", "wizard_graphic",
     "zombie_graphic", "vampire_graphic", "werewolf_graphic",
   ];
 

@@ -16,7 +16,7 @@ const channelEvents = (channel: GameChannel) => channel as unknown as EventSourc
 }>;
 type Configuration = NonNullable<ConstructorParameters<typeof RTCPeerConnection>[0]>;
 export type GameState = { turn: number; [key: string]: unknown };
-export type PlayerAction = { type: "MOVE" | "ATTACK" | "SUPPORT" | "CLASS_READY" | "PICKUP" | "PICKUP_EQUIPMENT" | "DROP_EQUIPMENT" | "DESCEND"; target?: string; charged?: boolean; microgameScore?: number };
+export type PlayerAction = { type: "MOVE" | "ATTACK" | "SUPPORT" | "CLASS_READY" | "PICKUP" | "PICKUP_EQUIPMENT" | "DROP_EQUIPMENT" | "USE_ITEM" | "DESCEND"; target?: string; charged?: boolean; microgameScore?: number };
 export type NetworkMessage =
   | { type: "PLAYER_INFO"; playerId: string; name: string }
   | { type: "SUBMIT_ACTION"; turn: number; action: PlayerAction }

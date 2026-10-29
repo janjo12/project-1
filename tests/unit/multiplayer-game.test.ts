@@ -8,6 +8,21 @@ import { getGameClass } from "@/game/config/game-classes";
 import { GAME_PARAMETERS } from "@/game/config/gameparameters";
 
 const initial = () => { const state = createMultiplayerState("lan-test", "easy", ["host", "guest"]); state.phase = "playing"; return state; };
+test("multiplayer rolls a class independently for each player and keeps distinct auras for shared classes", () => {
+  const random = jest.spyOn(Math, "random")
+    .mockReturnValueOnce(0)
+    .mockReturnValueOnce(0.99);
+  try {
+    const state = createMultiplayerState("lan-test", "easy", ["host", "guest"]);
+    expect(state.players.host.classId).toBe("warrior");
+    expect(state.players.guest.classId).toBe("wizard");
+    expect(getMultiplayerPlayerAuraColor(Object.keys(state.players), "host"))
+      .not.toBe(getMultiplayerPlayerAuraColor(Object.keys(state.players), "guest"));
+  } finally {
+    random.mockRestore();
+  }
+});
+
 test("same-class allies appear as tappable room actors with distinct stable auras", () => {
   const state = initial();
   state.players.guest.classId = state.players.host.classId;
@@ -118,6 +133,38 @@ test("multiplayer ordinary and charged attacks cannot damage a Werewolf", () => 
   expect(uncharged.map.entities.monsters.werewolf.currentHealth).toBe(60);
 });
 
+test("Wizard Chain Lightning damages every other enemy for half the actual target damage", () => {
+  const state = initial();
+  state.players.host.classId = "wizard";
+  const room = getRoom(state.map, state.players.host.roomId)!;
+  room.contents = [{ type: "monster", id: "primary" }, { type: "monster", id: "secondary" }];
+  state.map.entities.monsters.primary = { id: "primary", type: "monster", name: "Primary", sprite: "x", damage: 0, currentHealth: 30, maximumHealth: 30 };
+  state.map.entities.monsters.secondary = { id: "secondary", type: "monster", name: "Secondary", sprite: "x", damage: 0, currentHealth: 30, maximumHealth: 30 };
+
+  const next = resolveMultiplayerTurn(state, new Map([["host", { type: "ATTACK", target: "primary", microgameScore: 100 }]]));
+
+  expect(next.map.entities.monsters.primary.currentHealth).toBe(17);
+  expect(next.map.entities.monsters.secondary.currentHealth).toBe(24);
+});
+
+test("Wizard Empower Attacks gives an ally two stronger turns and improves further when charged", () => {
+  const state = initial();
+  state.players.host.classId = "wizard";
+  state.players.guest.classId = "cleric";
+  const room = getRoom(state.map, state.players.host.roomId)!;
+  room.contents = [{ type: "monster", id: "target" }];
+  state.map.entities.monsters.target = { id: "target", type: "monster", name: "Target", sprite: "x", damage: 0, currentHealth: 100, maximumHealth: 100 };
+
+  const next = resolveMultiplayerTurn(state, new Map([
+    ["host", { type: "SUPPORT", target: "guest", charged: true }],
+    ["guest", { type: "ATTACK", target: "target", microgameScore: 100 }],
+  ]));
+
+  expect(next.map.entities.monsters.target.currentHealth).toBe(80);
+  expect(next.players.guest.empoweredAttackBonus).toBe(10);
+  expect(next.players.guest.empoweredAttackTurns).toBe(2);
+});
+
 test("multiplayer Silver Arrow kills the Werewolf without needing attack damage", () => {
   const state = initial();
   const room = getRoom(state.map, state.players.host.roomId)!;
@@ -186,12 +233,13 @@ test("warrior support redirects an ally's hit and resolves before player order",
 
 test("charged Warrior support adds five defense and deals only a small riposte in multiplayer", () => {
   const state = initial();
+  state.difficulty = "hard";
   state.players.host.classId = "warrior";
   const room = getRoom(state.map, state.players.host.roomId)!;
   room.contents = [{ type: "monster", id: "guard" }];
   state.map.entities.monsters.guard = { id: "guard", type: "monster", name: "Guard", sprite: "g", damage: 24, currentHealth: 100, maximumHealth: 100 };
 
-  const next = resolveMultiplayerTurn(state, new Map([["host", { type: "SUPPORT", charged: true }]]));
+  const next = resolveMultiplayerTurn(state, new Map([["host", { type: "SUPPORT", charged: true, defenseScore: 0 }]]));
 
   expect(next.players.host.health).toBe(PLAYER_MAX_HEALTH - 4);
   expect(next.players.host.defenseBuff).toBe(0);
@@ -202,12 +250,13 @@ test("charged Warrior support adds five defense and deals only a small riposte i
 
 test("Cleric support adds five defense for two multiplayer turns", () => {
   const state = initial();
+  state.difficulty = "hard";
   state.players.host.classId = "cleric";
   const room = getRoom(state.map, state.players.host.roomId)!;
   room.contents = [{ type: "monster", id: "guard" }];
   state.map.entities.monsters.guard = { id: "guard", type: "monster", name: "Guard", sprite: "g", damage: 20, currentHealth: 100, maximumHealth: 100 };
 
-  const first = resolveMultiplayerTurn(state, new Map([["host", { type: "SUPPORT" }]]));
+  const first = resolveMultiplayerTurn(state, new Map([["host", { type: "SUPPORT", defenseScore: 0 }]]));
   expect(first.players.host.health).toBe(PLAYER_MAX_HEALTH - 5);
   expect(first.players.host.defenseBuff).toBe(5);
   expect(first.players.host.defenseBuffTurns).toBe(1);
@@ -216,6 +265,53 @@ test("Cleric support adds five defense for two multiplayer turns", () => {
   expect(second.players.host.health).toBe(PLAYER_MAX_HEALTH - 10);
   expect(second.players.host.defenseBuff).toBe(0);
   expect(second.players.host.defenseBuffTurns).toBe(0);
+});
+
+test("Miracle saves a Cleric once per level at half Health without spending Energy", () => {
+  const state = initial();
+  state.difficulty = "hard";
+  const cleric = state.players.host;
+  cleric.classId = "cleric";
+  state.players.guest.roomId = "B5";
+  const room = getRoom(state.map, cleric.roomId)!;
+  room.contents = [{ type: "monster", id: "guard" }];
+  state.map.entities.monsters.guard = {
+    id: "guard", type: "monster", name: "Guard", sprite: "g",
+    damage: 200, currentHealth: 100, maximumHealth: 100,
+  };
+
+  const saved = resolveMultiplayerTurn(state, new Map([[
+    "host", { type: "SUPPORT", defenseScore: 0 },
+  ]]));
+  expect(saved.players.host.health).toBe(Math.ceil(PLAYER_MAX_HEALTH / 2));
+  expect(saved.players.host.energy).toBe(PLAYER_MAX_ENERGY);
+  expect(saved.players.host.miracleUsed).toBe(true);
+
+  saved.players.host.health = 5;
+  const fallen = resolveMultiplayerTurn(saved, new Map([[
+    "host", { type: "SUPPORT" },
+  ]]));
+  expect(fallen.players.host.health).toBeLessThanOrEqual(0);
+  expect(fallen.players.host.energy).toBe(PLAYER_MAX_ENERGY);
+});
+
+test("Miracle becomes available again when the party descends to a new level", () => {
+  const state = initial();
+  const room = getRoom(state.map, state.players.host.roomId)!;
+  room.contents = [{ type: "stairs", id: "stairs" }];
+  state.map.entities.doorwayGuards = {};
+  for (const player of Object.values(state.players)) {
+    player.roomId = state.players.host.roomId;
+    player.classId = "cleric";
+    player.miracleUsed = true;
+  }
+
+  const next = resolveMultiplayerTurn(state, new Map([[
+    "host", { type: "DESCEND" },
+  ]]));
+
+  expect(next.level).toBe(2);
+  expect(Object.values(next.players).every(player => player.miracleUsed === false)).toBe(true);
 });
 
 test("missing multiplayer actions do not block enemy damage or counterattack", () => {
