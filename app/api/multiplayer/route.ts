@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { createMultiplayerState, resolveMultiplayerTurn, type MultiplayerState, type PlayerAction } from "@/game/engine/multiplayer-rules";
 import { getTurnDuration } from "@/game/engine/resolveTurn";
 import type { Difficulty } from "@/utils/settings-storage";
+import { DEFAULT_MULTIPLAYER_PLAYER_OPTIONS, isMultiplayerPlayerOptionsPatch, multiplayerPlayerOptionsPatch, updateMultiplayerPlayerOptions, type MultiplayerPlayerOptions } from "@/multiplayer/player-options";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,6 +13,8 @@ type Session = {
   seed: string;
   difficulty: Difficulty;
   playerIds: string[];
+  playerOptions: Record<string, MultiplayerPlayerOptions>;
+  readyPlayerIds: Set<string>;
   nextPlayerNumber: number;
   state: MultiplayerState | null;
   actions: Map<string, PlayerAction>;
@@ -29,6 +32,9 @@ const globalSessions = globalThis as typeof globalThis & { __project1Multiplayer
 const sessions = globalSessions.__project1MultiplayerSessions ??= new Map<string, Session>();
 const globalCleanupClock = globalThis as typeof globalThis & { __project1MultiplayerLastCleanupAt?: number };
 const roomAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+function logRoomEvent(event: string, session: Pick<Session, "code" | "playerIds" | "state" | "revision" | "deadlineAt">, details: Record<string, unknown> = {}) {
+  console.info("[multiplayer-room]", JSON.stringify({ event, roomCode: session.code, playerCount: session.playerIds.length, started: !!session.state, turn: session.state?.turn ?? null, revision: session.revision, deadlineAt: session.deadlineAt, at: new Date().toISOString(), ...details }));
+}
 
 function readPositiveInteger(value: string | undefined, fallback: number, maximum: number) {
   const parsed = Number(value);
@@ -49,6 +55,7 @@ function cleanExpiredSessions(force = false) {
   globalCleanupClock.__project1MultiplayerLastCleanupAt = now;
   for (const [code, session] of sessions) {
     if (now - session.touchedAt <= SESSION_TTL_MS) continue;
+    logRoomEvent("expired", session, { idleMs: now - session.touchedAt });
     if (session.timer) clearTimeout(session.timer);
     sessions.delete(code);
   }
@@ -74,7 +81,9 @@ function publicSession(session: Session, playerId: string) {
     revision: session.revision,
     deadlineAt: session.deadlineAt,
     state: session.state,
-    players: session.playerIds.map(id => ({ id, health: session.state?.players[id]?.health ?? 100 })),
+    playerOptions: session.playerOptions[playerId] ?? DEFAULT_MULTIPLAYER_PLAYER_OPTIONS,
+    playerReady: session.readyPlayerIds.has(playerId),
+    players: session.playerIds.map(id => ({ id, health: session.state?.players[id]?.health ?? 100, ready: session.readyPlayerIds.has(id) })),
   };
 }
 
@@ -92,6 +101,7 @@ function finishTurn(session: Session) {
   session.state = resolveMultiplayerTurn(session.state, new Map(session.actions));
   session.actions.clear();
   session.revision += 1;
+  logRoomEvent("turn_finished", session);
   scheduleTurnDeadline(session);
 }
 
@@ -100,6 +110,7 @@ function scheduleTurnDeadline(session: Session) {
   const duration = getTurnDuration({ difficulty: session.state.difficulty, level: session.state.level });
   session.deadlineAt = Date.now() + duration;
   session.timer = setTimeout(() => finishTurn(session), duration);
+  logRoomEvent("turn_deadline_scheduled", session, { durationMs: duration });
   session.timer.unref?.();
 }
 
@@ -114,6 +125,7 @@ function getSession(code: string) {
   const normalizedCode = code.trim().toUpperCase();
   const session = sessions.get(normalizedCode);
   if (session && Date.now() - session.touchedAt > SESSION_TTL_MS) {
+    logRoomEvent("expired_on_access", session, { idleMs: Date.now() - session.touchedAt });
     if (session.timer) clearTimeout(session.timer);
     sessions.delete(normalizedCode);
     return undefined;
@@ -140,7 +152,8 @@ export async function POST(request: Request) {
 
   if (body.type === "create") {
     const difficulty = body.difficulty;
-    if (typeof body.seed !== "string" || !(difficulty === "easy" || difficulty === "normal" || difficulty === "hard")) {
+    const requestedSeed = body.seed;
+    if (typeof requestedSeed !== "string" || !(difficulty === "easy" || difficulty === "normal" || difficulty === "hard")) {
       return json({ error: "Choose a valid seed and difficulty before hosting." }, 400);
     }
     if (sessions.size >= MAX_ACTIVE_ROOMS) {
@@ -148,8 +161,11 @@ export async function POST(request: Request) {
       if (sessions.size >= MAX_ACTIVE_ROOMS) return json({ error: "The multiplayer server is at room capacity. Try again shortly." }, 503);
     }
     const code = newCode();
-    const session: Session = { code, seed: body.seed.trim() || "web-playtest", difficulty, playerIds: ["host"], nextPlayerNumber: 2, state: null, actions: new Map(), revision: 0, timer: null, deadlineAt: null, touchedAt: Date.now() };
+    if (!isMultiplayerPlayerOptionsPatch(body)) return json({ error: "Choose valid personal gameplay options." }, 400);
+    const hostOptions = updateMultiplayerPlayerOptions(DEFAULT_MULTIPLAYER_PLAYER_OPTIONS, multiplayerPlayerOptionsPatch(body));
+    const session: Session = { code, seed: requestedSeed.trim() || "web-playtest", difficulty, playerIds: ["host"], playerOptions: { host: hostOptions }, readyPlayerIds: new Set(), nextPlayerNumber: 2, state: null, actions: new Map(), revision: 0, timer: null, deadlineAt: null, touchedAt: Date.now() };
     sessions.set(code, session);
+    logRoomEvent("created", session);
     return json(publicSession(session, "host"), 201);
   }
 
@@ -160,9 +176,12 @@ export async function POST(request: Request) {
   if (body.type === "join") {
     if (session.state) return json({ error: "This game has already started." }, 409);
     if (session.playerIds.length >= MAX_PLAYERS_PER_ROOM) return json({ error: "This room is full." }, 409);
+    if (!isMultiplayerPlayerOptionsPatch(body)) return json({ error: "Choose valid personal gameplay options." }, 400);
     const playerId = `player-${session.nextPlayerNumber++}`;
     session.playerIds.push(playerId);
+    session.playerOptions[playerId] = updateMultiplayerPlayerOptions(DEFAULT_MULTIPLAYER_PLAYER_OPTIONS, multiplayerPlayerOptionsPatch(body));
     session.revision += 1;
+    logRoomEvent("joined", session, { playerId });
     return json(publicSession(session, playerId), 201);
   }
 
@@ -170,15 +189,43 @@ export async function POST(request: Request) {
   if (!session.playerIds.includes(playerId)) return json({ error: "This player is no longer in the room." }, 404);
 
   if (body.type === "configure") {
-    if (playerId !== "host") return json({ error: "Only the host can choose game options." }, 403);
+    const requestedSeed = body.seed;
+    const requestedDifficulty = body.difficulty;
     if (session.state) return json({ error: "This game has already started." }, 409);
-    const difficulty = body.difficulty;
-    if (typeof body.seed !== "string" || !(difficulty === "easy" || difficulty === "normal" || difficulty === "hard")) {
+    if (playerId !== "host" && (body.seed !== undefined || body.difficulty !== undefined)) {
+      return json({ error: "Only the host can change the shared seed or difficulty." }, 403);
+    }
+    if ((body.seed !== undefined && typeof body.seed !== "string") ||
+        (body.difficulty !== undefined && body.difficulty !== "easy" && body.difficulty !== "normal" && body.difficulty !== "hard")) {
       return json({ error: "Choose a valid seed and difficulty before starting." }, 400);
     }
-    session.seed = body.seed.trim() || "web-playtest";
-    session.difficulty = difficulty;
+    if (!isMultiplayerPlayerOptionsPatch(body)) {
+      return json({ error: "Choose valid personal gameplay options." }, 400);
+    }
+    session.playerOptions[playerId] = updateMultiplayerPlayerOptions(session.playerOptions[playerId], multiplayerPlayerOptionsPatch(body));
+    if (requestedSeed !== undefined) session.seed = typeof requestedSeed === "string" ? requestedSeed.trim() || "web-playtest" : session.seed;
+    if (requestedDifficulty === "easy" || requestedDifficulty === "normal" || requestedDifficulty === "hard") session.difficulty = requestedDifficulty;
     session.revision += 1;
+    return json(publicSession(session, playerId));
+  }
+
+  if (body.type === "options") {
+    if (session.state) return json({ error: "Gameplay options are locked after the game starts." }, 409);
+    if (!isMultiplayerPlayerOptionsPatch(body)) return json({ error: "Choose valid personal gameplay options." }, 400);
+    session.playerOptions[playerId] = updateMultiplayerPlayerOptions(session.playerOptions[playerId], multiplayerPlayerOptionsPatch(body));
+    session.readyPlayerIds.delete(playerId);
+    session.revision += 1;
+    return json(publicSession(session, playerId));
+  }
+
+  if (body.type === "ready") {
+    if (session.state) return json({ error: "This game has already started." }, 409);
+    if (playerId === "host") return json({ error: "The host starts the room from the shared game options." }, 403);
+    if (!isMultiplayerPlayerOptionsPatch(body)) return json({ error: "Choose valid personal gameplay options." }, 400);
+    session.playerOptions[playerId] = updateMultiplayerPlayerOptions(session.playerOptions[playerId], multiplayerPlayerOptionsPatch(body));
+    session.readyPlayerIds.add(playerId);
+    session.revision += 1;
+    logRoomEvent("player_ready", session, { playerId });
     return json(publicSession(session, playerId));
   }
 
@@ -186,7 +233,12 @@ export async function POST(request: Request) {
     if (playerId !== "host") return json({ error: "Only the host can start the game." }, 403);
     if (session.state) return json({ error: "This game has already started." }, 409);
     if (session.playerIds.length < 2) return json({ error: "Join from a second browser before starting the multiplayer playtest." }, 409);
+    if (session.playerIds.some(id => id !== "host" && !session.readyPlayerIds.has(id))) return json({ error: "Wait for every player to finish their own options and press Start." }, 409);
     session.state = createMultiplayerState(session.seed, session.difficulty, [...session.playerIds]);
+    for (const [id, options] of Object.entries(session.playerOptions)) {
+      if (id in session.state.players) session.state.players[id].gameplayOptions = options;
+    }
+    logRoomEvent("started", session, { seed: session.seed, difficulty: session.difficulty });
     session.revision += 1;
     return json(publicSession(session, playerId));
   }
@@ -195,25 +247,29 @@ export async function POST(request: Request) {
     if (!session.state || session.state.ended) return json({ error: "The game is not accepting actions." }, 409);
     const turn = body.turn;
     if (!Number.isSafeInteger(turn) || turn !== session.state.turn || !validAction(body.action)) return json({ error: "That action is invalid or belongs to an earlier turn." }, 400);
-    if ((session.state.players[playerId]?.health ?? 0) <= 0 && !["MOVE", "ATTACK", "SUPPORT"].includes(body.action.type)) {
+    if (session.state.phase === "playing" && (session.state.players[playerId]?.health ?? 0) <= 0 && !["MOVE", "ATTACK", "SUPPORT"].includes(body.action.type)) {
       return json({ error: "Ghosts can only move, attack, or support." }, 403);
     }
     if (!eligiblePlayers(session).includes(playerId)) return json({ error: "This player cannot act during the current phase." }, 403);
     if (session.actions.has(playerId)) return json({ error: "You already submitted an action for this turn." }, 409);
     session.actions.set(playerId, body.action);
     if (session.actions.size === eligiblePlayers(session).length) finishTurn(session);
+    logRoomEvent("action_submitted", session, { playerId, actionType: body.action.type, pendingActions: session.actions.size });
     return json(publicSession(session, playerId));
   }
 
   if (body.type === "leave") {
-    if (session.timer) clearTimeout(session.timer);
-    session.timer = null;
-    session.deadlineAt = null;
     if (playerId === "host") {
+      logRoomEvent("closed_by_host", session, { playerId });
+      if (session.timer) clearTimeout(session.timer);
+      session.timer = null;
+      session.deadlineAt = null;
       sessions.delete(session.code);
       return json({ ok: true });
     }
     session.playerIds = session.playerIds.filter(id => id !== playerId);
+    delete session.playerOptions[playerId];
+    session.readyPlayerIds.delete(playerId);
     session.actions.delete(playerId);
     if (session.state) {
       const players = { ...session.state.players };
@@ -223,6 +279,7 @@ export async function POST(request: Request) {
       else scheduleTurnDeadline(session);
     }
     session.revision += 1;
+    logRoomEvent("player_left", session, { playerId });
     return json({ ok: true });
   }
 

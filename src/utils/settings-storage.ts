@@ -1,18 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
-export type Difficulty = "easy" | "normal" | "hard";
-export type Appearance = "system" | "light" | "dark";
-export type Handedness = "left" | "right";
-
-export type GameSettings = {
-  appearance: Appearance;
-  difficulty: Difficulty;
-  seed: string;
-  microgamesEnabled: boolean;
-  vibrationEnabled: boolean;
-  reducedMotion: boolean;
-  handedness: Handedness;
-};
+import { DEFAULT_GAME_SETTINGS, normalizeSettings } from "@/utils/game-settings";
+import type { GameSettings } from "@/utils/game-settings";
+export { DEFAULT_GAME_SETTINGS, normalizeSettings } from "@/utils/game-settings";
+export type { Appearance, Difficulty, GameSettings, Handedness } from "@/utils/game-settings";
 
 const SETTINGS_STORAGE_KEY = "project-1:game-settings";
 
@@ -20,63 +10,6 @@ function getBrowserStorage(): Storage | null {
   return typeof globalThis.window?.localStorage === "undefined"
     ? null
     : globalThis.window.localStorage;
-}
-
-export const DEFAULT_GAME_SETTINGS: GameSettings = {
-  appearance: "system",
-  difficulty: "easy",
-  seed: "",
-  microgamesEnabled: true,
-  vibrationEnabled: true,
-  reducedMotion: false,
-  handedness: "right",
-};
-
-function isDifficulty(value: unknown): value is Difficulty {
-  return value === "easy" || value === "normal" || value === "hard";
-}
-
-
-function isAppearance(value: unknown): value is Appearance {
-  return value === "system" || value === "light" || value === "dark";
-}
-function isHandedness(value: unknown): value is Handedness {
-  return value === "left" || value === "right";
-}
-
-function normalizeSettings(value: unknown): GameSettings {
-  // Validate persisted values individually so newly added settings receive safe defaults.
-  if (!value || typeof value !== "object") {
-    return DEFAULT_GAME_SETTINGS;
-  }
-
-  const candidate = value as Partial<GameSettings>;
-
-  return {
-    appearance: isAppearance(candidate.appearance)
-      ? candidate.appearance
-      : DEFAULT_GAME_SETTINGS.appearance,
-    difficulty: isDifficulty(candidate.difficulty)
-      ? candidate.difficulty
-      : DEFAULT_GAME_SETTINGS.difficulty,
-    seed:
-      typeof candidate.seed === "string"
-        ? candidate.seed
-        : DEFAULT_GAME_SETTINGS.seed,
-    microgamesEnabled: typeof candidate.microgamesEnabled === "boolean"
-      ? candidate.microgamesEnabled
-      : DEFAULT_GAME_SETTINGS.microgamesEnabled,
-    vibrationEnabled:
-      typeof candidate.vibrationEnabled === "boolean"
-        ? candidate.vibrationEnabled
-        : DEFAULT_GAME_SETTINGS.vibrationEnabled,
-    reducedMotion: typeof candidate.reducedMotion === "boolean"
-      ? candidate.reducedMotion
-      : DEFAULT_GAME_SETTINGS.reducedMotion,
-    handedness: isHandedness(candidate.handedness)
-      ? candidate.handedness
-      : DEFAULT_GAME_SETTINGS.handedness,
-  };
 }
 
 export async function loadGameSettings(): Promise<GameSettings> {

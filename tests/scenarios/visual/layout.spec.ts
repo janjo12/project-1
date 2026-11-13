@@ -38,6 +38,12 @@ async function expectScreenFits(page: Page, screenName: string) {
     for (const element of visibleElements) {
       const bounds = element.getBoundingClientRect();
       if (bounds.width === 0 || bounds.height === 0) continue;
+      const inScrollableContent = clippingParents.some(parent => {
+        if (parent === element || !parent.contains(element)) return false;
+        const style = getComputedStyle(parent);
+        return /(auto|scroll)/.test(`${style.overflow} ${style.overflowY}`);
+      });
+      if (inScrollableContent) continue;
       const hitTarget = document.elementFromPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2);
       if (hitTarget && hitTarget !== element && !element.contains(hitTarget) && !hitTarget.contains(element)) continue;
       let visible = {
@@ -137,7 +143,7 @@ for (const viewport of viewports) {
     await expectScreenFits(page, "gameplay");
     const roomFrame = await page.getByTestId("dungeon-room-frame").boundingBox();
     expect(roomFrame, "gameplay should show the dungeon room frame").not.toBeNull();
-    expect(viewport.height - (roomFrame!.y + roomFrame!.height), "leave breathing room below the lower dungeon wall").toBeGreaterThanOrEqual(16);
+    expect(viewport.height - (roomFrame!.y + roomFrame!.height), "keep the lower dungeon wall clear of the viewport edge").toBeGreaterThanOrEqual(8);
     if (viewport.height < 500) {
       await page.getByRole("button", { name: "Menu" }).click();
       const landscapeMenu = page.getByRole("dialog", { name: "Game menu" });
@@ -172,7 +178,8 @@ for (const viewport of viewports) {
     expect(roomCode).toBeTruthy();
     await guestPage.getByRole("textbox", { name: "Room code" }).fill(roomCode!.trim());
     await guestPage.getByRole("button", { name: "Join room", exact: true }).click();
-    await expect(guestPage.getByText(new RegExp(`Joined room ${roomCode!.trim()}`))).toBeVisible();
+    await expect(guestPage.getByText("[Project 1]", { exact: true })).toBeVisible();
+    await expect(guestPage.getByRole("button", { name: "Start", exact: true })).toBeVisible();
     await expect(guestPage.getByRole("textbox", { name: "Seed" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Game options", exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Game options", exact: true }).click();

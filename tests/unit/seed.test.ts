@@ -1,4 +1,4 @@
-import { generateRandomSeed, isTestSeed } from "@/utils/seed";
+import { generateRandomSeedFrom, isTestSeed } from "@/utils/seed";
 
 test.each([
   ["test", true],
@@ -12,17 +12,14 @@ test.each([
 });
 
 test("generated seeds retry if the timestamp collides with the reserved test prefix", () => {
-  const now = jest.spyOn(Date, "now")
-    .mockReturnValueOnce(parseInt("test", 36))
-    .mockReturnValue(123456);
-  const random = jest.spyOn(Math, "random").mockReturnValue(0.5);
-
-  try {
-    expect(generateRandomSeed()).toMatch(/^2n9c-/);
-    expect(now).toHaveBeenCalledTimes(2);
-    expect(random).toHaveBeenCalledTimes(2);
-  } finally {
-    now.mockRestore();
-    random.mockRestore();
-  }
+  const timestamps = [parseInt("test", 36), 123456];
+  const counters = [1, 2];
+  let randomCalls = 0;
+  const seed = generateRandomSeedFrom({
+    now: () => timestamps.shift()!,
+    nextCounter: () => counters.shift()!,
+    random: () => { randomCalls += 1; return 0.5; },
+  });
+  expect(seed).toMatch(/^2n9c-/);
+  expect(randomCalls).toBe(2);
 });

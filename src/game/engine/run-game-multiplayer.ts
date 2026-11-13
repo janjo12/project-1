@@ -1,12 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppState } from "react-native";
 
 import type { createClientConnection, createHostSession } from "@/multiplayer/connection";
 import { describeMultiplayerFailure } from "@/multiplayer/multiplayer-errors";
-import { getRunSnapshot } from "@/game/engine/run-game-snapshot";
 import { getTurnDuration } from "@/game/engine/resolveTurn";
-import { moveCurrentPosition } from "@/game/dungeon/rooms";
+import { getMultiplayerPlayerView } from "@/game/engine/multiplayer-view";
 import type { GameSettings } from "@/utils/settings-storage";
+import type { MultiplayerPlayerOptions } from "@/multiplayer/player-options";
 import { createMultiplayerState, isMultiplayerState, resolveMultiplayerTurn } from "@/game/engine/multiplayer-rules";
 import type { MultiplayerState, PlayerAction } from "@/game/engine/multiplayer-rules";
 export { createMultiplayerState, isMultiplayerState, resolveMultiplayerTurn } from "@/game/engine/multiplayer-rules";
@@ -16,6 +16,11 @@ type Client = Awaited<ReturnType<typeof createClientConnection>>;
 // Load native WebRTC only when hosting/joining, so singleplayer still works in Expo Go.
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- Native module must load inside the recoverable host/join action.
 const networking = () => require("@/multiplayer/connection") as typeof import("@/multiplayer/connection");
+const localOptions = (settings: GameSettings): MultiplayerPlayerOptions => ({ difficulty: settings.difficulty, handedness: settings.handedness, microgamesEnabled: settings.microgamesEnabled, reducedMotion: settings.reducedMotion });
+function withLocalOptions(state: MultiplayerState, playerId: string, settings: GameSettings) {
+  state.players[playerId].gameplayOptions = localOptions(settings);
+  return state;
+}
 
 
 /** Owns the LAN session, lobby lifecycle, turn clock and local player view. */
@@ -32,6 +37,9 @@ export function useRunMultiplayerGame(settings: GameSettings) {
   const [incoming, setIncoming] = useState("");
   const [pendingId, setPendingId] = useState("");
   const [ready, setReady] = useState<string[]>([]);
+  const [prepared, setPrepared] = useState<string[]>([]);
+  const [playerReady, setPlayerReady] = useState(false);
+  const [localPlayerOptions, setLocalPlayerOptions] = useState<MultiplayerPlayerOptions>(() => localOptions(settings));
   const [lobbyPlayers, setLobbyPlayers] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -42,7 +50,16 @@ export function useRunMultiplayerGame(settings: GameSettings) {
   const [seconds, setSeconds] = useState(0);
   const [disconnected, setDisconnected] = useState(false);
   const [foreground, setForeground] = useState(true);
-  const report = (e: unknown) => { if (mounted.current) setError(describeMultiplayerFailure(e)); };
+  const report = useCallback((e: unknown) => {
+    const message = e instanceof Error ? e.message : String(e);
+    console.error("[multiplayer-client]", JSON.stringify({
+      event: "operation_failed", operation: "native_session", playerId, role,
+      message, name: e instanceof Error ? e.name : typeof e,
+      stack: e instanceof Error ? e.stack : undefined,
+      at: new Date().toISOString(),
+    }));
+    if (mounted.current) setError(describeMultiplayerFailure(e));
+  }, [playerId, role]);
   function receive(next: MultiplayerState) {
     if (!mounted.current) return;
     setState(next); setCharged(false); setSubmitted(null);
@@ -60,7 +77,7 @@ export function useRunMultiplayerGame(settings: GameSettings) {
     const tick = setInterval(() => setSeconds(Math.max(0, Math.ceil((deadline - Date.now()) / 1000))), 250);
     const timeout = setTimeout(() => { try { host.current?.finishTurn(); } catch (e) { report(e); } }, duration);
     return () => { clearInterval(tick); clearTimeout(timeout); };
-  }, [state, role, foreground]);
+  }, [state, role, foreground, report]);
 
   async function run(task: () => Promise<void>) {
     if (busyRef.current) return;
@@ -72,7 +89,7 @@ export function useRunMultiplayerGame(settings: GameSettings) {
     try {
       const api = networking();
       host.current = api.createHostSession<MultiplayerState>({
-        hostPlayerId: "host", initialState: createMultiplayerState(settings.seed, settings.difficulty, ["host"]),
+        hostPlayerId: "host", initialState: withLocalOptions(createMultiplayerState(settings.seed, settings.difficulty, ["host"]), "host", settings),
         connectionOptions: { configuration: { iceServers: [] } },
         resolveTurn: (previous, actions) => {
           const ids = new Set(["host", ...(host.current?.readyPlayerIds ?? [])]);
@@ -88,6 +105,7 @@ export function useRunMultiplayerGame(settings: GameSettings) {
             setLobbyPlayers(host.current?.playerIds ?? []);
           }
         },
+        onReadinessChange: playerIds => { if (mounted.current) setPrepared(playerIds); },
       });
       setRole("host");
     } catch (error) { report(error); }
@@ -130,9 +148,27 @@ export function useRunMultiplayerGame(settings: GameSettings) {
   }
   function start() {
     try {
+      if (role === "guest") { markReady(); return; }
       if (!ready.length) throw new Error("Connect at least one other device first.");
-      host.current!.start(createMultiplayerState(settings.seed, settings.difficulty, ["host", ...ready]));
+      if (ready.some(id => !prepared.includes(id))) throw new Error("Wait for every player to choose their options and press Start.");
+      const next = createMultiplayerState(settings.seed, settings.difficulty, ["host", ...ready]);
+      next.players.host.gameplayOptions = localOptions(settings);
+      host.current!.start(next);
     } catch (e) { report(e); }
+  }
+  function setPlayerOptions(options: MultiplayerPlayerOptions) {
+    setLocalPlayerOptions(options);
+    setPlayerReady(false);
+    if (host.current) host.current.setPlayerOptions(playerId, options);
+    else client.current?.send({ type: "PLAYER_OPTIONS", options });
+  }
+  function markReady() {
+    if (role !== "guest" || !connected || !client.current) {
+      report(new Error("Wait for the host to connect before pressing Start."));
+      return;
+    }
+    client.current.send({ type: "PLAYER_READY", options: localPlayerOptions });
+    setPlayerReady(true);
   }
   function submit(action: PlayerAction) {
     if (!state || state.ended || disconnected || submitted === state.turn) return;
@@ -146,12 +182,7 @@ export function useRunMultiplayerGame(settings: GameSettings) {
     } catch (e) { setSubmitted(null); report(e); }
   }
 
-  const player = state?.players[playerId];
-  const map = state && player ? moveCurrentPosition(state.map, player.roomId) : null;
-  const snapshot = state && player && map ? getRunSnapshot({ activeMonsterId: null, clearedLevels: state.level - 1,
-    difficulty: state.difficulty, dungeonMap: map, inventoryItem: player.item, equipment: player.equipment ?? null, isResolving: false, level: state.level,
-    playerEnergy: player.energy, playerHealth: player.health, turnCounter: state.turnsLeft }) : null;
-  const visibleMap = snapshot?.visibleDungeonMap ?? map;
+  const view = useMemo(() => getMultiplayerPlayerView(state, playerId), [state, playerId]);
   function removePlayer(id: string) {
     host.current?.removePlayer(id);
     if (id === pendingId) { setPendingId(""); setOutgoing(""); }
@@ -160,12 +191,14 @@ export function useRunMultiplayerGame(settings: GameSettings) {
     host.current?.close(); host.current = null;
     client.current?.close(); client.current = null;
     setRole(null); setState(null); setConnected(false); setDisconnected(false);
-    setSubmitted(null); setReady([]); setLobbyPlayers([]); setOutgoing(""); setIncoming(""); setPendingId("");
+    setSubmitted(null); setReady([]); setPrepared([]); setPlayerReady(false); setLobbyPlayers([]); setOutgoing(""); setIncoming(""); setPendingId("");
   }
   return {
-    role, playerId, state, outgoing, incoming, setIncoming, pendingId, ready,
+    role, playerId, state, outgoing, incoming, setIncoming, pendingId, ready, prepared, readyPlayers: prepared, playerReady,
     lobbyPlayers, error, busy, connected, submitted, charged, seconds, disconnected,
-    player, map: visibleMap, snapshot, hostGame, start, submit, removePlayer,
+    player: view.player, map: view.map, snapshot: view.snapshot, hostGame, start, submit, removePlayer,
+    playerOptions: view.player?.gameplayOptions ?? localPlayerOptions,
+    setPlayerOptions, markReady,
     chooseGuest: () => setRole("guest"),
     leave,
     addGuest: () => run(addGuest),

@@ -21,11 +21,16 @@ export function restartAnimations(
   animationKeys: (keyof CombatAnimationFrame)[],
 ) {
   // Restart only the requested one-shot channels.
-  setFrame(frame => {
-    const nextFrame = { ...frame };
-    animationKeys.forEach(key => { nextFrame[key] = 0; });
-    return nextFrame;
-  });
+  setFrame(frame => restartAnimationFrame(frame, animationKeys));
+}
+
+export function restartAnimationFrame<Frame extends CombatAnimationFrame>(
+  frame: Frame,
+  animationKeys: (keyof CombatAnimationFrame)[],
+): Frame {
+  const nextFrame = { ...frame };
+  animationKeys.forEach(key => { nextFrame[key] = 0; });
+  return nextFrame;
 }
 
 export function swapRoomItemWithInventory({ currentRoomId, currentRoomItemId, dungeonMap, inventoryItem }: {

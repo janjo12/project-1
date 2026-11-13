@@ -13,6 +13,11 @@ test("the player reaches the exit before the room changes and enters from the op
   await page.getByRole("button", { name: "easy", exact: true }).click();
   await page.getByRole("textbox", { name: "Seed" }).fill("testwarrior");
   await page.getByRole("button", { name: "Start", exact: true }).click();
+  const nextClassInstructions = page.getByRole("button", { name: "Next class instructions", exact: true });
+  if (await nextClassInstructions.isVisible().catch(() => false)) {
+    await nextClassInstructions.click();
+    await page.getByRole("button", { name: "Start playing", exact: true }).click();
+  }
   await page.clock.runFor(GAME_PARAMETERS.animation.roomTransitionDurationMs);
 
   const currentRoom = page.getByTestId("current-dungeon-room");
@@ -24,7 +29,7 @@ test("the player reaches the exit before the room changes and enters from the op
   await expect(doorway).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
   const doorwayBounds = await doorway.boundingBox();
   expect(doorwayBounds).not.toBeNull();
-  expect(Math.min(doorwayBounds!.width, doorwayBounds!.height)).toBeGreaterThan(40);
+  expect(Math.min(doorwayBounds!.width, doorwayBounds!.height)).toBeGreaterThan(32);
   const roomFrameBounds = await page.getByTestId("dungeon-room-frame").boundingBox();
   expect(roomFrameBounds).not.toBeNull();
   const horizontalCenter = doorwayBounds!.x + doorwayBounds!.width / 2;

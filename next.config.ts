@@ -5,6 +5,7 @@ import webpack from "webpack";
 const projectRoot = fileURLToPath(new URL(".", import.meta.url));
 
 const nextConfig: NextConfig = {
+  distDir: process.env.NEXT_DIST_DIR ?? ".next",
   outputFileTracingRoot: projectRoot,
   eslint: { ignoreDuringBuilds: true },
   transpilePackages: [

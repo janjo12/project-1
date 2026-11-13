@@ -47,10 +47,14 @@ export function PauseMenu({
       onRequestClose={onBackToGame}
       visible={visible}
     >
+      <ScrollView
+        style={{ maxHeight: "95%", width: "100%" }}
+        contentContainerStyle={{ alignItems: "center", gap: tinyLayout ? 3 : 16, width: "100%" }}
+      >
       <Title>{showInstructions ? "Instructions" : "Menu"}</Title>
       {!showInstructions ? <StyledText>Seed: {seed}</StyledText> : null}
 
-      {showInstructions ? <ScrollView style={{ maxHeight: "70%" }} contentContainerStyle={{ alignItems: "stretch", gap: 10 }}>
+      {showInstructions ? <>
         <StyledText>Level {level}</StyledText>
         <StyledText>Tap a monster to attack. Tap an item or equipment in the room to pick it up. Use doorways to move, tap your hero for the class support skill, and tap the stairs to descend.</StyledText>
         <StyledText>{getSupportDescription(classId, false)}</StyledText>
@@ -62,7 +66,7 @@ export function PauseMenu({
         <StyledText>Clearing a floor and taking its stairs restores Health and Energy. Your item and equipment carry over to the next floor.</StyledText>
         <StyledText>Running microgame average: {microgameAverage === null ? "No scores yet" : `${Math.round(microgameAverage)}% of maximum score`}</StyledText>
         <PrimaryButton accessibilityLabel="Back to pause menu" accessibilityRole="button" label="Back" onPress={() => setShowInstructions(false)} />
-      </ScrollView> : <>
+      </> : <>
         <Container style={tinyLayout ? { gap: 6 } : undefined}>
           <Row>
             <StyledText>Appearance</StyledText>
@@ -82,6 +86,7 @@ export function PauseMenu({
         <PrimaryButton accessibilityLabel="Back to Game" accessibilityRole="button" label="Back to Game" onPress={onBackToGame} />
         <DestructiveButton accessibilityLabel="Quit to Title" accessibilityRole="button" label="Quit to Title" onPress={onQuitToTitle} />
       </>}
+      </ScrollView>
     </StyledModal>
   );
 }

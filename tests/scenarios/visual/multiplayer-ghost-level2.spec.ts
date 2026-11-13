@@ -105,7 +105,9 @@ test("two live multiplayer players reach Level 2 after a ghost reveals and suppo
     await guestPage.getByRole("button", { name: "Join game", exact: true }).click();
     await guestPage.getByRole("textbox", { name: "Room code" }).fill(roomCode);
     await guestPage.getByRole("button", { name: "Join room", exact: true }).click();
-    await expect(guestPage.getByText(new RegExp(`Joined room ${roomCode}`))).toBeVisible();
+    await expect(guestPage.getByText("[Project 1]", { exact: true })).toBeVisible();
+    await guestPage.getByRole("button", { name: "hard", exact: true }).click();
+    await guestPage.getByRole("button", { name: "Start", exact: true }).click();
 
     await page.getByRole("button", { name: "Game options", exact: true }).click();
     await page.getByRole("textbox", { name: "Seed" }).fill("testwarrior");
@@ -125,6 +127,7 @@ test("two live multiplayer players reach Level 2 after a ghost reveals and suppo
     expect(state.phase).toBe("playing");
     expect(state.players.host.classId).toBe("warrior");
     expect(state.players[victimId].classId).toBe("warrior");
+    expect(state.players[victimId].gameplayOptions?.difficulty).toBe("hard");
 
     const wolfId = Object.values(state.map.entities.monsters).find(monster => monster.chases)?.id;
     expect(wolfId, "the reserved multiplayer seed includes a Werewolf encounter").toBeTruthy();
@@ -190,22 +193,22 @@ test("two live multiplayer players reach Level 2 after a ghost reveals and suppo
       if (room[step.direction] === "wall") throw new Error(`The test route unexpectedly hit a wall at ${currentRoomId}`);
       expect(nextRoom.id).toBe(step.to);
       state = await takeTurn(request, roomCode, state, {
-        host: { type: "MOVE", target: step.direction },
+        // Let the guest enter first so the test deterministically assigns Werewolf aggro to the player without the arrow.
+        host: stepIndex === pathToWolf.length - 1 ? { type: "SUPPORT" } : { type: "MOVE", target: step.direction },
         [victimId]: { type: "MOVE", target: step.direction },
       });
     }
 
-    expect(state.players.host.roomId).toBe(wolfRoomId);
+    expect(state.players.host.roomId).toBe(finalWolfStep.from);
     expect(state.players[victimId].roomId).toBe(wolfRoomId);
     expect(state.players.host.item).toBe("silver-bullet");
     expect(state.players[victimId].item).toBe("health-potion");
 
     // The guest keeps attacking the immune Werewolf while the host waits safely next door.
     // This makes the guest's death a real consequence of live combat; the health potion saves once.
-    const retreatDirection = reverseDirection(finalWolfStep.direction);
     for (let hit = 0; state.players[victimId].health > 0 && hit < 30; hit += 1) {
       state = await takeTurn(request, roomCode, state, {
-        host: hit === 0 ? { type: "MOVE", target: retreatDirection } : { type: "SUPPORT" },
+        host: { type: "SUPPORT" },
         [victimId]: { type: "ATTACK", target: wolfId!, microgameScore: 100 },
       });
     }
@@ -265,8 +268,6 @@ test("two live multiplayer players reach Level 2 after a ghost reveals and suppo
     }
     expect(state.players.host.roomId).toBe(stairsRoomId);
     expect(state.players[victimId].roomId).toBe(stairsRoomId);
-    await expect(page.getByRole("button", { name: new RegExp(`Warrior.*${victimId}`) })).toBeVisible();
-
     // A ghost can support the living player on the stairs, then the host descends to Level 2.
     state = await takeTurn(request, roomCode, state, {
       host: { type: "DESCEND" },

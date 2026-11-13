@@ -16,11 +16,12 @@ describe("customized test seeds", () => {
   });
 
   it("chooses ordinary run classes randomly, independently of the dungeon seed", () => {
-    const random = jest.spyOn(Math, "random").mockReturnValueOnce(0).mockReturnValueOnce(0.99);
-    expect(gameClassForSeed("replayable-seed").id).toBe("warrior");
-    expect(gameClassForSeed("replayable-seed").id).toBe("wizard");
-    expect(random).toHaveBeenCalledTimes(2);
-    random.mockRestore();
+    expect(gameClassForSeed("replayable-seed", () => 0).id).toBe("warrior");
+    expect(gameClassForSeed("replayable-seed", () => 0.99).id).toBe("wizard");
+  });
+
+  it("does not assign the multiplayer-only ghost class from a singleplayer seed", () => {
+    expect(gameClassForSeed("testghost", () => 0).id).toBe("warrior");
   });
 });
 

@@ -15,10 +15,24 @@ export function scaleMicrogameScore(score: number, difficulty: Difficulty = "har
   return scaled + Math.max(0, bounded - 100);
 }
 
+/** Easy-mode defense stays forgiving but starts from a lower guaranteed reduction. */
+export function scaleDefenseMicrogameScore(score: number, difficulty: Difficulty = "hard"): number {
+  if (difficulty !== "easy") return scaleMicrogameScore(score, difficulty);
+  const bounded = Math.max(0, score);
+  const standardScore = Math.min(100, bounded);
+  return Math.min(100, 65 + standardScore * 0.625) + Math.max(0, bounded - 100);
+}
+
 export function getPlayerAttackDamage(target: WorldMonster, charged: boolean, classId?: GameClassId): number {
   if (target.chases) return 0;
   const classBonus = classId === "wizard" ? 3 : 0;
   return (charged ? GAME_PARAMETERS.combat.strongAttackDamage : GAME_PARAMETERS.combat.normalAttackDamage) + classBonus;
+}
+
+/** Vanguard reflects ordinary enemy attacks, but never bypasses Werewolf immunity. */
+export function getWarriorRiposteDamage(target: WorldMonster, requestedDamage: number): number {
+  if (target.chases) return 0;
+  return Math.min(target.currentHealth, Math.max(0, requestedDamage));
 }
 
 export function applyDefense(damage: number, defense: number): number {

@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { getRunSnapshot } from "@/game/engine/run-game-snapshot";
-import { moveCurrentPosition } from "@/game/dungeon/rooms";
+import { getMultiplayerPlayerView } from "@/game/engine/multiplayer-view";
 import type { MultiplayerState, PlayerAction } from "@/game/engine/multiplayer-rules";
 import type { GameSettings } from "@/utils/settings-storage";
+import type { MultiplayerPlayerOptions } from "@/multiplayer/player-options";
+import { isRoomConnectionFailure, pollRoom, requestRoom } from "@/multiplayer/room-client";
+import { describeRoomOperationFailure } from "@/multiplayer/multiplayer-errors";
 
 type RoomResponse = {
   code: string;
@@ -11,38 +13,21 @@ type RoomResponse = {
   revision: number;
   deadlineAt: number | null;
   state: MultiplayerState | null;
-  players: { id: string; health: number }[];
+  players: { id: string; health: number; ready: boolean }[];
+  playerOptions: MultiplayerPlayerOptions;
+  playerReady: boolean;
 };
 
-type RoomRequestError = Error & { status: number };
-
-function isRoomConnectionFailure(cause: unknown) {
-  if (cause instanceof TypeError) return true;
-  return cause instanceof Error && "status" in cause &&
-    typeof cause.status === "number" && (cause.status === 404 || cause.status >= 500);
-}
-
-async function requestRoom<T extends object>(body: Record<string, unknown>): Promise<T> {
-  const response = await fetch("/api/multiplayer", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+function samePlayers(left: RoomResponse["players"], right: RoomResponse["players"]) {
+  return left.length === right.length && left.every((player, index) => {
+    const other = right[index];
+    return other !== undefined && player.id === other.id && player.health === other.health && player.ready === other.ready;
   });
-  const result = await response.json() as T | { error?: string };
-  if (!response.ok) {
-    const error = new Error("error" in result && result.error ? result.error : `Multiplayer request failed (${response.status}).`) as RoomRequestError;
-    error.status = response.status;
-    throw error;
-  }
-  return result as T;
 }
 
-async function pollRoom(code: string, playerId: string) {
-  const query = new URLSearchParams({ code, playerId });
-  const response = await fetch(`/api/multiplayer?${query}`, { cache: "no-store" });
-  const result = await response.json() as RoomResponse | { error?: string };
-  if (!response.ok) throw new Error("error" in result && result.error ? result.error : `Room update failed (${response.status}).`);
-  return result as RoomResponse;
+function samePlayerOptions(left: MultiplayerPlayerOptions, right: MultiplayerPlayerOptions) {
+  return left.difficulty === right.difficulty && left.handedness === right.handedness &&
+    left.microgamesEnabled === right.microgamesEnabled && left.reducedMotion === right.reducedMotion;
 }
 
 export function useRunMultiplayerGame(settings: GameSettings) {
@@ -51,7 +36,9 @@ export function useRunMultiplayerGame(settings: GameSettings) {
   const [roomCode, setRoomCode] = useState("");
   const [state, setState] = useState<MultiplayerState | null>(null);
   const [incoming, setIncoming] = useState("");
-  const [players, setPlayers] = useState<{ id: string; health: number }[]>([]);
+  const [players, setPlayers] = useState<{ id: string; health: number; ready: boolean }[]>([]);
+  const [playerReady, setPlayerReady] = useState(false);
+  const [readyPlayers, setReadyPlayers] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [connected, setConnected] = useState(false);
@@ -60,9 +47,34 @@ export function useRunMultiplayerGame(settings: GameSettings) {
   const [microgameScore, setMicrogameScore] = useState<number | null>(null);
   const [seconds, setSeconds] = useState(0);
   const [disconnected, setDisconnected] = useState(false);
+  const [playerOptions, setPlayerOptionsState] = useState<RoomResponse["playerOptions"]>({ difficulty: settings.difficulty, handedness: settings.handedness, microgamesEnabled: settings.microgamesEnabled, reducedMotion: settings.reducedMotion });
   const revision = useRef(-1);
   const deadlineAt = useRef<number | null>(null);
   const mounted = useRef(true);
+
+  function updatePlayers(next: RoomResponse["players"]) {
+    setPlayers(current => samePlayers(current, next) ? current : next);
+    const nextReady = next.filter(candidate => candidate.ready).map(candidate => candidate.id);
+    setReadyPlayers(current => current.length === nextReady.length && current.every((id, index) => id === nextReady[index]) ? current : nextReady);
+  }
+
+  function updatePlayerOptions(next: MultiplayerPlayerOptions) {
+    setPlayerOptionsState(current => samePlayerOptions(current, next) ? current : next);
+  }
+
+  const logFailure = useCallback((operation: string, cause: unknown) => {
+    const status = cause instanceof Error && "status" in cause && typeof cause.status === "number" ? cause.status : null;
+    const details = JSON.stringify({
+      event: "operation_failed", operation, roomCode: roomCode || null, playerId,
+      role, revision: revision.current, turn: state?.turn ?? null,
+      message: cause instanceof Error ? cause.message : String(cause),
+      name: cause instanceof Error ? cause.name : typeof cause,
+      status,
+      at: new Date().toISOString(),
+    });
+    if (operation === "leave_room" || (operation === "poll" && status === 404)) console.warn("[multiplayer-client]", details);
+    else console.error("[multiplayer-client]", details);
+  }, [roomCode, playerId, role, state?.turn]);
 
   useEffect(() => {
     mounted.current = true;
@@ -74,11 +86,13 @@ export function useRunMultiplayerGame(settings: GameSettings) {
     let stopped = false;
     const update = async () => {
       try {
-        const result = await pollRoom(roomCode, playerId);
+        const result = await pollRoom<RoomResponse>(roomCode, playerId);
         if (stopped) return;
-        setPlayers(result.players);
+        updatePlayers(result.players);
         deadlineAt.current = result.deadlineAt;
         setDisconnected(false);
+        updatePlayerOptions(result.playerOptions);
+        setPlayerReady(result.playerReady);
         if (result.revision !== revision.current) {
           revision.current = result.revision;
           if (result.state) {
@@ -90,15 +104,16 @@ export function useRunMultiplayerGame(settings: GameSettings) {
         }
       } catch (cause) {
         if (!stopped) {
+          logFailure("poll", cause);
           setDisconnected(true);
-          setError(cause instanceof Error ? cause.message : String(cause));
+          setError(describeRoomOperationFailure(cause, "poll"));
         }
       }
     };
     void update();
     const interval = setInterval(() => void update(), 400);
     return () => { stopped = true; clearInterval(interval); };
-  }, [roomCode, playerId]);
+  }, [roomCode, playerId, logFailure]);
 
   useEffect(() => {
     const tick = () => setSeconds(deadlineAt.current ? Math.max(0, Math.ceil((deadlineAt.current - Date.now()) / 1000)) : 0);
@@ -107,35 +122,42 @@ export function useRunMultiplayerGame(settings: GameSettings) {
     return () => clearInterval(interval);
   }, []);
 
-  async function run(task: () => Promise<void>) {
+  async function run(operation: string, task: () => Promise<void>) {
     if (busy) return;
     setBusy(true);
     setError("");
     try { await task(); }
-    catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
+    catch (cause) { logFailure(operation, cause); setError(describeRoomOperationFailure(cause, operation)); }
     finally { if (mounted.current) setBusy(false); }
   }
 
   async function hostGame() {
-    await run(async () => {
-      const result = await requestRoom<RoomResponse>({ type: "create", seed: settings.seed, difficulty: settings.difficulty });
+    await run("host_room", async () => {
+      const result = await requestRoom<RoomResponse>({
+        type: "create", seed: settings.seed, difficulty: settings.difficulty,
+        handedness: settings.handedness, microgamesEnabled: settings.microgamesEnabled, reducedMotion: settings.reducedMotion,
+      });
       revision.current = result.revision;
       setRoomCode(result.code);
       setRole("host");
       setPlayerId(result.playerId);
-      setPlayers(result.players);
+      updatePlayers(result.players);
       setConnected(true);
+      updatePlayerOptions(result.playerOptions);
+      setPlayerReady(result.playerReady);
     });
   }
 
   async function join() {
-    await run(async () => {
-      const result = await requestRoom<RoomResponse>({ type: "join", code: incoming });
+    await run("join_room", async () => {
+      const result = await requestRoom<RoomResponse>({ type: "join", code: incoming, ...playerOptions });
       revision.current = result.revision;
       setRoomCode(result.code);
       setRole("guest");
       setPlayerId(result.playerId);
-      setPlayers(result.players);
+      updatePlayers(result.players);
+      updatePlayerOptions(result.playerOptions);
+      setPlayerReady(result.playerReady);
       setConnected(true);
       setIncoming("");
     });
@@ -143,14 +165,46 @@ export function useRunMultiplayerGame(settings: GameSettings) {
 
   async function start() {
     if (!roomCode) return;
-    await run(async () => {
-      const configured = await requestRoom<RoomResponse>({ type: "configure", code: roomCode, playerId, seed: settings.seed, difficulty: settings.difficulty });
-      revision.current = configured.revision;
+    await run("start_room", async () => {
+      if (role === "guest") {
+        const result = await requestRoom<RoomResponse>({ type: "ready", code: roomCode, playerId, ...playerOptions });
+        revision.current = result.revision;
+        updatePlayers(result.players);
+        updatePlayerOptions(result.playerOptions);
+        setPlayerReady(result.playerReady);
+        return;
+      }
+      if (role === "host") {
+        const configured = await requestRoom<RoomResponse>({
+          type: "configure", code: roomCode, playerId,
+          seed: settings.seed, difficulty: settings.difficulty,
+          handedness: settings.handedness,
+          microgamesEnabled: settings.microgamesEnabled,
+          reducedMotion: settings.reducedMotion,
+        });
+        revision.current = configured.revision;
+        updatePlayerOptions(configured.playerOptions);
+      }
       const result = await requestRoom<RoomResponse>({ type: "start", code: roomCode, playerId });
       revision.current = result.revision;
       if (result.state) setState(result.state);
-      setPlayers(result.players);
+      updatePlayers(result.players);
+      updatePlayerOptions(result.playerOptions);
+      setPlayerReady(result.playerReady);
     });
+  }
+
+  async function setPlayerOptions(options: RoomResponse["playerOptions"]) {
+    updatePlayerOptions(options);
+    setPlayerReady(false);
+    if (!roomCode) return;
+    try {
+      const result = await requestRoom<RoomResponse>({ type: "options", code: roomCode, playerId, ...options });
+      revision.current = result.revision;
+    } catch (cause) {
+      logFailure("save_player_options", cause);
+      setError(describeRoomOperationFailure(cause, "save_player_options"));
+    }
   }
 
   async function submit(action: PlayerAction) {
@@ -160,7 +214,7 @@ export function useRunMultiplayerGame(settings: GameSettings) {
     const complete = { ...action, charged, ...(microgameScore === null ? {} : { microgameScore }) };
     try {
       const result = await requestRoom<RoomResponse>({ type: "action", code: roomCode, playerId, turn: state.turn, action: complete });
-      setPlayers(result.players);
+      updatePlayers(result.players);
       deadlineAt.current = result.deadlineAt;
       if (result.state && result.revision !== revision.current) {
         revision.current = result.revision;
@@ -170,8 +224,9 @@ export function useRunMultiplayerGame(settings: GameSettings) {
         setMicrogameScore(null);
       }
     } catch (cause) {
+      logFailure("submit_action", cause);
       setSubmitted(null);
-      setError(cause instanceof Error ? cause.message : String(cause));
+      setError(describeRoomOperationFailure(cause, "submit_action"));
       if (isRoomConnectionFailure(cause)) setDisconnected(true);
     }
   }
@@ -179,12 +234,15 @@ export function useRunMultiplayerGame(settings: GameSettings) {
   async function leave() {
     try {
       if (roomCode) await requestRoom({ type: "leave", code: roomCode, playerId });
-    } catch {
+    } catch (cause) {
+      logFailure("leave_room", cause);
       // Always clear local room state even when the server has already lost or closed the room.
     } finally {
       setRoomCode("");
       setState(null);
       setPlayers([]);
+      setReadyPlayers([]);
+      setPlayerReady(false);
       setRole(null);
       setConnected(false);
       setDisconnected(false);
@@ -194,21 +252,8 @@ export function useRunMultiplayerGame(settings: GameSettings) {
     }
   }
 
-  const player = state?.players[playerId];
-  const map = state && player ? moveCurrentPosition(state.map, player.roomId) : null;
-  const snapshot = state && player && map ? getRunSnapshot({
-    activeMonsterId: null,
-    clearedLevels: state.level - 1,
-    difficulty: state.difficulty,
-    dungeonMap: map,
-    inventoryItem: player.item,
-    equipment: player.equipment ?? null,
-    isResolving: false,
-    level: state.level,
-    playerEnergy: player.energy,
-    playerHealth: player.health,
-    turnCounter: state.turnsLeft,
-  }) : null;
+  const view = useMemo(() => getMultiplayerPlayerView(state, playerId), [state, playerId]);
+  const activePlayerOptions = view.player?.gameplayOptions ?? playerOptions;
 
   return {
     role,
@@ -219,6 +264,8 @@ export function useRunMultiplayerGame(settings: GameSettings) {
     setIncoming,
     pendingId: "",
     ready: players.filter(candidate => candidate.id !== "host").map(candidate => candidate.id),
+    readyPlayers,
+    playerReady,
     lobbyPlayers: players.filter(candidate => candidate.id !== "host").map(candidate => candidate.id),
     error,
     busy,
@@ -227,12 +274,14 @@ export function useRunMultiplayerGame(settings: GameSettings) {
     charged,
     seconds,
     disconnected,
-    player,
-    map,
-    snapshot,
+    player: view.player,
+    map: view.map,
+    snapshot: view.snapshot,
     hostGame: () => void hostGame(),
     start: () => void start(),
     submit: (action: PlayerAction) => void submit(action),
+    playerOptions: activePlayerOptions,
+    setPlayerOptions,
     removePlayer: () => undefined,
     chooseGuest: () => { setRole("guest"); setError(""); },
     addGuest: () => undefined,

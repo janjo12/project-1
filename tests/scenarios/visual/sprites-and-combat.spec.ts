@@ -12,6 +12,11 @@ test("web renders atlas sprites and practice attack remains available from the p
   await page.getByRole("button", { name: "Singleplayer" }).click();
   await page.getByRole("textbox", { name: "Seed" }).fill("testwarrior");
   await page.getByRole("button", { name: "Start", exact: true }).click();
+  const nextClassInstructions = page.getByRole("button", { name: "Next class instructions", exact: true });
+  if (await nextClassInstructions.isVisible().catch(() => false)) {
+    await nextClassInstructions.click();
+    await page.getByRole("button", { name: "Start playing", exact: true }).click();
+  }
   await page.getByRole("button", { name: "Menu" }).click();
   await page.getByRole("dialog", { name: "Game menu" }).getByRole("button", { name: "Practice attack microgame" }).click();
   const microgame = page.getByTestId("microgame-overlay");

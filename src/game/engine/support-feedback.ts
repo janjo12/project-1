@@ -7,5 +7,6 @@ export function getSupportFeedback(classId: GameClassId) {
     case "thief": return { emoji: "🎁", label: "Enrich" };
     case "archer": return { emoji: "🎯", label: "Raise Focus" };
     case "wizard": return { emoji: "⚡", label: "Empower Attacks" };
+    case "ghost": return { emoji: "👻", label: "Haunt" };
   }
 }

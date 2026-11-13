@@ -76,7 +76,7 @@ test("Multitap target stays on the right hand side for right-handed controls", a
 test("Multitap target stays on the left hand side for left-handed controls", async ({ page }) => verifyMultitapHandedness(page, "left"));
 
 async function verifyMultitapHandedness(page: import("@playwright/test").Page, handedness: "left" | "right") {
-  await startPractice(page, "testwarrior", handedness);
+  await startPractice(page, "testranger", handedness);
   const overlay = page.getByTestId("microgame-overlay");
   const target = page.getByRole("button", { name: "Tap circle" });
   const track = page.getByTestId("multitap-track");

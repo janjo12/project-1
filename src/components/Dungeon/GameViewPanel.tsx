@@ -1,5 +1,5 @@
 import type { SceneFrameStore } from "@/game/state/sceneFrameStore";
-import { useEffect, useState, type ReactNode } from "react";
+import { memo, useEffect, useState, type ReactNode } from "react";
 import { Animated, Platform, StyleSheet, Text, View } from "react-native";
 
 import { useThemeColors, type ThemeColors } from "@/components/Common/theme";
@@ -30,6 +30,7 @@ type GameViewPanelProps = {
   showGetHint?: boolean;
   completedTutorialHints?: ("Attack" | "Get")[];
   supportEffect?: SupportEffect | null;
+  waitingForPlayers?: boolean;
   playerPosition?: ScenePosition;
   playerLabel?: string;
   playerSprite?: string;
@@ -55,7 +56,7 @@ const defaultRoomDoorways: RoomDoorways = {
   top: "wall",
 };
 
-export function GameViewPanel({
+export const GameViewPanel = memo(function GameViewPanel({
   canUnlockDoors = false,
   canPassBlockedDoorways = false,
   floorLayer,
@@ -69,6 +70,7 @@ export function GameViewPanel({
   showGetHint = false,
   completedTutorialHints = [],
   supportEffect = null,
+  waitingForPlayers = false,
   playerPosition = "center",
   playerLabel = "Player",
   playerSprite = PLAYER_SPRITE,
@@ -105,6 +107,7 @@ export function GameViewPanel({
   return (
     <Animated.View style={[styles.panel, { opacity: panelOpacity }]}>
       <View style={[styles.sceneBox, Platform.OS === "web" && styles.webSceneBox]} onLayout={event => setSceneBoxHeight(event.nativeEvent.layout.height)}>
+        <View style={waitingForPlayers ? styles.waitingScene : undefined}>
         {showStairsObjective || hardTurnCounter !== null ? (
           <Text
             accessibilityLabel={hardTurnCounter !== null ? "Turns remaining" : "Level objective"}
@@ -147,10 +150,16 @@ export function GameViewPanel({
           supportEffect={supportEffect}
           onPlayerPress={onPlayerPress}
         />
+        </View>
+        {waitingForPlayers ? (
+          <View pointerEvents="none" style={styles.waitingOverlay}>
+            <Text accessibilityLiveRegion="polite" style={styles.waitingText}>Action submitted{"\n"}Waiting for other players…</Text>
+          </View>
+        ) : null}
       </View>
     </Animated.View>
   );
-}
+});
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
@@ -169,9 +178,33 @@ function createStyles(colors: ThemeColors) {
       minHeight: 0,
       flex: 1,
       padding: 4,
+      position: "relative",
     },
     webSceneBox: {
       paddingBottom: 24,
+    },
+    waitingScene: {
+      opacity: 0.28,
+    },
+    waitingOverlay: {
+      alignItems: "center",
+      backgroundColor: "rgba(0, 0, 0, 0.68)",
+      borderColor: colors.accent,
+      borderRadius: 8,
+      borderWidth: 2,
+      left: 16,
+      paddingHorizontal: 18,
+      paddingVertical: 12,
+      position: "absolute",
+      right: 16,
+      top: "42%",
+      zIndex: 10,
+    },
+    waitingText: {
+      color: colors.paper,
+      fontSize: 16,
+      fontWeight: "900",
+      textAlign: "center",
     },
     turnCounter: {
       color: colors.ink,
