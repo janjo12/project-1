@@ -6,7 +6,7 @@ import type { Difficulty } from "@/utils/settings-storage";
 
 export type MicrogameKind = "concentration" | "timed-attack" | "multitap" | "multiswipe" | "rune-tracer" | "defense";
 export type MultitapTargetSpot = { x: number; y: number };
-export type MultiswipeTarget = { start: MultitapTargetSpot; end: MultitapTargetSpot; axis: "horizontal" | "vertical" };
+export type MultiswipeTarget = { start: MultitapTargetSpot; end: MultitapTargetSpot; axis: "horizontal" | "vertical"; path?: MultitapTargetSpot[] };
 export type RuneNode = { id: string; point: MultitapTargetSpot };
 export type RuneEdge = { id: string; from: string; to: string };
 export type RuneTracerPattern = { nodes: RuneNode[]; edges: RuneEdge[]; columns: number; rows: number; diameter: number };
@@ -20,8 +20,8 @@ export const TIMED_ATTACK_WINDOW_MS = TIMED_ATTACK_CUE_DELAY_MS + HUMAN_REACTION
 export const MULTITAP_WINDOW_MS = 3000;
 export const MULTISWIPE_WINDOW_MS = MULTITAP_WINDOW_MS;
 export const RUNE_TRACER_WINDOW_MS = MULTITAP_WINDOW_MS;
-export const DEFENSE_CUE_DELAY_MS = 120;
-export const DEFENSE_WINDOW_MS = 700;
+export const DEFENSE_CUE_DELAY_MS = 300;
+export const DEFENSE_WINDOW_MS = 1300;
 export const MULTITAP_DOT_DIAMETER = 44;
 const now = () => globalThis.performance?.now?.() ?? Date.now();
 const scoreWithinRange = (score: number) => Math.max(0, Math.min(100, Math.round(score)));
@@ -84,23 +84,47 @@ export function getNextMultiswipeTarget(trackWidth: number, trackHeight: number,
     return { start: { x: 0.2, y: 0.5 }, end: { x: 0.8, y: 0.5 }, axis: "horizontal" };
   }
   const { columns, rows } = getMultiswipeGrid(trackWidth, trackHeight, requestedDiameter);
-  const options: MultiswipeTarget[] = [];
-  for (let row = 0; row < rows; row += 1) {
-    for (let column = 0; column < columns; column += 1) {
-      for (const [deltaColumn, deltaRow, axis] of [[3, 0, "horizontal"], [0, 3, "vertical"]] as const) {
-        const endColumn = column + deltaColumn;
-        const endRow = row + deltaRow;
-        if (endColumn >= columns || endRow >= rows) continue;
-        const point = (x: number, y: number): MultitapTargetSpot => ({
-          x: (x + 0.5) / columns,
-          y: (y + 0.5) / rows,
-        });
-        options.push({ start: point(column, row), end: point(endColumn, endRow), axis });
+  const point = (column: number, row: number): MultitapTargetSpot => ({ x: (column + 0.5) / columns, y: (row + 0.5) / rows });
+  const steps = [
+    { id: "up", dx: 0, dy: -1, opposite: "down" },
+    { id: "down", dx: 0, dy: 1, opposite: "up" },
+    { id: "left", dx: -1, dy: 0, opposite: "right" },
+    { id: "right", dx: 1, dy: 0, opposite: "left" },
+  ] as const;
+  const starts = Array.from({ length: columns * rows }, (_, index) => ({ column: index % columns, row: Math.floor(index / columns) }));
+  for (let index = starts.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(random() * (index + 1));
+    [starts[index], starts[swapIndex]] = [starts[swapIndex], starts[index]];
+  }
+  for (const start of starts) {
+    const route = [start];
+    const directionsUsed: string[] = [];
+    const walk = (): boolean => {
+      if (route.length === 4) return true;
+      const current = route[route.length - 1];
+      const options = steps.filter(step => !directionsUsed.includes(step.opposite) &&
+        current.column + step.dx >= 0 && current.column + step.dx < columns && current.row + step.dy >= 0 && current.row + step.dy < rows);
+      for (let index = options.length - 1; index > 0; index -= 1) {
+        const swapIndex = Math.floor(random() * (index + 1));
+        [options[index], options[swapIndex]] = [options[swapIndex], options[index]];
       }
+      for (const step of options) {
+        directionsUsed.push(step.id);
+        route.push({ column: current.column + step.dx, row: current.row + step.dy });
+        if (walk()) return true;
+        route.pop();
+        directionsUsed.pop();
+      }
+      return false;
+    };
+    if (walk()) {
+      const path = route.map(({ column, row }) => point(column, row));
+      const firstStep = route[1];
+      const axis = firstStep.row === start.row ? "horizontal" : "vertical";
+      return { start: path[0], end: path[path.length - 1], axis, path };
     }
   }
-  if (options.length === 0) return { start: { x: 0.2, y: 0.5 }, end: { x: 0.8, y: 0.5 }, axis: "horizontal" };
-  return options[Math.min(options.length - 1, Math.floor(random() * options.length))];
+  return { start: { x: 0.2, y: 0.5 }, end: { x: 0.8, y: 0.5 }, axis: "horizontal" };
 }
 
 function distanceToSpot(point: MultitapTargetSpot, spot: MultitapTargetSpot, width: number, height: number) {
@@ -120,14 +144,36 @@ export function getMultitapGrid(trackWidth: number, trackHeight: number, request
   };
 }
 
-export function getRuneTracerPattern(trackWidth: number, trackHeight: number, handedness: "left" | "right", requestedDiameter = 28): RuneTracerPattern {
+export function getRuneTracerPattern(trackWidth: number, trackHeight: number, handedness: "left" | "right", requestedDiameter = 28, patternSeed = 1): RuneTracerPattern {
   const { diameter, columns, rows } = getMultitapGrid(trackWidth, trackHeight, requestedDiameter);
   const columnOffset = Math.max(0, Math.floor((columns - 4) / 2));
   const rowOffset = Math.max(0, Math.floor((rows - 4) / 2));
   const cellWidth = trackWidth / 2 / columns;
-  const cells: Record<string, [number, number]> = {
-    A: [1, 0], B: [3, 1], C: [3, 3], D: [0, 3], E: [0, 1], F: [1, 1], G: [1, 2],
+  // Build a connected rune with a seeded step walk. The seed stays fixed for
+  // this overlay instance, so resizing does not change the shape mid-trace.
+  let randomState = patternSeed >>> 0 || 1;
+  const random = () => {
+    randomState = (randomState * 1664525 + 1013904223) >>> 0;
+    return randomState / 0x100000000;
   };
+  const route: [number, number][] = [[1, 1]];
+  const steps = [[1, 0], [-1, 0], [0, 1], [0, -1]] as const;
+  const walk = (): boolean => {
+    if (route.length === 7) return true;
+    const [column, row] = route[route.length - 1];
+    const options = steps
+      .map(([dx, dy]) => [column + dx, row + dy] as [number, number])
+      .filter(([x, y]) => x >= 0 && x < 4 && y >= 0 && y < 4 && !route.some(([rx, ry]) => rx === x && ry === y))
+      .sort(() => random() - 0.5);
+    for (const next of options) {
+      route.push(next);
+      if (walk()) return true;
+      route.pop();
+    }
+    return false;
+  };
+  walk();
+  const cells: Record<string, [number, number]> = Object.fromEntries(route.map((point, index) => [String.fromCharCode(65 + index), point]));
   const nodes = Object.entries(cells).map(([id, [column, row]]) => {
     const x = column + columnOffset;
     const y = row + rowOffset;
@@ -139,12 +185,8 @@ export function getRuneTracerPattern(trackWidth: number, trackHeight: number, ha
       },
     };
   });
-  const edges: RuneEdge[] = [
-    { id: "AB", from: "A", to: "B" }, { id: "BC", from: "B", to: "C" },
-    { id: "CD", from: "C", to: "D" }, { id: "DE", from: "D", to: "E" },
-    { id: "EA", from: "E", to: "A" }, { id: "AF", from: "A", to: "F" },
-    { id: "FG", from: "F", to: "G" }, { id: "GA", from: "G", to: "A" },
-  ];
+  const nodeIds = Object.keys(cells);
+  const edges: RuneEdge[] = nodeIds.slice(1).map((id, index) => ({ id: `${nodeIds[index]}${id}`, from: nodeIds[index], to: id }));
   return { nodes, edges, columns, rows, diameter };
 }
 
@@ -247,7 +289,7 @@ export function useMicrogame(onComplete: (result: MicrogameResult) => void) {
       swipeStartedAtEndpoint.current = false;
       swipeStartEndpoint.current = null;
       runeProgress.current = 0;
-      setTargetDelay(gameKind === "timed-attack" ? TIMED_ATTACK_CUE_DELAY_MS : gameKind === "defense" ? DEFENSE_CUE_DELAY_MS : 200 + Math.floor(Math.random() * 401));
+      setTargetDelay(gameKind === "timed-attack" ? TIMED_ATTACK_CUE_DELAY_MS : gameKind === "defense" ? DEFENSE_CUE_DELAY_MS + Math.floor(Math.random() * 601) : 200 + Math.floor(Math.random() * 401));
       setTargetTaps(getFocusedMultitapTargetTaps(options?.difficulty ?? "normal", options?.level ?? 1, nextEaseLevel));
       leftHandedRef.current = handedness === "left";
       const handednessSpot = handedness === "right" ? 0.2 : 0.8;
@@ -272,6 +314,8 @@ export function useMicrogame(onComplete: (result: MicrogameResult) => void) {
       ? getConcentrationScore(elapsedMs, targetProgress * CONCENTRATION_TARGET_DURATION_MS, easeLevel)
       : kind === "defense" && elapsedMs < targetDelay
         ? 0
+        : kind === "defense"
+          ? scoreWithinRange(100 - Math.abs(elapsedMs - targetDelay) * 100 / (500 * focusTolerance(easeLevel)))
         : getTimedAttackScore(elapsedMs - targetDelay, easeLevel);
     finish(score);
   }, [active, easeLevel, finish, kind, targetDelay, targetSpot]);
@@ -297,21 +341,22 @@ export function useMicrogame(onComplete: (result: MicrogameResult) => void) {
     runeProgress.current = Math.max(0, Math.min(1, progress));
   }, []);
   const endSwipe = useCallback((x: number, y: number, width: number, height: number, dotDiameter = MULTITAP_DOT_DIAMETER) => {
-    if (!active || completed.current || kind !== "multiswipe") return;
+    if (!active || completed.current || kind !== "multiswipe") return false;
     const started = swipeStartedAtEndpoint.current;
     swipeStartedAtEndpoint.current = false;
-    if (!started) return;
+    if (!started) return false;
     const startEndpoint = swipeStartEndpoint.current;
     swipeStartEndpoint.current = null;
-    if (width <= 0 || height <= 0) return;
+    if (width <= 0 || height <= 0) return false;
     const point = { x: x / width, y: y / height };
     const reachedOtherEnd = startEndpoint === "start"
       ? isMultiswipeEndpoint(point, multiswipeTarget.end, width, height, dotDiameter)
       : startEndpoint === "end" && isMultiswipeEndpoint(point, multiswipeTarget.start, width, height, dotDiameter);
     const completedBar = reachedOtherEnd;
-    if (!completedBar) return;
+    if (!completedBar) return false;
     swipeCount.current += 1;
     setMultiswipeTarget(getNextMultiswipeTarget(width, height, dotDiameter));
+    return true;
   }, [active, kind, multiswipeTarget]);
   useEffect(() => {
     if (!active) return;

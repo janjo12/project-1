@@ -478,7 +478,8 @@ function Multiplayer({ settings, onLeave, onHostSelect, onOptionsSelect, onPlayS
               microgamesEnabled={playerOptions.microgamesEnabled}
               onNext={() => setIntroPage(1)}
               onBack={() => setIntroPage(0)}
-              onPractice={() => microgame.start(getGameClass(player.classId).microgame, playerOptions.handedness, { difficulty: playerOptions.difficulty, level: state.level, easeLevel: getMicrogameEaseLevel(player.classId, player.focusBoost) })}
+              onPracticeAttack={() => microgame.start(getGameClass(player.classId).microgame, playerOptions.handedness, { difficulty: playerOptions.difficulty, level: state.level, easeLevel: getMicrogameEaseLevel(player.classId, player.focusBoost) })}
+              onPracticeDefense={() => microgame.start("defense", playerOptions.handedness, { difficulty: playerOptions.difficulty, level: state.level, easeLevel: getMicrogameEaseLevel(player.classId, player.focusBoost) })}
               onStart={() => {
                 setIntroPage(-1);
                 submit({ type: "CLASS_READY" });

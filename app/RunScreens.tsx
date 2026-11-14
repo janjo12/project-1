@@ -296,7 +296,7 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
         onRuneProgress={microgame.updateRuneProgress}
         onRuneComplete={progress => microgame.finishRuneTracer(true, progress)} />
       </View>
-      {classIntroPage >= 0 && !(classIntroPage === 1 && !settings.microgamesEnabled) ? (
+      {classIntroPage >= 0 ? (
         <ClassBriefing
           page={classIntroPage}
           classId={game.playerClass.id}
@@ -304,9 +304,10 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
           multiplayer={false}
           microgamesEnabled={settings.microgamesEnabled}
           onExit={onBackToSetup}
-          onNext={() => setClassIntroPage(settings.microgamesEnabled ? 1 : -1)}
+          onNext={() => setClassIntroPage(1)}
           onBack={() => setClassIntroPage(0)}
-          onPractice={() => microgame.start(game.playerClass.microgame, settings.handedness, { difficulty: settings.difficulty, level: game.level })}
+          onPracticeAttack={() => microgame.start(game.playerClass.microgame, settings.handedness, { difficulty: settings.difficulty, level: game.level })}
+          onPracticeDefense={() => microgame.start("defense", settings.handedness, { difficulty: settings.difficulty, level: game.level })}
           onStart={() => setClassIntroPage(-1)}
         />
       ) : null}
