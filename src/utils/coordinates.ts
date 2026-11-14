@@ -3,11 +3,13 @@ export type ScenePosition = "top" | "bottom" | "left" | "right" | "center";
 export const SCENE_WIDTH = 384;
 export const SCENE_HEIGHT = 288;
 export const SPRITE_SIZE = 32;
+export const ROOM_GRID_COLUMNS = SCENE_WIDTH / SPRITE_SIZE;
+export const ROOM_GRID_ROWS = SCENE_HEIGHT / SPRITE_SIZE;
 // Tune this once to resize the player and other human-form sprites together.
 export const HUMAN_FORM_SPRITE_SIZE = 56;
 export const CREATURE_SPRITE_SIZE = 48;
 const HUMAN_FORM_SPRITES = new Set([
-  "warrior_graphic", "cleric_graphic", "thief_graphic", "archer_graphic", "wizard_graphic",
+  "warrior_graphic", "cleric_graphic", "thief_graphic", "archer_graphic", "wizard_graphic", "ghost_graphic",
   "zombie_graphic", "vampire_graphic", "werewolf_graphic",
 ]);
 
@@ -19,39 +21,51 @@ export const ACTOR_ENVELOPE = 80;
 export type SceneSlot = { x: number; y: number; size: number };
 
 export function layoutRoomActors(actors: { id: string; position?: ScenePosition }[]) {
-  // Pack each actor group into its own logical scene region, independent of device pixel size.
+  // Actors occupy non-overlapping 3x3 grid blocks. Dense rooms step down to 2x2
+  // or 1x1 blocks while keeping every placement aligned to the same invisible grid.
   const slots: Record<string, SceneSlot> = {};
-  const regions: Record<ScenePosition, [number, number, number, number]> = {
-    top: [16, 8, 352, 50], bottom: [16, 230, 352, 50],
-    left: [8, 64, 72, 160], center: [80, 64, 224, 160], right: [304, 64, 72, 160],
+  const blockSpan = actors.length <= 12 ? 3 : actors.length <= 24 ? 2 : 1;
+  const blockSize = blockSpan * SPRITE_SIZE;
+  const spriteSize = Math.min(ACTOR_ENVELOPE, blockSize);
+  const cells: { column: number; row: number }[] = [];
+  for (let row = 0; row + blockSpan <= ROOM_GRID_ROWS; row += blockSpan) {
+    for (let column = 0; column + blockSpan <= ROOM_GRID_COLUMNS; column += blockSpan) {
+      cells.push({ column, row });
+    }
+  }
+  const centerColumn = (ROOM_GRID_COLUMNS - blockSpan) / 2;
+  const centerRow = (ROOM_GRID_ROWS - blockSpan) / 2;
+  const regionOrder = (position: ScenePosition, a: typeof cells[number], b: typeof cells[number]) => {
+    if (position === "top" && a.row !== b.row) return a.row - b.row;
+    if (position === "bottom" && a.row !== b.row) return b.row - a.row;
+    if (position === "left" && a.column !== b.column) return a.column - b.column;
+    if (position === "right" && a.column !== b.column) return b.column - a.column;
+    const aDistance = Math.abs(a.column - centerColumn) + Math.abs(a.row - centerRow);
+    const bDistance = Math.abs(b.column - centerColumn) + Math.abs(b.row - centerRow);
+    return aDistance - bDistance || a.row - b.row || a.column - b.column;
   };
-  for (const position of Object.keys(regions) as ScenePosition[]) {
+  const occupied = new Set<string>();
+  for (const position of ["center", "top", "bottom", "left", "right"] as const) {
     const group = actors.filter(actor => (actor.position ?? "center") === position)
       .sort((a, b) => a.id.localeCompare(b.id));
     if (!group.length) continue;
-    const [x, y, width, height] = regions[position];
-    let columns = 1;
-    let size = 0;
-    for (let count = 1; count <= group.length; count++) {
-      const candidate = Math.min(ACTOR_ENVELOPE, width / count, height / Math.ceil(group.length / count));
-      // Prefer a wider row when equally sized cells fit, which keeps small groups readable.
-      if (candidate >= size) { columns = count; size = candidate; }
-    }
-    const rows = Math.ceil(group.length / columns);
-    group.forEach((actor, index) => {
-      const row = Math.floor(index / columns);
-      const rowCount = Math.min(columns, group.length - row * columns);
+    const orderedCells = [...cells].sort((a, b) => regionOrder(position, a, b));
+    for (const actor of group) {
+      const cell = orderedCells.find(candidate => !occupied.has(`${candidate.column}:${candidate.row}`))
+        ?? cells.find(candidate => !occupied.has(`${candidate.column}:${candidate.row}`));
+      if (!cell) break;
+      occupied.add(`${cell.column}:${cell.row}`);
       slots[actor.id] = {
-        x: x + (width - rowCount * size) / 2 + (index % columns) * size,
-        y: y + (height - rows * size) / 2 + row * size,
-        size,
+        x: cell.column * SPRITE_SIZE + (blockSize - spriteSize) / 2,
+        y: cell.row * SPRITE_SIZE + (blockSize - spriteSize) / 2,
+        size: spriteSize,
       };
-    });
+    }
   }
   return slots;
 }
 
-/** Keep human-form sprites the same size when their actors move between room regions. */
+/** Keep human-form sprites at a consistent size while their grid block fits the envelope. */
 export function getHumanFormScale(playerCount: number) {
   const count = Math.max(1, Math.floor(playerCount));
   const players = Array.from({ length: count }, (_, index) => ({

@@ -20,6 +20,11 @@ test("live multiplayer server creates, joins, resolves, polls, and closes a room
   expect(join.status()).toBe(201);
   const guest = await join.json() as RoomResponse;
 
+  const ready = await request.post("/api/multiplayer", {
+    data: { type: "ready", code: host.code, playerId: guest.playerId, difficulty: "normal" },
+  });
+  expect(ready.ok()).toBe(true);
+
   const start = await request.post("/api/multiplayer", {
     data: { type: "start", code: host.code, playerId: host.playerId },
   });

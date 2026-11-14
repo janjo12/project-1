@@ -23,8 +23,8 @@ export function ItemControl({
 
   return <Pressable accessibilityRole="button" accessibilityLabel={itemLabel} accessibilityHint="Open item details" onPress={onPress} style={styles.itemPanel}>
     <View ref={targetRef} style={styles.slotContents} testID="item-status">
-      {itemSprite ? <PixelSprite sprite={itemSprite} label={itemLabel} size={24} /> : null}
-      <Text numberOfLines={2} style={styles.label}>{itemLabel}</Text>
+      {itemSprite ? <PixelSprite sprite={itemSprite} label={itemLabel} size={32} /> : null}
+      <Text numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.78} style={styles.label}>{itemLabel}</Text>
     </View>
   </Pressable>;
 }
@@ -36,11 +36,11 @@ export function EquipmentControl({ label, sprite, onPress, disabled = false, tar
   const styles = createStyles(colors);
   if (!label) return <View ref={targetRef} accessible={false} pointerEvents="none" style={{ flex: 1, alignItems: "center", justifyContent: "center", height: 72, opacity: 0 }} testID="equipment-flight-target" />;
   return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityHint="Open equipment details" disabled={disabled} onPress={onPress}
-      testID="equipment-slot" style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.paperLight,
-      borderColor: colors.sepia, borderWidth: 2, borderRadius: 12, height: 72, padding: 6, overflow: "hidden", opacity: disabled ? 0.5 : 1 }}>
+      testID="equipment-slot" style={[styles.equipmentPanel, { backgroundColor: colors.paperLight,
+      borderColor: colors.sepia, opacity: disabled ? 0.5 : 1 }]}>
     <View ref={targetRef} style={styles.slotContents} testID="equipment-status">
-      {sprite ? <PixelSprite sprite={sprite} label={label} size={24} /> : null}
-      <Text numberOfLines={2} style={[styles.label, { color: colors.ink }]}>{label}</Text>
+      {sprite ? <PixelSprite sprite={sprite} label={label} size={32} /> : null}
+      <Text numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.78} style={[styles.label, { color: colors.ink }]}>{label}</Text>
     </View>
   </Pressable>;
 }
@@ -91,15 +91,17 @@ function createStyles(colors: ThemeColors) {
       height: 72,
       justifyContent: "center",
       overflow: "hidden",
-      padding: 4,
+      padding: 2,
     },
-    slotContents: { alignItems: "center", flexDirection: "row", gap: 4, justifyContent: "center", width: "100%" },
+    equipmentPanel: { flex: 1, alignItems: "center", justifyContent: "center", borderWidth: 2, borderRadius: 12, height: 72, padding: 2, overflow: "hidden" },
+    slotContents: { alignItems: "center", flexDirection: "column", gap: 1, justifyContent: "center", width: "100%" },
     label: {
       color: colors.ink,
       flexShrink: 1,
-      fontSize: 11,
+      fontSize: 13,
       fontWeight: "900",
-      textAlign: "left",
+      lineHeight: 15,
+      textAlign: "center",
     },
   });
 }

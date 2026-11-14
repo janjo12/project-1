@@ -1,26 +1,47 @@
-import { createMultiplayerState, resolveMultiplayerTurn } from "@/game/engine/run-game-multiplayer";
+import { createMultiplayerState, resolveMultiplayerTurn } from "@/game/engine/multiplayer-rules";
 import { PLAYER_MAX_ENERGY, PLAYER_MAX_HEALTH } from "@/game/engine/run-game-helpers";
 import type { PlayerAction } from "@/multiplayer/connection";
 import { addEquipmentToRoom, getConnectedRoomId, getRoom } from "@/game/dungeon/rooms";
-import type { Direction, RoomEquipmentRef } from "@/game/dungeon/types";
+import { type Direction, type RoomEquipmentRef } from "@/game/dungeon/types";
 import { getMultiplayerPlayerAuraColor, getMultiplayerRoomActors } from "@/game/engine/multiplayer-presentation";
 import { getGameClass } from "@/game/config/game-classes";
 import { GAME_PARAMETERS } from "@/game/config/gameparameters";
+import { createSeededDungeonMap } from "@/game/dungeon/generateDungeon";
 
 const initial = () => { const state = createMultiplayerState("lan-test", "easy", ["host", "guest"]); state.phase = "playing"; return state; };
 test("multiplayer rolls a class independently for each player and keeps distinct auras for shared classes", () => {
-  const random = jest.spyOn(Math, "random")
-    .mockReturnValueOnce(0)
-    .mockReturnValueOnce(0.99);
-  try {
-    const state = createMultiplayerState("lan-test", "easy", ["host", "guest"]);
-    expect(state.players.host.classId).toBe("warrior");
-    expect(state.players.guest.classId).toBe("wizard");
-    expect(getMultiplayerPlayerAuraColor(Object.keys(state.players), "host"))
-      .not.toBe(getMultiplayerPlayerAuraColor(Object.keys(state.players), "guest"));
-  } finally {
-    random.mockRestore();
-  }
+  const rolls = [0, 0.99];
+  const state = createMultiplayerState("lan-test", "easy", ["host", "guest"], () => rolls.shift() ?? 0);
+  expect(state.players.host.classId).toBe("warrior");
+  expect(state.players.guest.classId).toBe("wizard");
+  expect(getMultiplayerPlayerAuraColor(Object.keys(state.players), "host"))
+    .not.toBe(getMultiplayerPlayerAuraColor(Object.keys(state.players), "guest"));
+});
+
+test("the multiplayer-only testghost seed starts one ghost and a living test partner", () => {
+  const state = createMultiplayerState("testghost", "easy", ["host", "guest"]);
+  expect(state.players.host).toMatchObject({ classId: "ghost", health: 0 });
+  expect(state.players.guest).toMatchObject({ classId: "warrior", health: PLAYER_MAX_HEALTH });
+  expect(state.ended).toBe(false);
+  expect(state.map.entities.monsters["testghost:guard"]).toBeDefined();
+});
+
+test.each([
+  ["testwarrior", "warrior"],
+  ["testcleric", "cleric"],
+  ["testthief", "thief"],
+  ["testwizard", "wizard"],
+  ["testranger", "archer"],
+  ["testarcher", "archer"],
+] as const)("dedicated seed %s assigns every multiplayer player the %s class and singleplayer test floor", (seed, classId) => {
+  const state = createMultiplayerState(seed, "easy", ["host", "guest", "third"]);
+  const singleplayerMap = createSeededDungeonMap(seed, 1);
+  expect(Object.values(state.players).map(player => player.classId)).toEqual([classId, classId, classId]);
+  expect(state.map.startingRoomId).toBe(singleplayerMap.startingRoomId);
+  expect(state.map.rooms.flat().map(room => [room.id, room.north, room.east, room.south, room.west, room.contents.map(content => [content.id, content.type])]))
+    .toEqual(singleplayerMap.rooms.flat().map(room => [room.id, room.north, room.east, room.south, room.west, room.contents.map(content => [content.id, content.type])]));
+  expect(state.map.entities.items).toEqual(singleplayerMap.entities.items);
+  expect(Object.keys(state.map.entities.monsters).sort()).toEqual(Object.keys(singleplayerMap.entities.monsters).sort());
 });
 
 test("same-class allies appear as tappable room actors with distinct stable auras", () => {
@@ -89,6 +110,57 @@ test("multiplayer chests reveal loot when the matching slot is occupied and the 
   expect(getRoom(swapped.map, room.id)!.contents.some(content => content.type === "equipment" && content.isChest === false)).toBe(true);
 });
 
+test("a newly fallen multiplayer character drops carried items and equipment for an ally", () => {
+  const state = createMultiplayerState("testwarrior", "easy", ["host", "guest"]);
+  state.phase = "playing";
+  const host = state.players.host;
+  const guest = state.players.guest;
+  host.health = 1;
+  host.item = "silver-bullet";
+  host.equipment = "good-weapon";
+  const hostRoom = getRoom(state.map, host.roomId)!;
+  const guestDirection = (["north", "east", "south", "west"] as Direction[]).find(direction => getConnectedRoomId(state.map, host.roomId, direction));
+  expect(guestDirection).toBeDefined();
+  const guestRoomId = getConnectedRoomId(state.map, host.roomId, guestDirection!)!;
+  guest.roomId = guestRoomId;
+  const monsterId = "drop-test:monster";
+  state.map.entities.monsters[monsterId] = {
+    id: monsterId, type: "monster", name: "Drop Test", sprite: "zombie_graphic", damage: 20,
+    currentHealth: 100, maximumHealth: 100,
+  };
+  hostRoom.contents.push({ id: monsterId, type: "monster" });
+
+  const fallen = resolveMultiplayerTurn(state, new Map([
+    ["host", { type: "SUPPORT" }],
+    ["guest", { type: "SUPPORT" }],
+  ]));
+
+  expect(state.players.host.item).toBe("silver-bullet");
+  expect(state.players.host.equipment).toBe("good-weapon");
+  expect(fallen.players.host).toMatchObject({ health: 0, item: null, equipment: null });
+  const fallenRoom = getRoom(fallen.map, hostRoom.id)!;
+  const droppedItem = fallenRoom.contents.find(content => content.type === "item" && content.isChest === false && fallen.map.entities.items[content.id]?.itemId === "silver-bullet");
+  const droppedEquipment = fallenRoom.contents.find(content => content.type === "equipment" && content.isChest === false && fallen.map.entities.equipment[content.id]?.equipmentId === "good-weapon");
+  expect(droppedItem?.type).toBe("item");
+  expect(droppedEquipment?.type).toBe("equipment");
+
+  const retrievedItem = resolveMultiplayerTurn(fallen, new Map([
+    ["host", { type: "SUPPORT" }],
+    ["guest", { type: "MOVE", target: guestDirection === "east" ? "west" : guestDirection === "west" ? "east" : guestDirection === "north" ? "south" : "north" }],
+  ]));
+  expect(retrievedItem.players.guest.roomId).toBe(hostRoom.id);
+  const itemPickup = resolveMultiplayerTurn(retrievedItem, new Map([
+    ["host", { type: "SUPPORT" }],
+    ["guest", { type: "PICKUP", target: droppedItem?.id }],
+  ]));
+  expect(itemPickup.players.guest.item).toBe("silver-bullet");
+  const equipmentPickup = resolveMultiplayerTurn(itemPickup, new Map([
+    ["host", { type: "SUPPORT" }],
+    ["guest", { type: "PICKUP_EQUIPMENT", target: droppedEquipment?.id }],
+  ]));
+  expect(equipmentPickup.players.guest.equipment).toBe("good-weapon");
+});
+
 test("a shared item can only be picked up once regardless of packet order", () => {
   const state = initial();
   const room = getRoom(state.map, state.players.host.roomId)!;
@@ -133,6 +205,24 @@ test("multiplayer ordinary and charged attacks cannot damage a Werewolf", () => 
   expect(uncharged.map.entities.monsters.werewolf.currentHealth).toBe(60);
 });
 
+test("Warrior counterattacks cannot kill the Werewolf without a Silver Arrow in multiplayer", () => {
+  const state = initial();
+  state.players.host.classId = "warrior";
+  const room = getRoom(state.map, state.players.host.roomId)!;
+  room.contents = [{ type: "monster", id: "werewolf" }];
+  state.map.entities.monsters.werewolf = {
+    id: "werewolf", type: "monster", name: "Werewolf", sprite: "w", chases: true,
+    damage: 0, currentHealth: 1, maximumHealth: 60,
+  };
+
+  const next = resolveMultiplayerTurn(state, new Map([[
+    "host", { type: "SUPPORT" },
+  ]]));
+
+  expect(next.map.entities.monsters.werewolf.currentHealth).toBe(1);
+  expect(next.players.host.vanguard).toBe(0);
+});
+
 test("Wizard Chain Lightning damages every other enemy for half the actual target damage", () => {
   const state = initial();
   state.players.host.classId = "wizard";
@@ -145,6 +235,25 @@ test("Wizard Chain Lightning damages every other enemy for half the actual targe
 
   expect(next.map.entities.monsters.primary.currentHealth).toBe(17);
   expect(next.map.entities.monsters.secondary.currentHealth).toBe(24);
+});
+
+test("each multiplayer player uses their own difficulty to scale attack scores", () => {
+  const state = initial();
+  state.difficulty = "normal";
+  state.players.host.gameplayOptions = { difficulty: "easy", handedness: "right", microgamesEnabled: true, reducedMotion: false };
+  state.players.guest.gameplayOptions = { difficulty: "hard", handedness: "left", microgamesEnabled: true, reducedMotion: false };
+  state.players.guest.roomId = state.players.host.roomId;
+  const room = getRoom(state.map, state.players.host.roomId)!;
+  room.contents = [{ type: "monster", id: "host-target" }, { type: "monster", id: "guest-target" }];
+  state.map.entities.monsters["host-target"] = { id: "host-target", type: "monster", name: "Host Target", sprite: "x", damage: 0, currentHealth: 100, maximumHealth: 100 };
+  state.map.entities.monsters["guest-target"] = { id: "guest-target", type: "monster", name: "Guest Target", sprite: "x", damage: 0, currentHealth: 100, maximumHealth: 100 };
+
+  const next = resolveMultiplayerTurn(state, new Map([
+    ["host", { type: "ATTACK", target: "host-target", microgameScore: 50 }],
+    ["guest", { type: "ATTACK", target: "guest-target", microgameScore: 50 }],
+  ]));
+
+  expect(next.map.entities.monsters["host-target"].currentHealth).toBeLessThan(next.map.entities.monsters["guest-target"].currentHealth);
 });
 
 test("Wizard Empower Attacks gives an ally two stronger turns and improves further when charged", () => {

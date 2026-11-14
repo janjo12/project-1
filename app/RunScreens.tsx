@@ -6,6 +6,7 @@ import { Text, View, useWindowDimensions, type ViewInstance } from "react-native
 import { Container, Footer, Header, Row, StyledModal, StyledText, Title } from "@/components/Common/Displays";
 import { MicrogameOverlay } from "@/components/Common/MicrogameOverlay";
 import { ClassBriefing } from "@/components/Common/ClassBriefing";
+import { PauseMenu } from "@/components/Common/PauseMenu";
 import { ScreenShell } from "@/components/Common/ScreenShell";
 import { animateSpriteFlight, measureViewCenterNow } from "@/components/Common/SpriteFlight";
 import { useThemeColors } from "@/components/Common/theme";
@@ -119,6 +120,8 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
   const [equipmentMenuOpen, setEquipmentMenuOpen] = useState(false);
   const [classIntroPage, setClassIntroPage] = useState(0);
   const [combatMessage, setCombatMessage] = useState("");
+  const [microgameScoreTotal, setMicrogameScoreTotal] = useState(0);
+  const [microgameCount, setMicrogameCount] = useState(0);
   const [tutorial, setTutorial] = useState(createTutorialHintsState);
   const [supportEffect, setSupportEffect] = useState<{ targetId: string | null; emoji: string; label: string; key: number } | null>(null);
   const colors = useThemeColors();
@@ -143,6 +146,8 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
       resolveDefense(score);
       return;
     }
+    setMicrogameScoreTotal(total => total + score);
+    setMicrogameCount(count => count + 1);
     const target = pendingAttack.current;
     pendingAttack.current = null;
     if (target && game.attackMonster(target, damageScore)) {
@@ -291,7 +296,7 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
         onRuneProgress={microgame.updateRuneProgress}
         onRuneComplete={progress => microgame.finishRuneTracer(true, progress)} />
       </View>
-      {classIntroPage >= 0 && !(classIntroPage === 1 && !settings.microgamesEnabled) ? (
+      {classIntroPage >= 0 ? (
         <ClassBriefing
           page={classIntroPage}
           classId={game.playerClass.id}
@@ -299,35 +304,30 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
           multiplayer={false}
           microgamesEnabled={settings.microgamesEnabled}
           onExit={onBackToSetup}
-          onNext={() => setClassIntroPage(settings.microgamesEnabled ? 1 : -1)}
+          onNext={() => setClassIntroPage(1)}
           onBack={() => setClassIntroPage(0)}
-          onPractice={() => microgame.start(game.playerClass.microgame, settings.handedness, { difficulty: settings.difficulty, level: game.level })}
+          onPracticeAttack={() => microgame.start(game.playerClass.microgame, settings.handedness, { difficulty: settings.difficulty, level: game.level })}
+          onPracticeDefense={() => microgame.start("defense", settings.handedness, { difficulty: settings.difficulty, level: game.level })}
           onStart={() => setClassIntroPage(-1)}
         />
       ) : null}
       <ItemDetailsMenu visible={itemMenuOpen && !!game.inventoryItemLabel} label={game.inventoryItemLabel ?? "Item"} description={game.inventoryItemDescription ?? "A useful item."} activationDescription={game.inventoryItemActivationDescription ?? "This item activates automatically when its condition is met."} onClose={() => setItemMenuOpen(false)} />
       <EquipmentDetailsMenu visible={equipmentMenuOpen && !!game.equipmentLabel} label={game.equipmentLabel ?? "Equipment"} description={game.equipmentDescription ?? "Equipment provides its listed effects while carried."} dropDisabled={game.isResolving || game.hasLost || microgame.active} onDrop={() => { game.dropEquipment(); setEquipmentMenuOpen(false); }} onClose={() => setEquipmentMenuOpen(false)} />
-      <StyledModal accessibilityLabel="Game menu" accessibilityRole="dialog" animationType="fade" onRequestClose={() => setIsMenuOpen(false)} visible={isMenuOpen}>
-        <Title>Menu</Title>
-        <StyledText>Seed: {settings.seed.trim()}</StyledText>
-        <Container style={tinyLayout ? { gap: 6 } : undefined}>
-          <Row>
-            <StyledText>Appearance</StyledText>
-            <SegmentedButton
-              onChange={appearance => onSettingsChange({ appearance: appearance.toLowerCase() as GameSettings["appearance"] })}
-              options={["System", "Light", "Dark"] as const}
-              value={settings.appearance[0].toUpperCase() + settings.appearance.slice(1)}
-            />
-          </Row>
-          <ToggleButton label="Vibration" value={settings.vibrationEnabled} onValueChange={value => onSettingsChange({ vibrationEnabled: value })} />
-          <ToggleButton label="Left-handed controls" value={settings.handedness === "left"} onValueChange={value => onSettingsChange({ handedness: value ? "left" : "right" })} />
-        </Container>
-        {tinyLayout ? <NormalButton accessibilityLabel="Open dungeon map" accessibilityRole="button" label="Dungeon Map" onPress={() => { setIsMenuOpen(false); setIsMapOpen(true); }} /> : null}
-        {settings.microgamesEnabled ? <NormalButton accessibilityLabel="Practice attack microgame" accessibilityRole="button" label="Practice Attack" onPress={() => { setIsMenuOpen(false); startMicrogame(); }} /> : null}
-        {settings.microgamesEnabled ? <NormalButton accessibilityLabel="Practice Rune Tracer microgame" accessibilityRole="button" label="Practice Rune Tracer" onPress={() => { setIsMenuOpen(false); microgame.start("rune-tracer", settings.handedness, { difficulty: settings.difficulty, level: game.level }); }} /> : null}
-        <PrimaryButton accessibilityLabel="Back to Game" accessibilityRole="button" label="Back to Game" onPress={() => setIsMenuOpen(false)} />
-        <DestructiveButton accessibilityLabel="Quit to Title" accessibilityRole="button" label="Quit to Title" onPress={() => setIsQuitConfirmOpen(true)} />
-      </StyledModal>
+      <PauseMenu
+        onBackToGame={() => setIsMenuOpen(false)}
+        onQuitToTitle={() => setIsQuitConfirmOpen(true)}
+        onPractice={() => { setIsMenuOpen(false); startMicrogame(); }}
+        onPracticeRuneTracer={() => { setIsMenuOpen(false); microgame.start("rune-tracer", settings.handedness, { difficulty: settings.difficulty, level: game.level }); }}
+        onOpenMap={tinyLayout ? () => { setIsMenuOpen(false); setIsMapOpen(true); } : undefined}
+        onSettingsChange={onSettingsChange}
+        microgamesEnabled={settings.microgamesEnabled}
+        level={game.level}
+        classId={game.playerClass.id}
+        microgameAverage={microgameCount ? microgameScoreTotal / microgameCount : null}
+        settings={settings}
+        seed={settings.seed.trim()}
+        visible={isMenuOpen}
+      />
       <StyledModal accessibilityLabel="Quit to Title confirmation" accessibilityRole="dialog" animationType="fade" onRequestClose={() => setIsQuitConfirmOpen(false)} visible={isQuitConfirmOpen}>
         <Title>Quit to Title?</Title>
         <StyledText>Your current run will be lost.</StyledText>

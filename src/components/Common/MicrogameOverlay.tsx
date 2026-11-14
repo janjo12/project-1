@@ -18,7 +18,7 @@ type MicrogameOverlayProps = {
   multiswipeTarget: MultiswipeTarget;
   onTap: (trackWidth?: number, dotDiameter?: number, trackHeight?: number) => void;
   onSwipeStart: (x: number, y: number, width: number, height: number, dotDiameter?: number) => void;
-  onSwipeEnd: (x: number, y: number, width: number, height: number, dotDiameter?: number) => void;
+  onSwipeEnd: (x: number, y: number, width: number, height: number, dotDiameter?: number) => boolean;
   onMultiswipeLayout: (width: number, height: number) => void;
   onRuneProgress: (progress: number) => void;
   onRuneComplete: (progress: number) => void;
@@ -194,13 +194,20 @@ function TimedAttackMicrogame({ elapsed, targetDelay }: MicrogameContentProps) {
 
 function DefenseMicrogame({ elapsed, targetDelay }: MicrogameContentProps) {
   const colors = useThemeColors();
-  const cueVisible = elapsed >= targetDelay;
+  const progress = Math.max(0, Math.min(1, elapsed / Math.max(1, targetDelay)));
+  // The thin moving ring finishes centered in the gap between the two target rings.
+  const ringDiameter = 136 - progress * 90;
+  const contactReached = elapsed >= targetDelay;
   return (
-    <View pointerEvents="none" style={{ alignItems: "center", justifyContent: "center", gap: 8 }}>
-      <IdleBounce><View testID="defense-instruction" accessibilityLabel="Tap to defend"><StyledText style={{ color: colors.ink, fontSize: 24, fontWeight: "900", textAlign: "center" }}>Tap to defend</StyledText></View></IdleBounce>
-      <Text testID="defense-cue" accessibilityRole="timer" accessibilityLabel={cueVisible ? "Block now" : "Get ready to block"} style={{ color: cueVisible ? colors.accent : colors.sepia, fontSize: 36, fontWeight: "900" }}>
-        {cueVisible ? "BLOCK!" : "…"}
-      </Text>
+    <View pointerEvents="none" style={{ alignItems: "center", justifyContent: "center", gap: 18 }}>
+      <View testID="defense-instruction" accessibilityLabel="Tap when the thin shrinking ring is in the gap between the two thick target rings">
+        <StyledText style={{ color: colors.ink, fontSize: 21, fontWeight: "900", textAlign: "center" }}>Tap when the thin ring reaches the gap</StyledText>
+      </View>
+      <View testID="defense-cue" accessibilityRole="timer" accessibilityLabel={contactReached ? "Shrinking ring is between the target rings" : "Shrinking ring approaching the gap between target rings"} style={{ alignItems: "center", height: 148, justifyContent: "center", width: 148 }}>
+        <View style={{ position: "absolute", width: ringDiameter, height: ringDiameter, borderColor: contactReached ? colors.energy : colors.accent, borderRadius: ringDiameter / 2, borderWidth: 3 }} />
+        <View testID="defense-target-outer-ring" style={{ position: "absolute", width: 68, height: 68, borderRadius: 34, borderColor: colors.ink, borderWidth: 8 }} />
+        <View testID="defense-target-inner-ring" style={{ position: "absolute", width: 34, height: 34, borderRadius: 17, borderColor: colors.ink, borderWidth: 6 }} />
+      </View>
     </View>
   );
 }
@@ -237,20 +244,19 @@ function MultitapMicrogame({ multitapTargetSpot, leftHanded, onTap, panelHeight 
 
 function MultiswipeMicrogame({ multiswipeTarget, onSwipeStart, onSwipeEnd, onMultiswipeLayout, panelHeight }: MicrogameContentProps) {
   const colors = useThemeColors();
+  const [completedStroke, setCompletedStroke] = useState(false);
   const [trackWidth, setTrackWidth] = useState(0);
   const [trackHeight, setTrackHeight] = useState(0);
   const [trackOrigin, setTrackOrigin] = useState({ x: 0, y: 0 });
   const trackRef = useRef<ViewInstance>(null);
   const gridHeight = panelHeight > 0 ? Math.max(48, panelHeight * 0.5) : 110;
-  const { diameter: dotDiameter, columns, rows } = getMultiswipeGrid(trackWidth, trackHeight, MULTITAP_DOT_DIAMETER);
+  const { diameter: dotDiameter } = getMultiswipeGrid(trackWidth, trackHeight, MULTITAP_DOT_DIAMETER);
   const startX = multiswipeTarget.start.x * trackWidth;
   const startY = multiswipeTarget.start.y * trackHeight;
   const endX = multiswipeTarget.end.x * trackWidth;
   const endY = multiswipeTarget.end.y * trackHeight;
-  const horizontal = multiswipeTarget.axis === "horizontal";
-  const barStyle = horizontal
-    ? { left: Math.min(startX, endX), top: startY - 7, width: Math.abs(endX - startX), height: 14 }
-    : { left: startX - 7, top: Math.min(startY, endY), width: 14, height: Math.abs(endY - startY) };
+  const strokeThickness = (dotDiameter + 10) / 2;
+  const path = multiswipeTarget.path ?? [multiswipeTarget.start, multiswipeTarget.end];
   return (
     <>
       <IdleBounce>
@@ -289,18 +295,27 @@ function MultiswipeMicrogame({ multiswipeTarget, onSwipeStart, onSwipeEnd, onMul
           onSwipeStart(localX, localY, trackWidth, trackHeight, dotDiameter);
           return startsOnDot;
         }}
-        onResponderRelease={event => onSwipeEnd(event.nativeEvent.pageX - trackOrigin.x, event.nativeEvent.pageY - trackOrigin.y, trackWidth, trackHeight, dotDiameter)}
+        onResponderRelease={event => {
+          const completed = onSwipeEnd(event.nativeEvent.pageX - trackOrigin.x, event.nativeEvent.pageY - trackOrigin.y, trackWidth, trackHeight, dotDiameter);
+          if (completed) {
+            setCompletedStroke(true);
+            setTimeout(() => setCompletedStroke(false), 250);
+          }
+        }}
         style={{ width: "100%", height: gridHeight, position: "relative", overflow: "hidden" }}
       >
-        <View testID="multiswipe-grid" pointerEvents="none" style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0, flexDirection: "row", opacity: 0.12 }}>
-          {Array.from({ length: columns }, (_, column) => <View key={column} style={{ flex: 1, borderLeftWidth: column === 0 ? 0 : 1, borderColor: colors.ink }} />)}
-        </View>
-        <View pointerEvents="none" style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0, opacity: 0.12, flexDirection: "column" }}>
-          {Array.from({ length: rows }, (_, row) => <View key={row} style={{ flex: 1, borderTopWidth: row === 0 ? 0 : 1, borderColor: colors.ink }} />)}
-        </View>
-        <View testID="multiswipe-bar" pointerEvents="none" style={[{ position: "absolute", backgroundColor: colors.accent, borderRadius: 8 }, barStyle]} />
-        <View testID="multiswipe-start-dot" pointerEvents="none" style={{ position: "absolute", left: startX - dotDiameter / 2, top: startY - dotDiameter / 2 }}><MicrogameCircle size={dotDiameter} /></View>
-        <View testID="multiswipe-end-dot" pointerEvents="none" style={{ position: "absolute", left: endX - dotDiameter / 2, top: endY - dotDiameter / 2 }}><MicrogameCircle size={dotDiameter} /></View>
+        {path.slice(1).map((point, index) => {
+          const from = path[index];
+          const x1 = from.x * trackWidth;
+          const y1 = from.y * trackHeight;
+          const x2 = point.x * trackWidth;
+          const y2 = point.y * trackHeight;
+          const length = Math.hypot(x2 - x1, y2 - y1);
+          const angle = Math.atan2(y2 - y1, x2 - x1);
+          return <View key={index} testID={index === 0 ? "multiswipe-bar" : `multiswipe-bar-${index}`} pointerEvents="none" style={{ position: "absolute", left: (x1 + x2) / 2 - length / 2, top: (y1 + y2) / 2 - strokeThickness / 2, width: length, height: strokeThickness, borderRadius: strokeThickness / 2, backgroundColor: completedStroke ? colors.energy : colors.accent, transform: [{ rotate: `${angle}rad` }] }} />;
+        })}
+        <View testID="multiswipe-start-dot" pointerEvents="none" style={{ position: "absolute", left: startX - dotDiameter / 2, top: startY - dotDiameter / 2 }}><MicrogameCircle size={dotDiameter} style={{ backgroundColor: completedStroke ? colors.energy : colors.accent }} /></View>
+        <View testID="multiswipe-end-dot" pointerEvents="none" style={{ position: "absolute", left: endX - dotDiameter / 2, top: endY - dotDiameter / 2 }}><MicrogameCircle size={dotDiameter} style={{ backgroundColor: completedStroke ? colors.energy : colors.accent }} /></View>
       </View>
     </>
   );
@@ -317,8 +332,9 @@ function RuneTracerMicrogame({ leftHanded, onRuneProgress, onRuneComplete, panel
   const currentNodeRef = useRef<string | null>(null);
   const activeEdgeRef = useRef<RuneEdge | null>(null);
   const tracedEdgeIdsRef = useRef<Set<string>>(new Set());
+  const [patternSeed] = useState(() => Math.floor(Math.random() * 0x100000000));
   const gridHeight = panelHeight > 0 ? Math.max(48, panelHeight * 0.5) : 110;
-  const pattern = getRuneTracerPattern(trackWidth, trackHeight, leftHanded ? "left" : "right");
+  const pattern = getRuneTracerPattern(trackWidth, trackHeight, leftHanded ? "left" : "right", 28, patternSeed);
   const dotRadius = pattern.diameter / 2;
   const edgeTolerance = 10;
 
@@ -397,9 +413,6 @@ function RuneTracerMicrogame({ leftHanded, onRuneProgress, onRuneComplete, panel
     activeEdgeRef.current = null;
   }
 
-  const left = leftHanded ? 0 : "50%";
-  const right = leftHanded ? "50%" : 0;
-
   return (
     <>
       <IdleBounce style={{ alignItems: "center", marginBottom: 8 }}>
@@ -438,12 +451,6 @@ function RuneTracerMicrogame({ leftHanded, onRuneProgress, onRuneComplete, panel
         }}
         style={{ width: "100%", height: gridHeight, position: "relative", overflow: "hidden" }}
       >
-        <View pointerEvents="none" style={{ position: "absolute", left, right, top: 0, bottom: 0, flexDirection: "row", opacity: 0.14 }}>
-          {Array.from({ length: pattern.columns }, (_, column) => <View key={column} style={{ flex: 1, borderLeftWidth: column === 0 ? 0 : 1, borderColor: colors.ink }} />)}
-        </View>
-        <View pointerEvents="none" style={{ position: "absolute", left, right, top: 0, bottom: 0, flexDirection: "column", opacity: 0.14 }}>
-          {Array.from({ length: pattern.rows }, (_, row) => <View key={row} style={{ flex: 1, borderTopWidth: row === 0 ? 0 : 1, borderColor: colors.ink }} />)}
-        </View>
         {pattern.edges.map(edge => {
           const from = pattern.nodes.find(node => node.id === edge.from)!.point;
           const to = pattern.nodes.find(node => node.id === edge.to)!.point;
@@ -453,7 +460,8 @@ function RuneTracerMicrogame({ leftHanded, onRuneProgress, onRuneComplete, panel
           const y2 = to.y * trackHeight;
           const length = Math.hypot(x2 - x1, y2 - y1);
           const angle = Math.atan2(y2 - y1, x2 - x1);
-          return <View key={edge.id} testID={`rune-edge-${edge.id}`} pointerEvents="none" style={{ position: "absolute", left: (x1 + x2) / 2 - length / 2, top: (y1 + y2) / 2 - 5, width: length, height: 10, borderRadius: 5, backgroundColor: tracedEdges.has(edge.id) ? colors.energy : colors.accent, transform: [{ rotate: `${angle}rad` }] }} />;
+          const strokeThickness = (pattern.diameter + 10) / 2;
+          return <View key={edge.id} testID={`rune-edge-${edge.id}`} pointerEvents="none" style={{ position: "absolute", left: (x1 + x2) / 2 - length / 2, top: (y1 + y2) / 2 - strokeThickness / 2, width: length, height: strokeThickness, borderRadius: strokeThickness / 2, backgroundColor: tracedEdges.has(edge.id) ? colors.energy : colors.accent, transform: [{ rotate: `${angle}rad` }] }} />;
         })}
         {pattern.nodes.map(node => {
           const traced = pattern.edges.some(edge => tracedEdges.has(edge.id) && (edge.from === node.id || edge.to === node.id));

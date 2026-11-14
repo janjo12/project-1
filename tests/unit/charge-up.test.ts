@@ -13,10 +13,6 @@ jest.mock("@/game/dungeon/mapStorage", () => ({
   saveDungeonMap: jest.fn(async () => undefined),
   updateStoredDungeonMap: jest.fn(async () => null),
 }));
-jest.mock("@/game/engine/run-game-helpers", () => ({
-  ...jest.requireActual("@/game/engine/run-game-helpers"),
-  createLevelMap: jest.fn(),
-}));
 
 test("Werewolf health stays at one across levels and party sizes", () => {
   for (const [level, players] of [[1, 1], [5, 1], [1, 4], [5, 4]]) {
@@ -75,7 +71,6 @@ async function setup(enemy = false, meal = false, enemyHealth = 20, enemyDamage 
     map.entities.items.meal = { id: "meal", itemId: "energy-meal", label: "Energy Meal", sprite: "🍔", type: "item" };
     getRoom(map, "A1")!.contents.push({ id: "meal", isChest: true, type: "item" });
   }
-  require("@/game/engine/run-game-helpers").createLevelMap.mockReturnValue(map);
   require("@/game/dungeon/mapStorage").createAndSaveSeededDungeonMap.mockResolvedValue(map);
   const hook = await renderHook(() => useRunGame({
     difficulty,

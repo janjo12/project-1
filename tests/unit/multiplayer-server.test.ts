@@ -7,6 +7,9 @@ async function post(data: Record<string, unknown>) {
     body: JSON.stringify(data),
   }));
 }
+async function rawPost(body: string) {
+  return POST(new Request("http://localhost/api/multiplayer", { method: "POST", headers: { "Content-Type": "application/json" }, body }));
+}
 
 async function body<T>(response: Response) {
   return response.json() as Promise<T>;
@@ -15,8 +18,113 @@ async function body<T>(response: Response) {
 type RoomResponse = {
   code: string;
   playerId: string;
-  state: { turn: number; players: Record<string, unknown> } | null;
+  state: { turn: number; seed: string; difficulty: string; players: Record<string, { classId?: string; gameplayOptions?: { difficulty: string; handedness: string; microgamesEnabled: boolean; reducedMotion: boolean } }> } | null;
+  playerOptions?: { difficulty: string; handedness: string; microgamesEnabled: boolean; reducedMotion: boolean };
+  playerReady?: boolean;
+  deadlineAt?: number | null;
 };
+
+test.each([
+  ["malformed JSON", "{"],
+  ["missing request type", JSON.stringify({ code: "ABCD" })],
+  ["invalid create parameters", JSON.stringify({ type: "create", seed: 12, difficulty: "expert" })],
+] as const)("rejects %s with a client error", async (_label, raw) => {
+  const response = await rawPost(raw);
+  expect(response.status).toBe(400);
+  expect((await body<{ error: string }>(response)).error).toBeTruthy();
+});
+
+test("room API rejects unknown rooms, unknown players, and unknown operations", async () => {
+  expect((await GET(new Request("http://localhost/api/multiplayer?code=NOPE&playerId=host"))).status).toBe(404);
+  const host = await body<RoomResponse>(await post({ type: "create", seed: "sad-path-check", difficulty: "easy" }));
+  expect((await post({ type: "join", code: "NOPE" })).status).toBe(404);
+  expect((await post({ type: "options", code: host.code, playerId: "intruder", handedness: "left" })).status).toBe(404);
+  expect((await post({ type: "mystery", code: host.code, playerId: host.playerId })).status).toBe(400);
+  await post({ type: "leave", code: host.code, playerId: host.playerId });
+});
+
+test("room API rejects unauthorized starts, invalid options, and duplicate or stale actions safely", async () => {
+  const host = await body<RoomResponse>(await post({ type: "create", seed: "sad-path-actions", difficulty: "easy" }));
+  const guest = await body<RoomResponse>(await post({ type: "join", code: host.code }));
+  expect((await post({ type: "start", code: host.code, playerId: guest.playerId })).status).toBe(403);
+  expect((await post({ type: "options", code: host.code, playerId: guest.playerId, handedness: "upside-down" })).status).toBe(400);
+  expect((await post({ type: "options", code: host.code, playerId: guest.playerId, reducedMotion: "yes" })).status).toBe(400);
+  expect((await post({ type: "start", code: host.code, playerId: host.playerId })).status).toBe(409);
+  expect((await post({ type: "ready", code: host.code, playerId: guest.playerId, difficulty: "hard", handedness: "left", microgamesEnabled: false, reducedMotion: true })).ok).toBe(true);
+  expect((await post({ type: "start", code: host.code, playerId: host.playerId })).ok).toBe(true);
+  expect((await post({ type: "start", code: host.code, playerId: host.playerId })).status).toBe(409);
+  expect((await post({ type: "action", code: host.code, playerId: host.playerId, turn: 4, action: { type: "SUPPORT" } })).status).toBe(400);
+  expect((await post({ type: "action", code: host.code, playerId: host.playerId, turn: 0, action: { type: "CHEAT" } })).status).toBe(400);
+  expect((await post({ type: "action", code: host.code, playerId: host.playerId, turn: 0, action: { type: "SUPPORT" } })).ok).toBe(true);
+  expect((await post({ type: "action", code: host.code, playerId: host.playerId, turn: 0, action: { type: "SUPPORT" } })).status).toBe(409);
+  expect((await post({ type: "action", code: host.code, playerId: guest.playerId, turn: 0, action: { type: "CLASS_READY" } })).ok).toBe(true);
+  expect((await post({ type: "action", code: host.code, playerId: host.playerId, turn: 1, action: { type: "SUPPORT" } })).ok).toBe(true);
+  await post({ type: "leave", code: host.code, playerId: host.playerId });
+});
+
+test("each room member can configure independent gameplay options", async () => {
+  const host = await body<RoomResponse>(await post({ type: "create", seed: "option-check", difficulty: "easy" }));
+  const guest = await body<RoomResponse>(await post({ type: "join", code: host.code }));
+  await post({ type: "options", code: host.code, playerId: host.playerId, difficulty: "normal", handedness: "left", microgamesEnabled: false, reducedMotion: true });
+  await post({ type: "options", code: host.code, playerId: guest.playerId, difficulty: "hard", handedness: "right", microgamesEnabled: true, reducedMotion: false });
+  const hostPoll = await GET(new Request(`http://localhost/api/multiplayer?code=${host.code}&playerId=${host.playerId}`));
+  const guestPoll = await GET(new Request(`http://localhost/api/multiplayer?code=${host.code}&playerId=${guest.playerId}`));
+  expect((await body<RoomResponse>(hostPoll)).playerOptions).toEqual({ difficulty: "normal", handedness: "left", microgamesEnabled: false, reducedMotion: true });
+  expect((await body<RoomResponse>(guestPoll)).playerOptions).toEqual({ difficulty: "hard", handedness: "right", microgamesEnabled: true, reducedMotion: false });
+  await post({ type: "leave", code: host.code, playerId: host.playerId });
+});
+
+test.each([
+  ["testwizard", "wizard"],
+  ["testcleric", "cleric"],
+  ["testthief", "thief"],
+])("host can set shared seed %s after joining and all players receive the dedicated class", async (seed, expectedClass) => {
+  const host = await body<RoomResponse>(await post({ type: "create", seed: "initial-random-seed", difficulty: "easy" }));
+  const guest = await body<RoomResponse>(await post({ type: "join", code: host.code }));
+  expect((await post({ type: "configure", code: host.code, playerId: host.playerId, seed, difficulty: "normal" })).ok).toBe(true);
+  expect((await post({ type: "configure", code: host.code, playerId: guest.playerId, seed: "testwizard" })).status).toBe(403);
+  expect((await post({ type: "ready", code: host.code, playerId: guest.playerId, difficulty: "hard" })).ok).toBe(true);
+  const start = await body<RoomResponse>(await post({ type: "start", code: host.code, playerId: host.playerId }));
+  expect(start.state).toMatchObject({ seed, difficulty: "normal" });
+  expect(Object.values(start.state!.players).map(player => player.classId)).toEqual([expectedClass, expectedClass]);
+  expect(start.state!.players.host.gameplayOptions?.difficulty).toBe("normal");
+  expect(start.state!.players[guest.playerId].gameplayOptions?.difficulty).toBe("hard");
+  await post({ type: "leave", code: host.code, playerId: host.playerId });
+  expect(guest.playerId).toBe("player-2");
+});
+
+test("configure rejects invalid shared settings without starting or changing the room", async () => {
+  const host = await body<RoomResponse>(await post({ type: "create", seed: "keep-this-seed", difficulty: "easy" }));
+  const invalidSeed = await post({ type: "configure", code: host.code, playerId: host.playerId, seed: 42 });
+  const invalidDifficulty = await post({ type: "configure", code: host.code, playerId: host.playerId, difficulty: "extreme" });
+  expect(invalidSeed.status).toBe(400);
+  expect(invalidDifficulty.status).toBe(400);
+  const joined = await body<RoomResponse>(await post({ type: "join", code: host.code }));
+  await post({ type: "ready", code: host.code, playerId: joined.playerId });
+  const started = await body<RoomResponse>(await post({ type: "start", code: host.code, playerId: host.playerId }));
+  expect(started.state?.seed).toBe("keep-this-seed");
+  await post({ type: "leave", code: host.code, playerId: joined.playerId });
+  await post({ type: "leave", code: host.code, playerId: host.playerId });
+});
+
+test("a guest leaving does not cancel the hard-mode room timer", async () => {
+  jest.useFakeTimers();
+  try {
+    const host = await body<RoomResponse>(await post({ type: "create", seed: "timer-check", difficulty: "hard" }));
+    const guest = await body<RoomResponse>(await post({ type: "join", code: host.code }));
+    await post({ type: "ready", code: host.code, playerId: guest.playerId });
+    await post({ type: "start", code: host.code, playerId: host.playerId });
+    for (const playerId of [host.playerId, guest.playerId]) await post({ type: "action", code: host.code, playerId, turn: 0, action: { type: "CLASS_READY" } });
+    const before = await GET(new Request(`http://localhost/api/multiplayer?code=${host.code}&playerId=${host.playerId}`));
+    const beforeData = await body<RoomResponse>(before);
+    expect(beforeData.deadlineAt).not.toBeNull();
+    await post({ type: "leave", code: host.code, playerId: guest.playerId });
+    jest.advanceTimersByTime(20_000);
+    const after = await GET(new Request(`http://localhost/api/multiplayer?code=${host.code}&playerId=${host.playerId}`));
+    expect((await body<RoomResponse>(after)).state?.turn).toBeGreaterThan(beforeData.state?.turn ?? 0);
+    await post({ type: "leave", code: host.code, playerId: host.playerId });
+  } finally { jest.useRealTimers(); }
+});
 
 test("real multiplayer API route creates, joins, resolves, polls, and closes a room", async () => {
   const create = await post({ type: "create", seed: "server-check", difficulty: "easy" });
@@ -26,6 +134,8 @@ test("real multiplayer API route creates, joins, resolves, polls, and closes a r
   const join = await post({ type: "join", code: host.code });
   expect(join.status).toBe(201);
   const guest = await body<RoomResponse>(join);
+
+  await post({ type: "ready", code: host.code, playerId: guest.playerId });
 
   const start = await post({ type: "start", code: host.code, playerId: host.playerId });
   expect(start.ok).toBe(true);
@@ -69,6 +179,7 @@ test("rooms remain isolated during concurrent starts, turn submissions, and poll
     const guests = await Promise.all(Array.from({ length: 2 }, async () =>
       body<RoomResponse>(await post({ type: "join", code: host.code })),
     ));
+    await Promise.all(guests.map(guest => post({ type: "ready", code: host.code, playerId: guest.playerId })));
     return { host, guests };
   }));
 

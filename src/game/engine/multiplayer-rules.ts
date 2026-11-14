@@ -2,7 +2,9 @@ import { GAME_PARAMETERS } from "@/game/config/gameparameters";
 import { createLevelMap } from "@/game/engine/run-game-level";
 import { PLAYER_MAX_ENERGY, PLAYER_MAX_HEALTH } from "@/game/state/types";
 import { getHardTurnLimit, hasTurnLimit, resolveTurnLoss } from "@/game/engine/resolveTurn";
-import { getNeighborInGrid, getRoomId, POSSIBLE_EQUIPMENT, POSSIBLE_ITEMS, type Direction, type DungeonMap } from "@/game/dungeon/types";
+import { getNeighborInGrid, getRoomId, placeDoorwayGuard, setConnectionBoundary, POSSIBLE_EQUIPMENT, POSSIBLE_ITEMS, type Direction, type DungeonMap } from "@/game/dungeon/types";
+import { createMonster } from "@/game/entities/enemies";
+import { createEquipment, createItem } from "@/game/entities/items";
 import {
   addEquipmentToRoom,
   addItemToRoom,
@@ -26,8 +28,9 @@ import {
 import { applyDefense, getEquipmentStats, recoverStat, resolveEnergyLoss, resolveHealthLoss } from "@/game/actions/items";
 import { resolveClericMiracle } from "@/game/engine/cleric-miracle";
 import { gameClassForSeed, randomGameClass, type GameClassId } from "@/game/config/game-classes";
-import { getPlayerAttackDamage, resolveAttackDamage, scaleMicrogameScore } from "@/game/engine/combat";
+import { getPlayerAttackDamage, getWarriorRiposteDamage, resolveAttackDamage, scaleDefenseMicrogameScore } from "@/game/engine/combat";
 import type { Difficulty } from "@/utils/settings-storage";
+import { isMultiplayerPlayerOptions, type MultiplayerPlayerOptions } from "@/multiplayer/player-options";
 
 export type GameState = { turn: number; [key: string]: unknown };
 export type PlayerAction = {
@@ -55,6 +58,7 @@ export type MultiplayerPlayer = {
   vanguard: number;
   vanguardSource: string | null;
   nextAttackBonus: number;
+  gameplayOptions?: MultiplayerPlayerOptions;
 };
 export type MultiplayerState = GameState & {
   version: 2;
@@ -70,18 +74,22 @@ export type MultiplayerState = GameState & {
   werewolfAggroPlayerId?: string | null;
   werewolfWitnessPlayerIds?: string[];
 };
-export function createMultiplayerState(seed: string, difficulty: Difficulty, ids: string[]): MultiplayerState {
+export function createMultiplayerState(seed: string, difficulty: Difficulty, ids: string[], random: () => number = Math.random): MultiplayerState {
   // Multiplayer starts from one shared level and gives every roster member independent character resources.
+  const isGhostTestSeed = seed.trim().toLowerCase() === "testghost";
   const isTestSeed = /^(?:test|testwarrior|testcleric|testthief|testwizard|testranger|testarcher)$/i.test(seed.trim());
-  const testClassId = isTestSeed ? gameClassForSeed(seed).id : null;
+  const testClassId = isTestSeed ? gameClassForSeed(seed, random).id : null;
   // Ordinary multiplayer runs roll independently for each player. Reserved test
-  // seeds keep their fixture class for every roster member.
-  const classIds = ids.map(() => testClassId ?? randomGameClass().id);
+  // seeds keep their fixture class; testghost deliberately starts its host fallen.
+  const classIds = ids.map((_, index) => isGhostTestSeed
+    ? index === 0 ? "ghost" : "warrior"
+    : testClassId ?? randomGameClass(random).id);
   const map = createLevelMap(seed, 1, undefined, difficulty !== "easy", ids.length);
+  if (isGhostTestSeed) configureGhostTestMap(map, ids.length);
   const players = Object.fromEntries(ids.map((id, index) => [id, {
     id,
     roomId: map.startingRoomId,
-    health: PLAYER_MAX_HEALTH,
+    health: isGhostTestSeed && index === 0 ? 0 : PLAYER_MAX_HEALTH,
     energy: PLAYER_MAX_ENERGY,
     item: null,
     equipment: null,
@@ -113,6 +121,44 @@ export function createMultiplayerState(seed: string, difficulty: Difficulty, ids
     turnsLeft: getHardTurnLimit({ difficulty, map }),
     players,
   };
+}
+
+function configureGhostTestMap(map: DungeonMap, playerCount: number) {
+  // This multiplayer-only fixture starts one player as a ghost so its special rules
+  // can be tested without making that state possible in ordinary single-player runs.
+  const route = ["A1", "A2", "A3", "A4"];
+  const rooms = map.rooms.flat();
+  if (route.some(id => !rooms.some(room => room.id === id))) {
+    throw new Error("The testghost dungeon needs four adjacent rooms in row A");
+  }
+  map.startingRoomId = route[0];
+  map.entities = { items: {}, equipment: {}, doorwayGuards: {}, monsters: {} };
+  for (const room of rooms) {
+    room.contents = [];
+    room.isCurrentPosition = room.id === route[0];
+    room.isRevealed = room.id === route[0];
+    room.north = room.east = room.south = room.west = "wall";
+  }
+  route.slice(0, -1).forEach((roomId, index) => {
+    setConnectionBoundary(map.rooms, roomId, "east", index === 0 ? "locked" : index === 1 ? "guarded" : "open");
+  });
+  const start = rooms.find(room => room.id === route[0])!;
+  const zombie = createMonster(0, route[0], () => 0, 1, playerCount);
+  zombie.id = "testghost:zombie";
+  zombie.currentHealth = 50;
+  zombie.damage = 0;
+  map.entities.monsters[zombie.id] = zombie;
+  start.contents.push({ id: zombie.id, type: "monster" });
+  const item = createItem("health-potion", "testghost:item-chest");
+  map.entities.items[item.id] = item;
+  start.contents.push({ id: item.id, isChest: true, type: "item" });
+  const equipment = createEquipment("good-weapon", "testghost:equipment-chest");
+  map.entities.equipment[equipment.id] = equipment;
+  start.contents.push({ id: equipment.id, isChest: true, type: "equipment" });
+  const guard = createMonster(1, "A2:east", () => 0, 1, playerCount);
+  guard.id = "testghost:guard";
+  placeDoorwayGuard(map, "A2", "east", guard);
+  rooms.find(room => room.id === route[3])!.contents.push({ id: "stairs", label: "Stairs", type: "stairs" });
 }
 
 function applyPlayerDamage(player: MultiplayerPlayer, damage: number) {
@@ -230,6 +276,28 @@ export function resolveMultiplayerTurn(
       grantThiefReward(state, target);
     }
   }
+  // An enemy in a room that someone enters this round gets its first action next round.
+  // Precompute all destinations before player actions so roster order cannot make an
+  // enemy attack an existing occupant before another player enters that same room.
+  const roomsEnteredThisTurn = new Set<string>();
+  for (const [id, action] of actions) {
+    if (action.type !== "MOVE" || !["north", "east", "south", "west"].includes(action.target ?? "")) continue;
+    const mover = state.players[id];
+    if (!mover) continue;
+    const direction = action.target as Direction;
+    const room = getRoom(state.map, mover.roomId);
+    const doorway = room[direction];
+    if (doorway === "wall" || doorway === "guarded") continue;
+    if (doorway === "locked" && mover.health > 0) {
+      const hadKey = mover.item === "key";
+      const cost = getEquipmentStats(mover.equipment ?? null).chargeCost;
+      const charged = !!action.charged && mover.energy >= cost;
+      const thiefMustSpendTurnToPick = mover.classId === "thief" && !charged && !hadKey;
+      if ((!hadKey && mover.classId !== "thief") || thiefMustSpendTurnToPick) continue;
+    }
+    const neighbor = getNeighborInGrid(state.map.rooms, room, direction);
+    if (neighbor) roomsEnteredThisTurn.add(getRoomId(neighbor));
+  }
   for (const player of Object.values(state.players)) {
     // Player iteration follows roster insertion order; that order decides contested pickups deterministically.
     const action = actions.get(player.id);
@@ -333,7 +401,7 @@ export function resolveMultiplayerTurn(
             score: attackScore,
             equipmentAttack: getEquipmentStats(player.equipment).attack,
             charged,
-            difficulty: state.difficulty,
+            difficulty: player.gameplayOptions?.difficulty ?? state.difficulty,
             target: monster,
           });
         const damageApplied = Math.min(monster.currentHealth, damage > 0 ? damage + player.nextAttackBonus : 0);
@@ -393,7 +461,7 @@ export function resolveMultiplayerTurn(
       state.map = moveWerewolfToRoom(state.map, player.roomId);
     }
     const enemy = getRoomMonster(state.map, getRoom(state.map, player.roomId));
-    if (enemy) {
+    if (enemy && !roomsEnteredThisTurn.has(player.roomId)) {
       const protector = player.vanguardSource ? state.players[player.vanguardSource] : null;
       const recipient = protector && protector.health > 0 && protector.roomId === player.roomId ? protector : player;
       const recipientClassDefense = recipient.classId === "warrior" ? 15 : GAME_PARAMETERS.player.defense;
@@ -403,17 +471,14 @@ export function resolveMultiplayerTurn(
           getEquipmentStats(recipient.equipment).defense +
           recipient.defenseBuff,
       );
-      const defenseScore = Math.max(0, Math.min(100, scaleMicrogameScore(actions.get(recipient.id)?.defenseScore ?? 0, state.difficulty)));
+      const defenseScore = Math.max(0, Math.min(100, scaleDefenseMicrogameScore(actions.get(recipient.id)?.defenseScore ?? 0, recipient.gameplayOptions?.difficulty ?? state.difficulty)));
       const incomingDamage = Math.ceil(armoredDamage * (100 - Math.max(0, Math.min(100, defenseScore))) / 100);
       console.info(
         `[combat] ${enemy.name} dealt ${incomingDamage} damage to Player ${recipient.id} (${incomingDamage === 0 ? "blocked" : `base ${enemy.damage}, reduced by ${enemy.damage - incomingDamage} defense`}).`,
       );
       applyPlayerDamage(recipient, incomingDamage);
       if (player.vanguard > 0) {
-        const reflectedDamage = Math.min(
-          enemy.currentHealth,
-          GAME_PARAMETERS.combat.warriorRiposteDamage,
-        );
+        const reflectedDamage = getWarriorRiposteDamage(enemy, GAME_PARAMETERS.combat.warriorRiposteDamage);
         console.info(`[combat] Player ${player.id} reflected ${reflectedDamage} damage to ${enemy.name}.`);
         state.map = damageMonsterInRoom(
           state.map,
@@ -443,6 +508,19 @@ export function resolveMultiplayerTurn(
     const curseDamage = getEquipmentStats(player.equipment ?? null).turnDamage;
     if (curseDamage <= 0) continue;
     applyPlayerDamage(player, curseDamage);
+  }
+  // Keep the last equipped item and carried item available to the living team once
+  // a character crosses from alive to ghost. A consumed potion is already null.
+  for (const [id, player] of Object.entries(state.players)) {
+    if (previous.players[id].health <= 0 || player.health > 0) continue;
+    if (player.item) {
+      state.map = addItemToRoom(state.map, player.roomId, player.item, false);
+      player.item = null;
+    }
+    if (player.equipment) {
+      state.map = addEquipmentToRoom(state.map, player.roomId, player.equipment, false);
+      player.equipment = null;
+    }
   }
   const alive = Object.values(state.players).filter(p => p.health > 0);
   if (!getWerewolf(state.map)) {
@@ -500,7 +578,7 @@ export function isMultiplayerState(value: GameState): value is MultiplayerState 
     (player.focusBoost === undefined || Number.isFinite(player.focusBoost)) &&
     (player.empoweredAttackTurns === undefined || Number.isFinite(player.empoweredAttackTurns)) &&
     (player.empoweredAttackBonus === undefined || Number.isFinite(player.empoweredAttackBonus)) &&
-    ["warrior", "cleric", "thief", "archer", "wizard"].includes(player.classId) &&
+    ["warrior", "cleric", "thief", "archer", "wizard", "ghost"].includes(player.classId) &&
     Number.isFinite(player.defenseBuff) &&
     Number.isFinite(player.vanguard) &&
     Number.isFinite(player.nextAttackBonus) &&
@@ -518,6 +596,6 @@ export function isMultiplayerState(value: GameState): value is MultiplayerState 
     Array.isArray(state.briefingReady) &&
     state.briefingReady.every(id => typeof id === "string") &&
     !!state.map && Array.isArray(state.map.rooms) && !!state.map.entities &&
-    !!state.players && Object.values(state.players).every(validPlayer);
+    !!state.players && Object.values(state.players).every(player => validPlayer(player) && (player.gameplayOptions === undefined || isMultiplayerPlayerOptions(player.gameplayOptions)));
 }
 

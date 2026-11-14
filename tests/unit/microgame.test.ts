@@ -77,16 +77,24 @@ test("Warrior attacks use Multiswipe and each full swipe is worth three taps", (
   expect(getMultiswipeScore(barTarget + 1, tapTarget)).toBeGreaterThan(100);
 });
 
-test("Multiswipe targets have endpoints exactly three grid steps apart", () => {
+test("Multiswipe targets use exactly three orthogonal steps without reversing direction", () => {
   const width = 640;
   const height = 450;
   const { columns, rows } = getMultiswipeGrid(width, height, MULTITAP_DOT_DIAMETER);
   const target = getNextMultiswipeTarget(width, height, MULTITAP_DOT_DIAMETER, () => 0.37);
-  const startColumn = Math.round(target.start.x * columns - 0.5);
-  const startRow = Math.round(target.start.y * rows - 0.5);
-  const endColumn = Math.round(target.end.x * columns - 0.5);
-  const endRow = Math.round(target.end.y * rows - 0.5);
-  expect(Math.abs(startColumn - endColumn) + Math.abs(startRow - endRow)).toBe(3);
+  const path = target.path!;
+  expect(path).toHaveLength(4);
+  const directions = path.slice(1).map((point, index) => {
+    const dx = Math.round((point.x - path[index].x) * columns);
+    const dy = Math.round((point.y - path[index].y) * rows);
+    expect(Math.abs(dx) + Math.abs(dy)).toBe(1);
+    return `${dx},${dy}`;
+  });
+  const deltas = directions.map(direction => direction.split(",").map(Number));
+  expect(deltas.some(([dx]) => dx > 0) && deltas.some(([dx]) => dx < 0)).toBe(false);
+  expect(deltas.some(([, dy]) => dy > 0) && deltas.some(([, dy]) => dy < 0)).toBe(false);
+  expect(path[0]).toEqual(target.start);
+  expect(path[path.length - 1]).toEqual(target.end);
   expect(isMultiswipeEndpoint(target.start, target.start, width, height, MULTITAP_DOT_DIAMETER)).toBe(true);
   expect(isMultiswipeEndpoint(target.end, target.start, width, height, MULTITAP_DOT_DIAMETER)).toBe(false);
 });

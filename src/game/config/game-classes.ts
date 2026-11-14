@@ -1,11 +1,12 @@
 import type { MicrogameKind } from "@/game/actions/use-microgame";
 
-export type GameClassId = "warrior" | "cleric" | "thief" | "archer" | "wizard";
+export type GameClassId = "warrior" | "cleric" | "thief" | "archer" | "wizard" | "ghost";
 
 type GameClass = {
   id: GameClassId;
   name: string;
   sprite: string;
+  description: string;
   support: {
     singleplayer: string;
     multiplayer: string;
@@ -20,6 +21,7 @@ export const GAME_CLASSES: Record<GameClassId, GameClass> = {
     id: "warrior",
     name: "Warrior",
     sprite: "warrior_graphic",
+    description: "A steadfast frontliner who protects the party and answers enemy attacks with force.",
     support: {
       singleplayer: [
         "Vanguard: Tap yourself to damage enemies when they attack you for one turn.",
@@ -38,6 +40,7 @@ export const GAME_CLASSES: Record<GameClassId, GameClass> = {
     id: "cleric",
     name: "Cleric",
     sprite: "cleric_graphic",
+    description: "A resilient healer who keeps the party standing and can survive a fatal blow.",
     support: {
       singleplayer: "Aid: Tap yourself to gain +5 Defense for 2 turns. Charge Up first to also restore 10 Health.",
       multiplayer: [
@@ -53,6 +56,7 @@ export const GAME_CLASSES: Record<GameClassId, GameClass> = {
     id: "thief",
     name: "Thief",
     sprite: "thief_graphic",
+    description: "A nimble opportunist who finds extra supplies and slips through locked doors.",
     support: {
       singleplayer: [
         "Enrich: Tap yourself for a 10% chance to find an item or equipment.",
@@ -74,6 +78,7 @@ export const GAME_CLASSES: Record<GameClassId, GameClass> = {
     id: "archer",
     name: "Ranger",
     sprite: "archer_graphic",
+    description: "A precise ranged fighter whose calm focus makes attack challenges more forgiving.",
     support: {
       singleplayer: "Raise Focus: Tap yourself to make microgames easier for the next 2 turns. Charge Up first to make them much easier.",
       multiplayer: "Raise Focus: Tap yourself or an ally in the same room to make microgames easier for the next 2 turns. Charge Up first to make them much easier.",
@@ -86,6 +91,7 @@ export const GAME_CLASSES: Record<GameClassId, GameClass> = {
     id: "wizard",
     name: "Wizard",
     sprite: "wizard_graphic",
+    description: "A powerful spellcaster who chains attacks across enemies with rune magic.",
     support: {
       singleplayer: "Empower Attacks: Tap yourself to gain +5 base attack damage for your next 2 turns. Charge Up first to gain +10 instead.",
       multiplayer: "Empower Attacks: Tap yourself or an ally in the same room to gain +5 base attack damage for the next 2 turns. Charge Up first to grant +10 instead.",
@@ -94,19 +100,32 @@ export const GAME_CLASSES: Record<GameClassId, GameClass> = {
     microgame: "rune-tracer",
     microgameText: "Trace the connected rune from any dot or bar. Complete it quickly for a higher score; unfinished tracing still scores by progress.",
   },
+  ghost: {
+    id: "ghost",
+    name: "Ghost",
+    sprite: "ghost_graphic",
+    description: "A fallen ally who haunts the dungeon, moving freely and helping the living fight on.",
+    support: {
+      singleplayer: "Ghosts only appear in multiplayer after a character falls.",
+      multiplayer: "Haunt: Support yourself or an ally in the same room to add +5 damage to their next attack.",
+    },
+    special: "Move through any doorway, attack for 5 damage, or support yourself or an ally. Ghosts cannot pick up items or descend.",
+    microgame: "timed-attack",
+    microgameText: "Ghosts do not play microgames.",
+  },
 };
 
 export function getMicrogameEaseLevel(classId: GameClassId, focusBoost = 0) {
   return Math.min(4, (classId === "archer" ? 1 : 0) + focusBoost);
 }
 
-export function randomGameClass() {
-  const classIds = Object.keys(GAME_CLASSES) as GameClassId[];
-  const randomIndex = Math.floor(Math.random() * classIds.length);
+export function randomGameClass(random: () => number = Math.random) {
+  const classIds: GameClassId[] = ["warrior", "cleric", "thief", "archer", "wizard"];
+  const randomIndex = Math.floor(random() * classIds.length);
   return GAME_CLASSES[classIds[randomIndex]];
 }
 
-export function gameClassForSeed(seed: string) {
+export function gameClassForSeed(seed: string, random: () => number = Math.random) {
   const testClasses: Record<string, GameClassId> = {
     test: "warrior",
     testwarrior: "warrior",
@@ -120,7 +139,7 @@ export function gameClassForSeed(seed: string) {
   const normalizedSeed = seed.trim().toLowerCase();
   const testClass = testClasses[normalizedSeed];
   if (testClass) return getGameClass(testClass);
-  return randomGameClass();
+  return randomGameClass(random);
 }
 
 export function getGameClass(id: GameClassId) {

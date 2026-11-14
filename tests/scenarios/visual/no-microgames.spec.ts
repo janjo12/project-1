@@ -12,6 +12,7 @@ test("attacks resolve directly and enemies still respond when attack microgames 
   await page.getByRole("button", { name: "Start", exact: true }).click();
   await expect(page.getByRole("button", { name: "Menu" })).toBeVisible();
   await expect(page.getByText("Level 1 Map", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Start playing", exact: true }).click();
 
   // The reserved seed puts the key one room ahead and the first lock on the route.
   await page.getByRole("button", { name: /Tap right doorway to move/ }).last().click();

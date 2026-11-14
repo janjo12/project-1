@@ -1,4 +1,8 @@
 import { RTCPeerConnection, RTCSessionDescription } from "react-native-webrtc";
+import { isValidPlayerAction, isValidTurn, parseNetworkMessage, parseSessionDescription } from "@/multiplayer/connection-protocol";
+import type { GameState, NetworkMessage, PlayerAction } from "@/multiplayer/connection-protocol";
+import { isMultiplayerPlayerOptions, type MultiplayerPlayerOptions } from "@/multiplayer/player-options";
+export type { GameState, NetworkMessage, PlayerAction } from "@/multiplayer/connection-protocol";
 
 export type GameChannel = ReturnType<RTCPeerConnection["createDataChannel"]>;
 // v124's published declarations omit the vendored EventTarget base type.
@@ -16,12 +20,7 @@ const channelEvents = (channel: GameChannel) => channel as unknown as EventSourc
   open: unknown; close: unknown; error: unknown; message: { data: unknown };
 }>;
 type Configuration = NonNullable<ConstructorParameters<typeof RTCPeerConnection>[0]>;
-export type GameState = { turn: number; [key: string]: unknown };
-export type PlayerAction = { type: "MOVE" | "ATTACK" | "SUPPORT" | "CLASS_READY" | "PICKUP" | "PICKUP_EQUIPMENT" | "DROP_EQUIPMENT" | "USE_ITEM" | "DESCEND"; target?: string; charged?: boolean; microgameScore?: number };
-export type NetworkMessage =
-  | { type: "PLAYER_INFO"; playerId: string; name: string }
-  | { type: "SUBMIT_ACTION"; turn: number; action: PlayerAction }
-  | { type: "INITIAL_STATE" | "TURN_RESULT"; turn: number; state: GameState };
+type StateWithPlayers = GameState & { players: Record<string, { [key: string]: unknown; gameplayOptions?: MultiplayerPlayerOptions }> };
 
 export type ConnectionOptions = {
   configuration?: Configuration;
@@ -67,43 +66,12 @@ export function waitForIceGathering(pc: RTCPeerConnection, timeoutMs = 15000): P
   });
 }
 
-function record(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-function validTurn(value: unknown): value is number {
-  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
-}
-function validAction(value: unknown): value is PlayerAction {
-  // Treat data-channel payloads as untrusted input and reject unsupported action shapes at the boundary.
-  return record(value) && ["MOVE", "ATTACK", "SUPPORT", "CLASS_READY", "PICKUP", "PICKUP_EQUIPMENT", "DROP_EQUIPMENT", "DESCEND"].includes(String(value.type)) &&
-    (value.charged === undefined || typeof value.charged === "boolean") &&
-    (value.microgameScore === undefined || (typeof value.microgameScore === "number" && Number.isFinite(value.microgameScore) && value.microgameScore >= 0 && value.microgameScore <= 100)) &&
-    (value.target === undefined || typeof value.target === "string");
-}
 function parseDescription(text: string, type: "offer" | "answer") {
-  const value: unknown = JSON.parse(text);
-  if (!record(value) || value.type !== type || typeof value.sdp !== "string" || !value.sdp.trim()) {
-    throw new Error(`Expected a WebRTC ${type} with a nonempty SDP.`);
-  }
-  return new RTCSessionDescription({ type, sdp: value.sdp });
+  return new RTCSessionDescription(parseSessionDescription(text, type));
 }
 
 export function parseMessage(data: string): NetworkMessage {
-  // Validate both the envelope and state-turn pairing before the host/client can consume a packet.
-  const value: unknown = JSON.parse(data);
-  if (record(value)) {
-    if (value.type === "PLAYER_INFO" && typeof value.playerId === "string" && typeof value.name === "string") {
-      return value as NetworkMessage;
-    }
-    if (value.type === "SUBMIT_ACTION" && validTurn(value.turn) && validAction(value.action)) {
-      return value as NetworkMessage;
-    }
-    if ((value.type === "INITIAL_STATE" || value.type === "TURN_RESULT") && validTurn(value.turn) &&
-        record(value.state) && value.state.turn === value.turn) {
-      return value as NetworkMessage;
-    }
-  }
-  throw new Error("Invalid game message.");
+  return parseNetworkMessage(data);
 }
 
 export function sendMessage(channel: GameChannel, message: NetworkMessage) {
@@ -201,6 +169,7 @@ export type HostSessionOptions<State extends GameState> = {
   onError?: (error: Error) => void;
   connectionOptions?: Pick<ConnectionOptions, "configuration" | "iceTimeoutMs">;
   onPlayersChange?: () => void;
+  onReadinessChange?: (playerIds: string[]) => void;
   isActivePlayer?: (state: State, playerId: string) => boolean;
 };
 
@@ -210,11 +179,13 @@ export function createHostSession<State extends GameState>(options: HostSessionO
   const connections = new Map<string, PlayerConnection>();
   const pending = new Set<string>();
   const actions = new Map<string, PlayerAction>();
+  const readyPlayers = new Set<string>();
+  const playerOptions = new Map<string, MultiplayerPlayerOptions>();
   let participants = new Set<string>();
   let state = options.initialState;
   let started = false;
   let closed = false;
-  if (!options.hostPlayerId || !validTurn(state.turn)) throw new Error("Invalid host or initial turn.");
+  if (!options.hostPlayerId || !isValidTurn(state.turn)) throw new Error("Invalid host or initial turn.");
 
   function broadcast(message: NetworkMessage) {
     // Closed channels are skipped independently so one broken peer does not block the others.
@@ -235,7 +206,7 @@ export function createHostSession<State extends GameState>(options: HostSessionO
       options.onError?.(error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
-    if (!validTurn(next.turn) || next.turn <= state.turn) throw new Error("The resolver must advance the turn.");
+    if (!isValidTurn(next.turn) || next.turn <= state.turn) throw new Error("The resolver must advance the turn.");
     state = next;
     actions.clear();
     participants = new Set([options.hostPlayerId, ...connections.keys()].filter(id => options.isActivePlayer?.(state, id) ?? true));
@@ -245,7 +216,7 @@ export function createHostSession<State extends GameState>(options: HostSessionO
   function submit(playerId: string, turn: number, action: PlayerAction) {
     // One current-turn action per active participant prevents stale, duplicate, or unauthorized submissions.
     if (!started || closed || !participants.has(playerId) || turn !== state.turn ||
-        actions.has(playerId) || !validAction(action)) return false;
+        actions.has(playerId) || !isValidPlayerAction(action)) return false;
     actions.set(playerId, { ...action });
     if (actions.size === participants.size) {
       try { finishTurn(); }
@@ -257,16 +228,20 @@ export function createHostSession<State extends GameState>(options: HostSessionO
     const player = connections.get(playerId);
     if (!player) return;
     connections.delete(playerId);
+    readyPlayers.delete(playerId);
+    playerOptions.delete(playerId);
     participants.delete(playerId);
     actions.delete(playerId);
     player?.close();
     options.onPlayersChange?.();
+    options.onReadinessChange?.([...readyPlayers]);
     if (started && !closed && participants.size > 0 && actions.size === participants.size) finishTurn();
   }
   return {
     get state() { return state; },
     get playerIds() { return [...connections.keys()]; },
     get readyPlayerIds() { return [...connections.values()].filter(p => p.channel.readyState === "open").map(p => p.id); },
+    get preparedPlayerIds() { return [...readyPlayers]; },
     async addPlayer(playerId: string) {
       // Reserve IDs during asynchronous offer creation so concurrent invites cannot collide.
       if (closed || started) throw new Error("Players can only join an open lobby.");
@@ -282,6 +257,16 @@ export function createHostSession<State extends GameState>(options: HostSessionO
           onMessage: (message) => {
             // Identity comes from this peer, never an ID supplied in a packet.
             if (message.type === "SUBMIT_ACTION") submit(playerId, message.turn, message.action);
+            if ((message.type === "PLAYER_OPTIONS" || message.type === "PLAYER_READY") && isMultiplayerPlayerOptions(message.options)) {
+              playerOptions.set(playerId, message.options);
+              if (message.type === "PLAYER_OPTIONS") readyPlayers.delete(playerId);
+              else readyPlayers.add(playerId);
+              const current = state as unknown as StateWithPlayers;
+              if (current.players?.[playerId]) {
+                state = { ...current, players: { ...current.players, [playerId]: { ...current.players[playerId], gameplayOptions: message.options } } } as unknown as State;
+              }
+              options.onReadinessChange?.([...readyPlayers]);
+            }
           },
           onClose: () => removePlayer(playerId),
         });
@@ -300,13 +285,32 @@ export function createHostSession<State extends GameState>(options: HostSessionO
       if (closed || started || pending.size || [...connections.values()].some(p => p.channel.readyState !== "open")) {
         throw new Error("Wait for every player channel to open before starting.");
       }
+      if ([...connections.keys()].some(id => !readyPlayers.has(id))) throw new Error("Wait for every player to choose their options and press Start.");
       participants = new Set([options.hostPlayerId, ...connections.keys()]);
-      if (initialState) state = initialState;
+      if (initialState) {
+        const next = initialState as unknown as StateWithPlayers;
+        const players = { ...next.players };
+        for (const [id, nextOptions] of playerOptions) {
+          if (players[id]) players[id] = { ...players[id], gameplayOptions: nextOptions };
+        }
+        state = { ...next, players } as unknown as State;
+      }
       started = true;
       broadcast({ type: "INITIAL_STATE", turn: state.turn, state });
       options.onState?.(state);
     },
     submitHostAction: (turn: number, action: PlayerAction) => submit(options.hostPlayerId, turn, action),
+    setPlayerOptions(playerId: string, nextOptions: MultiplayerPlayerOptions) {
+      playerOptions.set(playerId, nextOptions);
+      readyPlayers.delete(playerId);
+      options.onReadinessChange?.([...readyPlayers]);
+      const current = state as unknown as StateWithPlayers;
+      if (!current.players?.[playerId]) return false;
+      state = { ...current, players: { ...current.players, [playerId]: { ...current.players[playerId], gameplayOptions: nextOptions } } } as unknown as State;
+      broadcast({ type: "TURN_RESULT", turn: state.turn, state });
+      options.onState?.(state);
+      return true;
+    },
     finishTurn,
     removePlayer,
     close() {
@@ -317,4 +321,3 @@ export function createHostSession<State extends GameState>(options: HostSessionO
     },
   };
 }
-

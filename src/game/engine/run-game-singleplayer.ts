@@ -50,7 +50,7 @@ import {
   applyWerewolfChaseAfterAction,
   getHardTurnLimit, hasTurnLimit, resolveTurnLoss
 } from "@/game/engine/resolveTurn";
-import { getPlayerAttackDamage, getPotentialAttackDamage, scaleMicrogameScore } from "@/game/engine/combat";
+import { getPlayerAttackDamage, getPotentialAttackDamage, getWarriorRiposteDamage, scaleDefenseMicrogameScore } from "@/game/engine/combat";
 import { resolveClericMiracle } from "@/game/engine/cleric-miracle";
 import { getWerewolfEntryPosition } from "@/game/engine/werewolf-transition";
 import { restartAnimations, swapRoomItemWithInventory } from "@/game/engine/run-game-helpers";
@@ -475,10 +475,7 @@ export function useRunGame({
         );
 
         if (reflects) {
-          const reflectedDamage = Math.min(
-            monster.currentHealth,
-            GAME_PARAMETERS.combat.warriorRiposteDamage,
-          );
+          const reflectedDamage = getWarriorRiposteDamage(monster, GAME_PARAMETERS.combat.warriorRiposteDamage);
           console.info(`[combat] Player reflected ${reflectedDamage} damage to ${monster.name}.`);
           setEnemyHealthLossAmount(GAME_PARAMETERS.combat.warriorRiposteDamage);
           restartAnimations(setAnimationFrame, ["playerAttackElapsed", "enemyDamageElapsed", "enemyHealthLossElapsed"]);
@@ -490,7 +487,7 @@ export function useRunGame({
         }
 
         const resolveAttack = (defenseScore: number) => {
-          const safeScore = Math.max(0, Math.min(100, scaleMicrogameScore(defenseScore, difficulty)));
+          const safeScore = Math.max(0, Math.min(100, scaleDefenseMicrogameScore(defenseScore, difficulty)));
           const damageTaken = Math.ceil(damageAfterEquipment * (100 - safeScore) / 100);
           console.info(
             `[combat] ${monster.name} dealt ${damageTaken} damage to Player (${damageTaken === 0 ? "blocked" : `base ${monster.damage}, reduced by ${monster.damage - damageTaken} defense and reaction`}).`,

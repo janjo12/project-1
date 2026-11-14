@@ -14,7 +14,8 @@ describe("class briefing when microgames are disabled", () => {
         microgamesEnabled={false}
         onNext={onNext}
         onBack={jest.fn()}
-        onPractice={jest.fn()}
+        onPracticeAttack={jest.fn()}
+        onPracticeDefense={jest.fn()}
         onStart={onStart}
       />,
     );
@@ -29,13 +30,14 @@ describe("class briefing when microgames are disabled", () => {
     const screen = await render(
       <ClassBriefing
         classId="cleric"
-        page={0}
+        page={1}
         damage={10}
         multiplayer={false}
         microgamesEnabled={false}
         onNext={jest.fn()}
         onBack={jest.fn()}
-        onPractice={jest.fn()}
+        onPracticeAttack={jest.fn()}
+        onPracticeDefense={jest.fn()}
         onStart={jest.fn()}
       />,
     );

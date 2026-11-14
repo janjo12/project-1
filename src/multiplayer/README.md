@@ -3,10 +3,10 @@
 ## Play
 
 1. On each browser choose **Multiplayer**. The host chooses **Host game** to create a room; everyone else chooses **Join game** and enters its room code.
-2. After at least one other player joins, the host opens **Game options** and presses **Start**. The host's difficulty and seed apply to everyone; joining players do not choose a seed.
+2. After joining, each player chooses their own difficulty, handedness, attack mini-games, and reduced-motion preferences, then presses **Start** to mark ready. The host sets the shared seed and room difficulty and starts the run after everyone is ready. Personal difficulty controls each player's combat scoring; the host's room difficulty controls the shared map and turn clock.
 3. Host: select **Add player**, long-press the invitation text to copy it, and transfer it to the guest.
 4. Guest: paste the invitation and choose **Create reply**. Copy the reply back to the host.
-5. Host: paste it and select **Accept reply**. Wait until the player is connected. Repeat for more devices, then **Start together**.
+5. Host: paste it and select **Accept reply**. Wait until the player is connected and has pressed **Start**. Repeat for more devices, then **Start together**.
 
 Mobile same-Wi-Fi multiplayer uses copy/paste signaling; QR scanning and automatic discovery are not implemented. Both sides use `iceServers: []`, so no STUN/TURN service is contacted. Wi-Fi client isolation can prevent peers from connecting even on the same SSID.
 

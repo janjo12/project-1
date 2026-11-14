@@ -1,4 +1,4 @@
-import { applyDefense, getPlayerAttackDamage, resolveAttackDamage, resolveEnemyDamage } from "@/game/engine/combat";
+import { applyDefense, getPlayerAttackDamage, getWarriorRiposteDamage, resolveAttackDamage, resolveEnemyDamage, scaleDefenseMicrogameScore } from "@/game/engine/combat";
 import type { WorldMonster } from "@/game/entities/enemies";
 import { GAME_PARAMETERS } from "@/game/config/gameparameters";
 import { createMultiplayerState } from "@/game/engine/multiplayer-rules";
@@ -26,6 +26,16 @@ describe("documented combat math", () => {
   it("applies defense without allowing negative damage", () => {
     expect(applyDefense(12, 10)).toBe(2);
     expect(resolveEnemyDamage(8, 10)).toBe(0);
+  });
+  it("keeps Vanguard counterattacks from bypassing Werewolf immunity", () => {
+    expect(getWarriorRiposteDamage({ ...enemy, currentHealth: 3 }, 5)).toBe(3);
+    expect(getWarriorRiposteDamage({ ...enemy, chases: true, currentHealth: 3 }, 5)).toBe(0);
+  });
+  it("lowers the easy defensive floor while preserving normal and hard scoring", () => {
+    expect(scaleDefenseMicrogameScore(0, "easy")).toBe(65);
+    expect(scaleDefenseMicrogameScore(100, "easy")).toBe(100);
+    expect(scaleDefenseMicrogameScore(0, "normal")).toBe(25);
+    expect(scaleDefenseMicrogameScore(0, "hard")).toBe(0);
   });
   it("keeps catalog health within a survivable number of average-score turns", () => {
     const averageScore = 80;
