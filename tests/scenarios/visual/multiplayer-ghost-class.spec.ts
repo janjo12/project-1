@@ -57,7 +57,7 @@ test("testghost multiplayer fixture confirms the ghost class rules", async ({ br
     await page.getByRole("button", { name: "Start", exact: true }).click();
     await expect(page.getByTestId("class-briefing")).toBeVisible();
     await expect(guestPage.getByTestId("class-briefing")).toBeVisible();
-    await page.getByRole("button", { name: "Next class instructions", exact: true }).click();
+    await page.getByRole("button", { name: "Continue to practice", exact: true }).click();
     await page.getByRole("button", { name: "Start playing", exact: true }).click();
     await guestPage.getByRole("button", { name: "Start playing", exact: true }).click();
 

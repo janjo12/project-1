@@ -127,7 +127,7 @@ for (const viewport of viewports) {
 
     await page.getByRole("textbox", { name: "Seed" }).fill("testwarrior");
     await page.getByRole("button", { name: "Start" }).click();
-    const nextClassInstructions = page.getByRole("button", { name: "Next class instructions", exact: true });
+    const nextClassInstructions = page.getByRole("button", { name: "Continue to practice", exact: true });
     if (await nextClassInstructions.isVisible().catch(() => false)) {
       await expectScreenFits(page, "class instructions");
       await nextClassInstructions.click();

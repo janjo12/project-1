@@ -20,7 +20,7 @@ for (const { seed, className } of dedicatedClassSeeds) {
 
     await expect(page.getByTestId("class-briefing")).toBeVisible();
     await expect(page.getByRole("img", { name: `${className} class sprite` })).toBeVisible();
-    const nextClassInstructions = page.getByRole("button", { name: "Next class instructions", exact: true });
+    const nextClassInstructions = page.getByRole("button", { name: "Continue to practice", exact: true });
     if (await nextClassInstructions.isVisible().catch(() => false)) {
       await nextClassInstructions.click();
       await page.getByRole("button", { name: "Start playing", exact: true }).click();

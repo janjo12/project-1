@@ -13,7 +13,7 @@ test("the player reaches the exit before the room changes and enters from the op
   await page.getByRole("button", { name: "easy", exact: true }).click();
   await page.getByRole("textbox", { name: "Seed" }).fill("testwarrior");
   await page.getByRole("button", { name: "Start", exact: true }).click();
-  const nextClassInstructions = page.getByRole("button", { name: "Next class instructions", exact: true });
+  const nextClassInstructions = page.getByRole("button", { name: "Continue to practice", exact: true });
   if (await nextClassInstructions.isVisible().catch(() => false)) {
     await nextClassInstructions.click();
     await page.getByRole("button", { name: "Start playing", exact: true }).click();

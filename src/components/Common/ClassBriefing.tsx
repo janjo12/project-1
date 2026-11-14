@@ -92,13 +92,13 @@ export function ClassBriefing({
         </>
       ) : (
         <>
-          <Text style={{ color: colors.ink, fontSize: compactLayout ? 14 : 16, textAlign: "center" }}>
-            Support · {getSupportDescription(classId, multiplayer)}
-          </Text>
-          <Text style={{ color: colors.ink, fontSize: compactLayout ? 14 : 16, textAlign: "center" }}>Special · {gameClass.special}</Text>
+          {!compactLayout ? <>
+            <Text style={{ color: colors.ink, fontSize: 16, textAlign: "center" }}>Support · {getSupportDescription(classId, multiplayer)}</Text>
+            <Text style={{ color: colors.ink, fontSize: 16, textAlign: "center" }}>Special · {gameClass.special}</Text>
+          </> : <Text style={{ color: colors.sepia, fontSize: 13, textAlign: "center" }}>Choose a skill to practice, or start playing.</Text>}
           {microgamesEnabled ? (
             <View style={{ alignItems: "center", gap: 8 }}>
-              {gameClass.microgame === "concentration" ? (
+              {!compactLayout && gameClass.microgame === "concentration" ? (
                 <View style={{ height: 48, width: 104, justifyContent: "center" }}>
                   <MicrogameCircleOutline
                     size={40}
@@ -113,39 +113,39 @@ export function ClassBriefing({
                     importantForAccessibility="no-hide-descendants"
                   />
                 </View>
-              ) : gameClass.microgame === "multitap" ? (
+              ) : !compactLayout && gameClass.microgame === "multitap" ? (
                 <View style={{ flexDirection: "row", gap: 10 }}>
                   <MicrogameCircle size={32} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />
                   <MicrogameCircle size={32} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />
                   <MicrogameCircle size={32} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />
                 </View>
-              ) : gameClass.microgame === "multiswipe" ? (
+              ) : !compactLayout && gameClass.microgame === "multiswipe" ? (
                 <View style={{ alignItems: "center", flexDirection: "row", height: 42, justifyContent: "center", width: 126 }}>
                   <MicrogameCircle size={28} style={{ position: "absolute", left: 0 }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />
                   <View style={{ backgroundColor: colors.accent, height: 8, width: 72 }} />
                   <MicrogameCircle size={28} style={{ position: "absolute", right: 0 }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />
                 </View>
               ) : null}
-              {gameClass.microgame === "timed-attack" ? (
+              {!compactLayout && gameClass.microgame === "timed-attack" ? (
                 <Text style={{ color: colors.accent, fontSize: 36, fontWeight: "900" }}>NOW!</Text>
               ) : null}
-              {gameClass.microgame === "rune-tracer" ? <RuneTracerPreview /> : null}
-              <Text style={{ color: colors.ink, fontSize: compactLayout ? 15 : 17 }}>
+              {!compactLayout && gameClass.microgame === "rune-tracer" ? <RuneTracerPreview /> : null}
+              <Text numberOfLines={compactLayout ? 1 : undefined} style={{ color: colors.ink, fontSize: compactLayout ? 13 : 17, textAlign: "center" }}>
                 Attack game · {gameClass.microgameText}
               </Text>
             </View>
           ) : (
             <StyledText>Attack microgames are off. Attacks use full damage without timing bonuses.</StyledText>
           )}
-          <Text style={{ color: colors.ink, fontSize: compactLayout ? 15 : 17, textAlign: "center" }}>
-            Defense game · Tap when the thin ring reaches the gap between the two target rings.
+          <Text style={{ color: colors.ink, fontSize: compactLayout ? 13 : 17, textAlign: "center" }}>
+            {compactLayout ? "Defense · Tap when the thin ring reaches the target gap." : "Defense game · Tap when the thin ring reaches the gap between the two target rings."}
           </Text>
-          <Text style={{ color: colors.ink, fontSize: compactLayout ? 18 : 20, textAlign: "center" }}>
+          <Text style={{ color: colors.ink, fontSize: compactLayout ? 15 : 20, textAlign: "center" }}>
             Damage: {damage}
           </Text>
           <View style={{ alignItems: "center", flexDirection: "row", gap: 8, justifyContent: "center" }}>
-            <NormalButton accessibilityLabel="Practice attack game" accessibilityRole="button" label="Practice Attack" onPress={onPracticeAttack} />
-            <NormalButton accessibilityLabel="Practice defense game" accessibilityRole="button" label="Practice Defense" onPress={onPracticeDefense} />
+            <NormalButton accessibilityLabel="Practice attack game" accessibilityRole="button" label={compactLayout ? "Attack" : "Practice Attack"} onPress={onPracticeAttack} />
+            <NormalButton accessibilityLabel="Practice defense game" accessibilityRole="button" label={compactLayout ? "Defense" : "Practice Defense"} onPress={onPracticeDefense} />
           </View>
           <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
             <NormalButton
