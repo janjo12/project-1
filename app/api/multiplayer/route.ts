@@ -20,7 +20,7 @@ type Session = {
   state: MultiplayerState | null;
   actions: Map<string, PlayerAction>;
   revision: number;
-  timer: ReturnType<typeof setTimeout> | null;
+  timer: (ReturnType<typeof setTimeout> & { unref?: () => void }) | null;
   deadlineAt: number | null;
   touchedAt: number;
 };
