@@ -6,8 +6,11 @@ import { getIdleBobStyle } from "@/components/Common/idleBob";
 
 export function TutorialSpeechBubble({ label, testID, reducedMotion = false, animationsPaused = false }: { label: string; testID?: string; reducedMotion?: boolean; animationsPaused?: boolean }) {
   const bobStyle = useMemo(() => getIdleBobStyle(animationsPaused, reducedMotion), [animationsPaused, reducedMotion]);
+  // React Native Web adds CSS animation styles that are intentionally absent
+  // from React Native's cross-platform Animated.View style type.
+  const animatedBobStyle = bobStyle as unknown as React.ComponentProps<typeof Animated.View>["style"];
   return (
-    <Animated.View pointerEvents="none" testID={testID} style={[{ alignItems: "center", zIndex: 10 }, bobStyle]}>
+    <Animated.View pointerEvents="none" testID={testID} style={[{ alignItems: "center", zIndex: 10 }, animatedBobStyle]}>
       <View style={{ backgroundColor: "#ffffff", borderColor: "#111827", borderRadius: 999, borderWidth: 1, paddingHorizontal: 7, paddingVertical: 2 }}>
         <Text style={{ color: "#111827", fontSize: 10, fontWeight: "900", lineHeight: 13, textAlign: "center" }}>{label}</Text>
       </View>
