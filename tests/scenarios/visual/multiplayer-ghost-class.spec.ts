@@ -44,12 +44,13 @@ test("testghost multiplayer fixture confirms the ghost class rules", async ({ br
     await guestPage.getByRole("button", { name: "Join game", exact: true }).click();
     await guestPage.getByRole("textbox", { name: "Room code" }).fill(roomCode);
     await guestPage.getByRole("textbox", { name: "Room code" }).press("Enter");
-    await expect(guestPage.getByText("[Project 1]", { exact: true })).toBeVisible();
+    await expect(guestPage.getByText("Dungeon Run", { exact: true })).toBeVisible();
     await expect(guestPage.getByText("Multiplayer", { exact: true })).toHaveCount(0);
     await guestPage.getByRole("button", { name: "hard", exact: true }).click();
     await guestPage.getByRole("button", { name: "Left", exact: true }).click();
     await guestPage.getByRole("button", { name: "Off", exact: true }).click();
-    await guestPage.getByRole("switch", { name: "Reduced motion" }).check();
+    const reducedMotion = guestPage.getByRole("switch", { name: "Reduced motion" });
+    if (!(await reducedMotion.isChecked())) await reducedMotion.check();
 
     await page.getByRole("button", { name: "Game options", exact: true }).click();
     await page.getByRole("textbox", { name: "Seed" }).fill("testghost");

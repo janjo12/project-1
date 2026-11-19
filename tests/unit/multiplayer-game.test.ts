@@ -73,6 +73,28 @@ test("two devices have independent positions in the same authoritative map", () 
   expect(next.turn).toBe(1);
 });
 
+test("entering a room with an enemy is safe until the player takes an action there", () => {
+  const state = initial();
+  const player = state.players.host;
+  const direction = (["north", "east", "south", "west"] as Direction[])
+    .find(value => getConnectedRoomId(state.map, player.roomId, value));
+  expect(direction).toBeDefined();
+  const destinationId = getConnectedRoomId(state.map, player.roomId, direction!)!;
+  const destination = getRoom(state.map, destinationId)!;
+  destination.contents.push({ type: "monster", id: "entry-guard" });
+  state.map.entities.monsters["entry-guard"] = {
+    id: "entry-guard", type: "monster", name: "Entry Guard", sprite: "g",
+    damage: 20, currentHealth: 100, maximumHealth: 100,
+  };
+
+  const entered = resolveMultiplayerTurn(state, new Map([["host", { type: "MOVE", target: direction }]]));
+  expect(entered.players.host.roomId).toBe(destinationId);
+  expect(entered.players.host.health).toBe(PLAYER_MAX_HEALTH);
+
+  const acted = resolveMultiplayerTurn(entered, new Map([["host", { type: "PICKUP" }]]));
+  expect(acted.players.host.health).toBeLessThan(PLAYER_MAX_HEALTH);
+});
+
 test("charged movement refunds energy and still consumes the shared turn", () => {
   const state = initial();
   state.difficulty = "normal";
@@ -233,8 +255,8 @@ test("Wizard Chain Lightning damages every other enemy for half the actual targe
 
   const next = resolveMultiplayerTurn(state, new Map([["host", { type: "ATTACK", target: "primary", microgameScore: 100 }]]));
 
-  expect(next.map.entities.monsters.primary.currentHealth).toBe(17);
-  expect(next.map.entities.monsters.secondary.currentHealth).toBe(24);
+  expect(next.map.entities.monsters.primary.currentHealth).toBe(16);
+  expect(next.map.entities.monsters.secondary.currentHealth).toBe(23);
 });
 
 test("each multiplayer player uses their own difficulty to scale attack scores", () => {
@@ -269,7 +291,7 @@ test("Wizard Empower Attacks gives an ally two stronger turns and improves furth
     ["guest", { type: "ATTACK", target: "target", microgameScore: 100 }],
   ]));
 
-  expect(next.map.entities.monsters.target.currentHealth).toBe(80);
+  expect(next.map.entities.monsters.target.currentHealth).toBe(78);
   expect(next.players.guest.empoweredAttackBonus).toBe(10);
   expect(next.players.guest.empoweredAttackTurns).toBe(2);
 });
@@ -303,11 +325,50 @@ test("team descends together and revives fallen teammates", () => {
   expect(next.players.guest.roomId).toBe(next.players.host.roomId);
 });
 
-test("turn limits end the shared run", () => {
+test.each(["normal", "hard"] as const)("a shared %s turn budget ghosts only applicable players while Easy allies continue", difficulty => {
   const state = initial();
-  state.difficulty = "normal";
+  state.players.host.gameplayOptions = { difficulty, handedness: "right", microgamesEnabled: true, reducedMotion: false };
+  state.players.guest.gameplayOptions = { difficulty: "easy", handedness: "right", microgamesEnabled: true, reducedMotion: false };
   state.turnsLeft = 1;
-  expect(resolveMultiplayerTurn(state, new Map()).ended).toBe(true);
+  const exhausted = resolveMultiplayerTurn(state, new Map([
+    ["host", { type: "SUPPORT" }],
+    ["guest", { type: "SUPPORT" }],
+  ]));
+  expect(exhausted.turnsLeft).toBe(0);
+  expect(exhausted.players.host.health).toBe(0);
+  expect(exhausted.players.guest.health).toBe(PLAYER_MAX_HEALTH);
+  expect(exhausted.ended).toBe(false);
+  expect(resolveMultiplayerTurn(exhausted, new Map()).turn).toBe(exhausted.turn + 1);
+});
+
+test("an Easy-only multiplayer party has no floor turn-budget expiration", () => {
+  const state = initial();
+  for (const player of Object.values(state.players)) {
+    player.gameplayOptions = { difficulty: "easy", handedness: "right", microgamesEnabled: true, reducedMotion: false };
+  }
+  state.turnsLeft = 1;
+  const next = resolveMultiplayerTurn(state, new Map([
+    ["host", { type: "SUPPORT" }],
+    ["guest", { type: "SUPPORT" }],
+  ]));
+  expect(next.turnsLeft).toBe(1);
+  expect(Object.values(next.players).every(player => player.health > 0)).toBe(true);
+  expect(next.ended).toBe(false);
+});
+
+test("a turn-budget timeout ends the run only when no Easy player remains alive", () => {
+  const state = initial();
+  for (const player of Object.values(state.players)) {
+    player.gameplayOptions = { difficulty: "hard", handedness: "right", microgamesEnabled: true, reducedMotion: false };
+  }
+  state.turnsLeft = 1;
+  const ended = resolveMultiplayerTurn(state, new Map([
+    ["host", { type: "SUPPORT" }],
+    ["guest", { type: "SUPPORT" }],
+  ]));
+  expect(Object.values(ended.players).every(player => player.health <= 0)).toBe(true);
+  expect(ended.ended).toBe(true);
+  expect(resolveMultiplayerTurn(ended, new Map())).toBe(ended);
 });
 
 test("the shared game stays in briefing until every player completes class instructions", () => {
@@ -370,7 +431,7 @@ test("Cleric support adds five defense for two multiplayer turns", () => {
   expect(first.players.host.defenseBuff).toBe(5);
   expect(first.players.host.defenseBuffTurns).toBe(1);
 
-  const second = resolveMultiplayerTurn(first, new Map());
+  const second = resolveMultiplayerTurn(first, new Map([["host", { type: "PICKUP" }]]));
   expect(second.players.host.health).toBe(PLAYER_MAX_HEALTH - 10);
   expect(second.players.host.defenseBuff).toBe(0);
   expect(second.players.host.defenseBuffTurns).toBe(0);
@@ -423,13 +484,12 @@ test("Miracle becomes available again when the party descends to a new level", (
   expect(Object.values(next.players).every(player => player.miracleUsed === false)).toBe(true);
 });
 
-test("missing multiplayer actions do not block enemy damage or counterattack", () => {
+test("players who miss a turn are not attacked without a chance to play defense", () => {
   const state = initial();
   const room = getRoom(state.map, state.players.host.roomId)!;
   room.contents = [{ type: "monster", id: "guard" }];
   state.map.entities.monsters.guard = { id: "guard", type: "monster", name: "Guard", sprite: "g", damage: 20, currentHealth: 100, maximumHealth: 100 };
-  const next = resolveMultiplayerTurn(state, new Map());
+  const next = resolveMultiplayerTurn(state, new Map([["host", { type: "SUPPORT", defenseScore: 0 }]]));
   expect(next.players.host.health).toBeLessThan(PLAYER_MAX_HEALTH);
-  expect(next.players.guest.health).toBeLessThan(PLAYER_MAX_HEALTH);
-  expect(next.map.entities.monsters.guard.currentHealth).toBe(100);
+  expect(next.players.guest.health).toBe(PLAYER_MAX_HEALTH);
 });

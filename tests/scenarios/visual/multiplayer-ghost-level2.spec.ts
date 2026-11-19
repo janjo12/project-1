@@ -103,13 +103,20 @@ test("two live multiplayer players reach Level 2 after a ghost reveals and suppo
     await guestPage.goto(new URL("/", page.url()).toString(), { waitUntil: "domcontentloaded" });
     await guestPage.getByRole("button", { name: "Multiplayer" }).click();
     await guestPage.getByRole("button", { name: "Join game", exact: true }).click();
+    await expect(guestPage.getByText("Enter the host's room code. You'll choose your own difficulty and gameplay options after joining.")).toBeVisible();
+    await expect(guestPage.getByText(/room server supplies its seed and difficulty/i)).toHaveCount(0);
     await guestPage.getByRole("textbox", { name: "Room code" }).fill(roomCode);
     await guestPage.getByRole("button", { name: "Join room", exact: true }).click();
-    await expect(guestPage.getByText("[Project 1]", { exact: true })).toBeVisible();
+    await expect(guestPage.getByText("Dungeon Run", { exact: true })).toBeVisible();
+    await expect(guestPage.getByRole("button", { name: "On", exact: true })).toBeVisible();
+    await expect(guestPage.getByRole("button", { name: "Off", exact: true })).toBeVisible();
     await guestPage.getByRole("button", { name: "hard", exact: true }).click();
     await guestPage.getByRole("button", { name: "Start", exact: true }).click();
 
     await page.getByRole("button", { name: "Game options", exact: true }).click();
+    await expect(page.getByRole("button", { name: "On", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Off", exact: true })).toBeVisible();
+    await expect(page.getByRole("switch", { name: "Attack microgames" })).toHaveCount(0);
     await page.getByRole("textbox", { name: "Seed" }).fill("testwarrior");
     await page.getByRole("button", { name: "Start", exact: true }).click();
     await expect(page.getByTestId("class-briefing")).toBeVisible();
@@ -125,6 +132,7 @@ test("two live multiplayer players reach Level 2 after a ghost reveals and suppo
     expect(guestId).toBeTruthy();
     const victimId = guestId!;
     expect(state.phase).toBe("playing");
+    expect(state.difficulty).toBe("normal");
     expect(state.players.host.classId).toBe("warrior");
     expect(state.players[victimId].classId).toBe("warrior");
     expect(state.players[victimId].gameplayOptions?.difficulty).toBe("hard");

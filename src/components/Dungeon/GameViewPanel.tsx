@@ -107,10 +107,13 @@ export const GameViewPanel = memo(function GameViewPanel({
   return (
     <Animated.View style={[styles.panel, { opacity: panelOpacity }]}>
       <View style={[styles.sceneBox, Platform.OS === "web" && styles.webSceneBox]} onLayout={event => setSceneBoxHeight(event.nativeEvent.layout.height)}>
-        <View style={waitingForPlayers ? styles.waitingScene : undefined}>
+        <View style={[styles.sceneContent, waitingForPlayers ? styles.waitingScene : undefined, { gap: showStairsObjective || hardTurnCounter !== null ? 12 : 8 }]}>
         {showStairsObjective || hardTurnCounter !== null ? (
           <Text
             accessibilityLabel={hardTurnCounter !== null ? "Turns remaining" : "Level objective"}
+            adjustsFontSizeToFit
+            minimumFontScale={0.72}
+            numberOfLines={1}
             style={styles.turnCounter}
             testID="hard-turn-counter"
           >
@@ -123,7 +126,7 @@ export const GameViewPanel = memo(function GameViewPanel({
         <RoomScene
           actors={visibleActors}
           roomId={roomId}
-          maxHeight={sceneBoxHeight || undefined}
+          maxHeight={sceneBoxHeight ? Math.max(0, sceneBoxHeight - (showStairsObjective || hardTurnCounter !== null ? 30 : 0)) : undefined}
           reducedMotion={reducedMotion}
           animationsPaused={pauseAnimations}
           floorLayer={floorLayer}
@@ -180,6 +183,12 @@ function createStyles(colors: ThemeColors) {
       padding: 4,
       position: "relative",
     },
+    sceneContent: {
+      alignItems: "center",
+      flex: 1,
+      justifyContent: "center",
+      width: "100%",
+    },
     webSceneBox: {
       paddingBottom: 24,
     },
@@ -201,7 +210,7 @@ function createStyles(colors: ThemeColors) {
       zIndex: 10,
     },
     waitingText: {
-      color: colors.paper,
+      color: "#ffffff",
       fontSize: 16,
       fontWeight: "900",
       textAlign: "center",
@@ -211,8 +220,14 @@ function createStyles(colors: ThemeColors) {
       fontSize: 14,
       fontVariant: ["tabular-nums"],
       fontWeight: "900",
-      lineHeight: 16,
+      flexShrink: 0,
+      height: 20,
+      lineHeight: 20,
+      maxWidth: "100%",
+      minHeight: 20,
+      paddingHorizontal: 4,
       textAlign: "center",
+      width: "100%",
     },
   });
 }

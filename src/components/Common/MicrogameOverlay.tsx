@@ -1,22 +1,24 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { Animated, Easing, Pressable, Text, View, type ViewInstance } from "react-native";
+import { Animated, Easing, Platform, Pressable, Text, View, type ViewInstance } from "react-native";
 
 import { StyledText } from "@/components/Common/Displays";
 import { MicrogameCircle, MicrogameCircleOutline } from "@/components/Common/MicrogameCircle";
 import { useThemeColors } from "@/components/Common/theme";
-import { CONCENTRATION_TARGET_DURATION_MS, MULTITAP_DOT_DIAMETER, getMultitapGrid, getMultiswipeGrid, getRuneTracerPattern, isMultiswipeEndpoint, type MicrogameKind, type MultitapTargetSpot, type MultiswipeTarget, type RuneEdge } from "@/game/actions/use-microgame";
+import { CONCENTRATION_TARGET_DURATION_MS, DEFENSE_TARGET_INNER_DIAMETER, DEFENSE_TARGET_OUTER_DIAMETER, MULTITAP_DOT_DIAMETER, getDefenseRingDiameter, getMultitapGrid, getMultiswipeGrid, getMultiswipeStrokeProgress, getRuneTracerPattern, isDefenseRingWithinTargets, isMultiswipeEndpoint, type MicrogameKind, type MultitapTargetSpot, type MultiswipeTarget, type RuneEdge } from "@/game/actions/use-microgame";
 import type { NumberStore } from "@/game/state/numberStore";
 
 type MicrogameOverlayProps = {
   visible: boolean;
+  sessionId?: number;
   kind: MicrogameKind;
   elapsedStore: NumberStore;
+  progress: number;
   targetDelay: number;
   targetSpot: number;
   leftHanded: boolean;
   multitapTargetSpot: MultitapTargetSpot;
   multiswipeTarget: MultiswipeTarget;
-  onTap: (trackWidth?: number, dotDiameter?: number, trackHeight?: number) => void;
+  onTap: (trackWidth?: number, dotDiameter?: number, trackHeight?: number, elapsedOverride?: number) => void;
   onSwipeStart: (x: number, y: number, width: number, height: number, dotDiameter?: number) => void;
   onSwipeEnd: (x: number, y: number, width: number, height: number, dotDiameter?: number) => boolean;
   onMultiswipeLayout: (width: number, height: number) => void;
@@ -26,8 +28,10 @@ type MicrogameOverlayProps = {
 
 export function MicrogameOverlay({
   visible,
+  sessionId = 0,
   kind,
   elapsedStore,
+  progress,
   targetDelay,
   targetSpot,
   multitapTargetSpot,
@@ -42,6 +46,18 @@ export function MicrogameOverlay({
 }: MicrogameOverlayProps) {
   const elapsed = useSyncExternalStore(elapsedStore.subscribe, elapsedStore.getSnapshot, elapsedStore.getSnapshot);
   const [panelHeight, setPanelHeight] = useState(0);
+  const [defenseFeedback, setDefenseFeedback] = useState<{ sessionId: number; result: "success" | "miss" } | null>(null);
+  const defenseResult = defenseFeedback?.sessionId === sessionId ? defenseFeedback.result : null;
+  const handleTap = () => {
+    if (kind === "defense") {
+      const clickElapsed = elapsedStore.getSnapshot();
+      const ringDiameter = getDefenseRingDiameter(clickElapsed, targetDelay);
+      setDefenseFeedback({ sessionId, result: isDefenseRingWithinTargets(ringDiameter) ? "success" : "miss" });
+      onTap(undefined, undefined, undefined, clickElapsed);
+      return;
+    }
+    onTap();
+  };
 
   if (!visible) return null;
 
@@ -66,6 +82,7 @@ export function MicrogameOverlay({
         <MicrogameContent
           kind={kind}
           elapsed={elapsed}
+          progress={progress}
           panelHeight={panelHeight}
           targetDelay={targetDelay}
           targetSpot={targetSpot}
@@ -78,10 +95,11 @@ export function MicrogameOverlay({
           onMultiswipeLayout={onMultiswipeLayout}
           onRuneProgress={onRuneProgress}
           onRuneComplete={onRuneComplete}
+          defenseResult={defenseResult}
         />
       ) : (
         <Pressable
-          onPress={() => onTap()}
+          onPress={handleTap}
           accessibilityRole="button"
           accessibilityLabel="Tap the game screen"
           style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0, alignItems: "center", justifyContent: "center" }}
@@ -90,6 +108,7 @@ export function MicrogameOverlay({
             <MicrogameContent
               kind={kind}
               elapsed={elapsed}
+              progress={progress}
               panelHeight={panelHeight}
               targetDelay={targetDelay}
               targetSpot={targetSpot}
@@ -102,6 +121,7 @@ export function MicrogameOverlay({
               onMultiswipeLayout={onMultiswipeLayout}
               onRuneProgress={onRuneProgress}
               onRuneComplete={onRuneComplete}
+              defenseResult={defenseResult}
             />
           </View>
         </Pressable>
@@ -110,7 +130,7 @@ export function MicrogameOverlay({
   );
 }
 
-type MicrogameContentProps = Pick<MicrogameOverlayProps, "kind" | "targetDelay" | "targetSpot" | "multitapTargetSpot" | "multiswipeTarget" | "leftHanded" | "onTap" | "onSwipeStart" | "onSwipeEnd" | "onMultiswipeLayout" | "onRuneProgress" | "onRuneComplete"> & { elapsed: number; panelHeight: number };
+type MicrogameContentProps = Pick<MicrogameOverlayProps, "kind" | "targetDelay" | "targetSpot" | "multitapTargetSpot" | "multiswipeTarget" | "leftHanded" | "onTap" | "onSwipeStart" | "onSwipeEnd" | "onMultiswipeLayout" | "onRuneProgress" | "onRuneComplete"> & { elapsed: number; progress: number; panelHeight: number; defenseResult?: "success" | "miss" | null };
 
 function MicrogameContent(props: MicrogameContentProps) {
   switch (props.kind) {
@@ -142,14 +162,47 @@ function IdleBounce({ children, style }: { children: React.ReactNode; style?: ob
 
   useEffect(() => {
     const animation = Animated.loop(Animated.sequence([
-      Animated.timing(offset, { toValue: -3, duration: 650, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-      Animated.timing(offset, { toValue: 0, duration: 650, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      Animated.timing(offset, { toValue: -3, duration: 650, easing: Easing.inOut(Easing.sin), useNativeDriver: Platform.OS !== "web" }),
+      Animated.timing(offset, { toValue: 0, duration: 650, easing: Easing.inOut(Easing.sin), useNativeDriver: Platform.OS !== "web" }),
     ]));
     animation.start();
     return () => animation.stop();
   }, [offset]);
 
   return <Animated.View style={[style, { transform: [{ translateY: offset }] }]}>{children}</Animated.View>;
+}
+
+function VerticalProgressBar({ progress, height, testID }: { progress: number; height: number; testID: string }) {
+  const boundedProgress = Math.max(0, Math.min(1, progress));
+  const colors = useThemeColors();
+  return (
+    <View testID={testID} accessibilityRole="progressbar" accessibilityLabel="Action progress" accessibilityValue={{ min: 0, max: 100, now: Math.round(boundedProgress * 100) }} style={{ width: 14, height, overflow: "hidden", justifyContent: "flex-end", borderRadius: 7, borderWidth: 1, borderColor: colors.ink, backgroundColor: colors.paperLight }}>
+      <View testID={`${testID}-fill`} style={{ width: "100%", height: `${boundedProgress * 100}%`, backgroundColor: colors.energy }} />
+    </View>
+  );
+}
+
+function ProgressTrackRow({ children, progress, height, leftHanded, testID }: { children: React.ReactNode; progress: number; height: number; leftHanded: boolean; testID: string }) {
+  const bar = <VerticalProgressBar progress={progress} height={height} testID={testID} />;
+  return <View style={{ width: "100%", flexDirection: "row", alignItems: "center", gap: 10 }}>{leftHanded ? <>{children}{bar}</> : <>{bar}{children}</>}</View>;
+}
+
+function useGestureGlow() {
+  const [values] = useState(() => ({ position: new Animated.ValueXY({ x: -100, y: -100 }), opacity: new Animated.Value(0) }));
+  const { position, opacity } = values;
+  const showAt = (x: number, y: number) => {
+    position.setValue({ x: x - 44, y: y - 44 });
+    opacity.setValue(1);
+  };
+  const hide = (duration = 120) => Animated.timing(opacity, { toValue: 0, duration, useNativeDriver: Platform.OS !== "web" }).start();
+  const layer = <Animated.View pointerEvents="none" testID="multiswipe-cursor-glow" style={{ position: "absolute", width: 88, height: 88, alignItems: "center", justifyContent: "center", opacity, transform: [{ translateX: position.x }, { translateY: position.y }] }}>
+      <View style={{ alignItems: "center", backgroundColor: "rgba(250, 204, 21, 0.16)", borderColor: "rgba(250, 204, 21, 0.2)", borderRadius: 44, borderWidth: 2, height: 88, justifyContent: "center", width: 88 }}>
+      <View style={{ alignItems: "center", backgroundColor: "rgba(250, 204, 21, 0.22)", borderRadius: 32, height: 64, justifyContent: "center", width: 64 }}>
+        <View style={{ backgroundColor: "rgba(255,255,255,0.22)", borderRadius: 14, height: 28, width: 28 }} />
+      </View>
+    </View>
+  </Animated.View>;
+  return { layer, showAt, hide };
 }
 
 function ConcentrationMicrogame({ elapsed, targetSpot, leftHanded, onTap }: MicrogameContentProps) {
@@ -192,30 +245,34 @@ function TimedAttackMicrogame({ elapsed, targetDelay }: MicrogameContentProps) {
   );
 }
 
-function DefenseMicrogame({ elapsed, targetDelay }: MicrogameContentProps) {
+function DefenseMicrogame({ elapsed, targetDelay, defenseResult }: MicrogameContentProps) {
   const colors = useThemeColors();
-  const progress = Math.max(0, Math.min(1, elapsed / Math.max(1, targetDelay)));
-  // The thin moving ring finishes centered in the gap between the two target rings.
-  const ringDiameter = 136 - progress * 90;
-  const contactReached = elapsed >= targetDelay;
+  // It reaches the narrow target gap at the unchanged scoring time, then keeps
+  // shrinking to the center for the rest of the defense window.
+  const ringDiameter = getDefenseRingDiameter(elapsed, targetDelay);
+  const ringColor = defenseResult === "success" ? colors.energy : defenseResult === "miss" ? colors.health : colors.accent;
   return (
     <View pointerEvents="none" style={{ alignItems: "center", justifyContent: "center", gap: 18 }}>
-      <View testID="defense-instruction" accessibilityLabel="Tap when the thin shrinking ring is in the gap between the two thick target rings">
+      <View testID="defense-instruction" accessibilityLabel="Tap when the thin shrinking ring is in the gap between the two thin target rings">
         <StyledText style={{ color: colors.ink, fontSize: 21, fontWeight: "900", textAlign: "center" }}>Tap when the thin ring reaches the gap</StyledText>
       </View>
-      <View testID="defense-cue" accessibilityRole="timer" accessibilityLabel={contactReached ? "Shrinking ring is between the target rings" : "Shrinking ring approaching the gap between target rings"} style={{ alignItems: "center", height: 148, justifyContent: "center", width: 148 }}>
-        <View style={{ position: "absolute", width: ringDiameter, height: ringDiameter, borderColor: contactReached ? colors.energy : colors.accent, borderRadius: ringDiameter / 2, borderWidth: 3 }} />
-        <View testID="defense-target-outer-ring" style={{ position: "absolute", width: 68, height: 68, borderRadius: 34, borderColor: colors.ink, borderWidth: 8 }} />
-        <View testID="defense-target-inner-ring" style={{ position: "absolute", width: 34, height: 34, borderRadius: 17, borderColor: colors.ink, borderWidth: 6 }} />
+      <View testID="defense-cue" accessibilityRole="timer" accessibilityLabel={defenseResult === "success" ? "Successful block" : defenseResult === "miss" ? "Missed block" : "Shrinking ring approaching the gap between target rings"} style={{ alignItems: "center", height: 148, justifyContent: "center", width: 148 }}>
+        <View testID="defense-shrinking-ring" style={{ position: "absolute", width: ringDiameter, height: ringDiameter, borderColor: ringColor, borderRadius: ringDiameter / 2, borderWidth: 3 }} />
+        <View testID="defense-target-outer-ring" style={{ position: "absolute", width: DEFENSE_TARGET_OUTER_DIAMETER, height: DEFENSE_TARGET_OUTER_DIAMETER, borderRadius: DEFENSE_TARGET_OUTER_DIAMETER / 2, borderColor: colors.accent, borderWidth: 2 }} />
+        <View testID="defense-target-inner-ring" style={{ position: "absolute", width: DEFENSE_TARGET_INNER_DIAMETER, height: DEFENSE_TARGET_INNER_DIAMETER, borderRadius: DEFENSE_TARGET_INNER_DIAMETER / 2, borderColor: colors.accent, borderWidth: 2 }} />
       </View>
     </View>
   );
 }
 
-function MultitapMicrogame({ multitapTargetSpot, leftHanded, onTap, panelHeight }: MicrogameContentProps) {
+function MultitapMicrogame({ multitapTargetSpot, leftHanded, onTap, panelHeight, progress }: MicrogameContentProps) {
   const colors = useThemeColors();
   const [trackWidth, setTrackWidth] = useState(0);
   const [trackHeight, setTrackHeight] = useState(0);
+  const glow = useGestureGlow();
+  const [burst] = useState(() => ({ progress: new Animated.Value(0), position: new Animated.ValueXY({ x: -100, y: -100 }) }));
+  const burstProgress = burst.progress;
+  const burstPosition = burst.position;
   const gridHeight = panelHeight > 0 ? Math.max(48, panelHeight * 0.5) : 110;
   const { diameter: dotDiameter } = getMultitapGrid(trackWidth, trackHeight, MULTITAP_DOT_DIAMETER);
   const gridRegionStyle = leftHanded
@@ -229,22 +286,39 @@ function MultitapMicrogame({ multitapTargetSpot, leftHanded, onTap, panelHeight 
         <MicrogameCircle size={18} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />
       </View>
       </IdleBounce>
-      <View testID="multitap-track" onLayout={event => {
-        setTrackWidth(event.nativeEvent.layout.width);
-        setTrackHeight(event.nativeEvent.layout.height);
-      }} style={{ width: "100%", height: gridHeight, position: "relative", overflow: "hidden" }}>
-        <View testID="multitap-grid-region" pointerEvents="none" style={{ position: "absolute", ...gridRegionStyle, top: 0, bottom: 0 }} />
-        <Pressable onPress={() => onTap(trackWidth, dotDiameter, trackHeight)} accessibilityRole="button" accessibilityLabel="Tap circle" testID="multitap-target" style={{ position: "absolute", left: `${multitapTargetSpot.x * 100}%`, top: `${multitapTargetSpot.y * 100}%`, marginLeft: -dotDiameter / 2, marginTop: -dotDiameter / 2 }}>
-          <MicrogameCircle size={dotDiameter} />
-        </Pressable>
-      </View>
+      <ProgressTrackRow progress={progress} height={gridHeight} leftHanded={leftHanded} testID="multitap-progress">
+        <View testID="multitap-track" onLayout={event => {
+          setTrackWidth(event.nativeEvent.layout.width);
+          setTrackHeight(event.nativeEvent.layout.height);
+        }} onPointerMove={event => {
+          const nativeEvent = event.nativeEvent as typeof event.nativeEvent & { locationX?: number; locationY?: number };
+          if (nativeEvent.locationX !== undefined && nativeEvent.locationY !== undefined) glow.showAt(nativeEvent.locationX, nativeEvent.locationY);
+          else glow.showAt(nativeEvent.pageX, nativeEvent.pageY);
+        }} onPointerLeave={() => glow.hide()} style={{ flex: 1, height: gridHeight, position: "relative", overflow: "hidden" }}>
+          <View testID="multitap-grid-region" pointerEvents="none" style={{ position: "absolute", ...gridRegionStyle, top: 0, bottom: 0 }} />
+          {glow.layer}
+          <Animated.View pointerEvents="none" testID="multitap-tap-burst" style={{ position: "absolute", width: 112, height: 112, alignItems: "center", justifyContent: "center", opacity: burstProgress.interpolate({ inputRange: [0, 0.3, 1], outputRange: [0.38, 0.26, 0] }), transform: [{ translateX: burstPosition.x }, { translateY: burstPosition.y }, { scale: burstProgress.interpolate({ inputRange: [0, 1], outputRange: [0.16, 1.25] }) }] }}>
+            <View style={{ alignItems: "center", backgroundColor: `${colors.accent}55`, borderRadius: 56, height: 112, justifyContent: "center", width: 112 }}><View style={{ alignItems: "center", backgroundColor: `${colors.accent}66`, borderRadius: 40, height: 80, justifyContent: "center", width: 80 }}><View style={{ backgroundColor: `${colors.accent}88`, borderRadius: 26, height: 52, width: 52 }} /></View></View>
+          </Animated.View>
+          <Pressable onPress={() => {
+            burstPosition.setValue({ x: multitapTargetSpot.x * trackWidth - 56, y: multitapTargetSpot.y * trackHeight - 56 });
+            burstProgress.stopAnimation();
+            burstProgress.setValue(0);
+            Animated.timing(burstProgress, { toValue: 1, duration: 380, easing: Easing.out(Easing.cubic), useNativeDriver: Platform.OS !== "web" }).start();
+            onTap(trackWidth, dotDiameter, trackHeight);
+          }} accessibilityRole="button" accessibilityLabel="Tap circle" testID="multitap-target" style={{ position: "absolute", left: `${multitapTargetSpot.x * 100}%`, top: `${multitapTargetSpot.y * 100}%`, marginLeft: -dotDiameter / 2, marginTop: -dotDiameter / 2 }}>
+            <MicrogameCircle size={dotDiameter} />
+          </Pressable>
+        </View>
+      </ProgressTrackRow>
     </>
   );
 }
 
-function MultiswipeMicrogame({ multiswipeTarget, onSwipeStart, onSwipeEnd, onMultiswipeLayout, panelHeight }: MicrogameContentProps) {
+function MultiswipeMicrogame({ multiswipeTarget, onSwipeStart, onSwipeEnd, onMultiswipeLayout, panelHeight, progress, leftHanded }: MicrogameContentProps) {
   const colors = useThemeColors();
-  const [completedStroke, setCompletedStroke] = useState(false);
+  const [swipeProgress, setSwipeProgress] = useState(0);
+  const [swipeFromEnd, setSwipeFromEnd] = useState(false);
   const [trackWidth, setTrackWidth] = useState(0);
   const [trackHeight, setTrackHeight] = useState(0);
   const [trackOrigin, setTrackOrigin] = useState({ x: 0, y: 0 });
@@ -256,7 +330,17 @@ function MultiswipeMicrogame({ multiswipeTarget, onSwipeStart, onSwipeEnd, onMul
   const endX = multiswipeTarget.end.x * trackWidth;
   const endY = multiswipeTarget.end.y * trackHeight;
   const strokeThickness = (dotDiameter + 10) / 2;
-  const path = multiswipeTarget.path ?? [multiswipeTarget.start, multiswipeTarget.end];
+  const deltaX = endX - startX;
+  const deltaY = endY - startY;
+  const barLength = Math.hypot(deltaX, deltaY);
+  const barAngle = Math.atan2(deltaY, deltaX);
+  const barThickness = Math.max(12, strokeThickness * 0.82);
+  const updateSwipeProgress = (localX: number, localY: number) => {
+    const alongBar = getMultiswipeStrokeProgress({ x: localX, y: localY }, multiswipeTarget, trackWidth, trackHeight, dotDiameter * 0.7);
+    if (alongBar === null) return;
+    const directedProgress = swipeFromEnd ? 1 - alongBar : alongBar;
+    setSwipeProgress(previous => Math.max(previous, directedProgress));
+  };
   return (
     <>
       <IdleBounce>
@@ -265,6 +349,8 @@ function MultiswipeMicrogame({ multiswipeTarget, onSwipeStart, onSwipeEnd, onMul
         <View testID="multiswipe-instruction-bar" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={{ width: 36, height: 8, borderRadius: 4, backgroundColor: colors.accent }} />
       </View>
       </IdleBounce>
+      <ProgressTrackRow progress={progress} height={gridHeight} leftHanded={leftHanded} testID="multiswipe-progress">
+      <View testID="multiswipe-track-zone" style={{ flex: 1, height: gridHeight, position: "relative" }}>
       <View
         ref={trackRef}
         testID="multiswipe-track"
@@ -292,36 +378,62 @@ function MultiswipeMicrogame({ multiswipeTarget, onSwipeStart, onSwipeEnd, onMul
           const point = { x: localX / trackWidth, y: localY / trackHeight };
           const startsOnDot = isMultiswipeEndpoint(point, multiswipeTarget.start, trackWidth, trackHeight, dotDiameter) ||
             isMultiswipeEndpoint(point, multiswipeTarget.end, trackWidth, trackHeight, dotDiameter);
+          setSwipeFromEnd(isMultiswipeEndpoint(point, multiswipeTarget.end, trackWidth, trackHeight, dotDiameter));
+          setSwipeProgress(0);
           onSwipeStart(localX, localY, trackWidth, trackHeight, dotDiameter);
           return startsOnDot;
         }}
+        onResponderMove={event => updateSwipeProgress(event.nativeEvent.pageX - trackOrigin.x, event.nativeEvent.pageY - trackOrigin.y)}
         onResponderRelease={event => {
-          const completed = onSwipeEnd(event.nativeEvent.pageX - trackOrigin.x, event.nativeEvent.pageY - trackOrigin.y, trackWidth, trackHeight, dotDiameter);
+          const localX = event.nativeEvent.pageX - trackOrigin.x;
+          const localY = event.nativeEvent.pageY - trackOrigin.y;
+          updateSwipeProgress(localX, localY);
+          const completed = onSwipeEnd(localX, localY, trackWidth, trackHeight, dotDiameter);
           if (completed) {
-            setCompletedStroke(true);
-            setTimeout(() => setCompletedStroke(false), 250);
+            setSwipeProgress(0);
+            setSwipeFromEnd(false);
           }
         }}
-        style={{ width: "100%", height: gridHeight, position: "relative", overflow: "hidden" }}
+        style={{ position: "absolute", left: leftHanded ? 0 : "50%", right: leftHanded ? "50%" : 0, top: 0, bottom: 0, overflow: "hidden" }}
       >
-        {path.slice(1).map((point, index) => {
-          const from = path[index];
-          const x1 = from.x * trackWidth;
-          const y1 = from.y * trackHeight;
-          const x2 = point.x * trackWidth;
-          const y2 = point.y * trackHeight;
-          const length = Math.hypot(x2 - x1, y2 - y1);
-          const angle = Math.atan2(y2 - y1, x2 - x1);
-          return <View key={index} testID={index === 0 ? "multiswipe-bar" : `multiswipe-bar-${index}`} pointerEvents="none" style={{ position: "absolute", left: (x1 + x2) / 2 - length / 2, top: (y1 + y2) / 2 - strokeThickness / 2, width: length, height: strokeThickness, borderRadius: strokeThickness / 2, backgroundColor: completedStroke ? colors.energy : colors.accent, transform: [{ rotate: `${angle}rad` }] }} />;
-        })}
-        <View testID="multiswipe-start-dot" pointerEvents="none" style={{ position: "absolute", left: startX - dotDiameter / 2, top: startY - dotDiameter / 2 }}><MicrogameCircle size={dotDiameter} style={{ backgroundColor: completedStroke ? colors.energy : colors.accent }} /></View>
-        <View testID="multiswipe-end-dot" pointerEvents="none" style={{ position: "absolute", left: endX - dotDiameter / 2, top: endY - dotDiameter / 2 }}><MicrogameCircle size={dotDiameter} style={{ backgroundColor: completedStroke ? colors.energy : colors.accent }} /></View>
+        <View
+          testID="multiswipe-bar"
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            left: (startX + endX) / 2 - barLength / 2,
+            top: (startY + endY) / 2 - barThickness / 2,
+            width: barLength,
+            height: barThickness,
+            borderRadius: barThickness / 2,
+            backgroundColor: colors.accent,
+            transform: [{ rotate: `${barAngle}rad` }],
+          }}
+        />
+        <View
+          testID="multiswipe-bar-fill"
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            left: (swipeFromEnd ? endX - deltaX * swipeProgress / 2 : startX + deltaX * swipeProgress / 2) - barLength * swipeProgress / 2,
+            top: (swipeFromEnd ? endY - deltaY * swipeProgress / 2 : startY + deltaY * swipeProgress / 2) - barThickness / 2,
+            width: barLength * swipeProgress,
+            height: barThickness,
+            borderRadius: barThickness / 2,
+            backgroundColor: colors.energy,
+            transform: [{ rotate: `${barAngle}rad` }],
+          }}
+        />
+        <View testID="multiswipe-start-dot" pointerEvents="none" style={{ position: "absolute", left: startX - dotDiameter / 2, top: startY - dotDiameter / 2 }}><MicrogameCircle size={dotDiameter} /></View>
+        <View testID="multiswipe-end-dot" pointerEvents="none" style={{ position: "absolute", left: endX - dotDiameter / 2, top: endY - dotDiameter / 2 }}><MicrogameCircle size={dotDiameter} /></View>
       </View>
+      </View>
+      </ProgressTrackRow>
     </>
   );
 }
 
-function RuneTracerMicrogame({ leftHanded, onRuneProgress, onRuneComplete, panelHeight }: MicrogameContentProps) {
+function RuneTracerMicrogame({ leftHanded, onRuneProgress, onRuneComplete, panelHeight, progress }: MicrogameContentProps) {
   const colors = useThemeColors();
   const [trackWidth, setTrackWidth] = useState(0);
   const [trackHeight, setTrackHeight] = useState(0);
@@ -420,6 +532,7 @@ function RuneTracerMicrogame({ leftHanded, onRuneProgress, onRuneComplete, panel
         <StyledText style={{ color: colors.ink, fontSize: 20, fontWeight: "800", textAlign: "center" }}>Trace the Rune</StyledText>
       </View>
       </IdleBounce>
+      <ProgressTrackRow progress={progress} height={gridHeight} leftHanded={leftHanded} testID="rune-tracer-progress">
       <View
         ref={trackRef}
         testID="rune-tracer-track"
@@ -449,7 +562,7 @@ function RuneTracerMicrogame({ leftHanded, onRuneProgress, onRuneComplete, panel
           moveTrace(event.nativeEvent.pageX, event.nativeEvent.pageY);
           finishTrace();
         }}
-        style={{ width: "100%", height: gridHeight, position: "relative", overflow: "hidden" }}
+        style={{ flex: 1, height: gridHeight, position: "relative", overflow: "hidden" }}
       >
         {pattern.edges.map(edge => {
           const from = pattern.nodes.find(node => node.id === edge.from)!.point;
@@ -468,6 +581,7 @@ function RuneTracerMicrogame({ leftHanded, onRuneProgress, onRuneComplete, panel
           return <View key={node.id} testID={`rune-node-${node.id}`} pointerEvents="none" style={{ position: "absolute", left: node.point.x * trackWidth - dotRadius, top: node.point.y * trackHeight - dotRadius }}><MicrogameCircle size={pattern.diameter} style={{ backgroundColor: traced ? colors.energy : colors.accent }} /></View>;
         })}
       </View>
+      </ProgressTrackRow>
     </>
   );
 }

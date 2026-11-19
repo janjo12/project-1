@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
-import { MULTITAP_WINDOW_MS } from "@/game/actions/use-microgame";
+import { DEFENSE_WINDOW_MS, MULTISWIPE_WINDOW_MS } from "@/game/actions/use-microgame";
 import { openScenarioApp } from "../helpers";
 
-test("web renders atlas sprites and practice attack remains available from the pause menu", async ({ page }) => {
+test("Warrior pause menu practices its class attack and the defense microgame", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   const fixedTime = new Date("2026-01-01T00:00:00Z");
   await page.clock.install({ time: fixedTime });
@@ -18,12 +18,20 @@ test("web renders atlas sprites and practice attack remains available from the p
     await page.getByRole("button", { name: "Start playing", exact: true }).click();
   }
   await page.getByRole("button", { name: "Menu" }).click();
-  await page.getByRole("dialog", { name: "Game menu" }).getByRole("button", { name: "Practice attack microgame" }).click();
+  const gameMenu = page.getByRole("dialog", { name: "Game menu" });
+  await gameMenu.getByRole("button", { name: "Practice Attacking" }).click();
   const microgame = page.getByTestId("microgame-overlay");
   await expect(microgame).toBeVisible();
+  await expect(microgame.getByTestId("multiswipe-instruction")).toBeVisible();
   await expect(microgame.getByText("Tap the ●")).toHaveCount(0);
   await expect(microgame.getByTestId("pixel-sprite-image")).toHaveCount(0);
-  await page.clock.runFor(MULTITAP_WINDOW_MS + 100);
+  await page.clock.runFor(MULTISWIPE_WINDOW_MS + 1000);
+  await expect(page.getByTestId("microgame-overlay")).toBeHidden();
+
+  await page.getByRole("button", { name: "Menu" }).click();
+  await page.getByRole("dialog", { name: "Game menu" }).getByRole("button", { name: "Practice Defending" }).click();
+  await expect(page.getByTestId("microgame-overlay").getByTestId("defense-instruction")).toBeVisible();
+  await page.clock.runFor(DEFENSE_WINDOW_MS + 1000);
   await expect(page.getByTestId("microgame-overlay")).toBeHidden();
 
   const sprites = page.getByTestId("pixel-sprite-image");

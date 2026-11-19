@@ -1,5 +1,8 @@
-import { StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { useState } from "react";
+import { Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 
+import { InformationPopup } from "@/components/Common/InformationPopup";
+import { TutorialSpeechBubble } from "@/components/Common/TutorialSpeechBubble";
 import { PixelSprite } from "@/components/Common/PixelSprite";
 import { useThemeColors, type ThemeColors } from "@/components/Common/theme";
 import { GAME_PARAMETERS } from "@/game/config/gameparameters";
@@ -10,7 +13,9 @@ type DungeonMapProps = {
   currentRoomId: string;
   map: DungeonMapType;
   compact?: boolean;
+  landscapeCompact?: boolean;
   showCurrentRoomHint?: boolean;
+  reducedMotion?: boolean;
   players?: { id: string; roomId: string; color: string }[];
 };
 
@@ -19,13 +24,16 @@ export function DungeonMap({
   map,
   players = [],
   compact: forceCompact = false,
+  landscapeCompact = false,
   showCurrentRoomHint = false,
+  reducedMotion = false,
 }: DungeonMapProps) {
   const colors = useThemeColors();
   const { height } = useWindowDimensions();
   const compact = forceCompact || height < 800;
   const veryCompact = height < 500;
-  const styles = createStyles(colors, compact, veryCompact);
+  const styles = createStyles(colors, compact, veryCompact, landscapeCompact);
+  const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const roomMap = new Map(getRooms(map).map((room) => [room.id, room]));
   const currentRoomPosition = getRoomPosition(currentRoomId);
   const adjacentRoomId = (roomId: string, direction: "north" | "east" | "south" | "west") => {
@@ -134,8 +142,10 @@ export function DungeonMap({
                     {hasRevealedConnection(room, "south") ? <View testID={`map-corridor-${roomId}-south`} style={[styles.corridor, styles.southCorridor]} /> : null}
                     {hasRevealedConnection(room, "west") ? <View testID={`map-corridor-${roomId}-west`} style={[styles.corridor, styles.westCorridor]} /> : null}
                     {room && isRevealed ? (
-                      <View
-                        accessibilityLabel={`Room ${rowLetter}${columnNumber}${isCurrentRoom ? ", your room" : ""}${hasMonster ? ", monster" : ""}${hasItem ? ", item" : ""}${hasEquipment ? ", equipment" : ""}${hasStairs ? ", stairs" : ""}`}
+                      <Pressable
+                        accessibilityLabel={`Room ${rowLetter}${columnNumber}${isCurrentRoom ? ", your room" : ""}${hasMonster ? ", monster" : ""}${hasItem ? ", item" : ""}${hasEquipment ? ", equipment" : ""}${hasStairs ? ", stairs" : ""}. Tap for room information.`}
+                        accessibilityRole="button"
+                        onPress={() => setSelectedRoomId(roomId)}
                         style={[styles.room, { backgroundColor: roomColor }, isCurrentRoom && styles.currentRoom]}
                         testID={isCurrentRoom ? "current-dungeon-room" : `map-room-${rowLetter}${columnNumber}`}
                       >
@@ -155,9 +165,8 @@ export function DungeonMap({
                           </View>
                         ) : null}
                         {isCurrentRoom && showCurrentRoomHint ? (
-                          <View pointerEvents="none" style={styles.currentRoomHint} testID="tutorial-you-are-here">
-                            <Text style={styles.currentRoomHintArrow}>↓</Text>
-                            <Text style={styles.currentRoomHintText}>You Are Here</Text>
+                          <View pointerEvents="none" style={styles.currentRoomHint}>
+                            <TutorialSpeechBubble label="You Are Here" testID="tutorial-you-are-here" reducedMotion={reducedMotion} />
                           </View>
                         ) : null}
                         {hasNorthLock ? (
@@ -190,7 +199,7 @@ export function DungeonMap({
                         {hasWerewolf ? (
                           <PixelSprite sprite="werewolf_graphic" label="Werewolf" size={12} />
                         ) : null}
-                      </View>
+                      </Pressable>
                     ) : null}
                   </View>
                 );
@@ -199,11 +208,17 @@ export function DungeonMap({
           ))}
         </View>
       </View>
+      <InformationPopup
+        visible={selectedRoomId !== null}
+        title={selectedRoomId === currentRoomId ? "You are here" : "How to progress"}
+        messages={selectedRoomId === currentRoomId ? [] : ["Use arrows to move, or unlock a door or defeat a monster to progress."]}
+        onClose={() => setSelectedRoomId(null)}
+      />
     </View>
   );
 }
 
-function createStyles(colors: ThemeColors, compact: boolean, veryCompact: boolean) {
+function createStyles(colors: ThemeColors, compact: boolean, veryCompact: boolean, landscapeCompact: boolean) {
   return StyleSheet.create({
     wrapper: {
       alignSelf: "stretch",
@@ -212,7 +227,7 @@ function createStyles(colors: ThemeColors, compact: boolean, veryCompact: boolea
     },
     compactWrapper: {
       alignSelf: "center",
-      maxWidth: veryCompact ? 140 : 180,
+      maxWidth: landscapeCompact ? 260 : veryCompact ? 140 : 180,
     },
     body: {
       flexDirection: "row",
@@ -318,23 +333,6 @@ function createStyles(colors: ThemeColors, compact: boolean, veryCompact: boolea
       transform: [{ translateX: -35 }],
       width: 70,
       zIndex: 5,
-    },
-    currentRoomHintArrow: {
-      color: colors.accent,
-      fontSize: compact ? 10 : 14,
-      fontWeight: "900",
-      lineHeight: compact ? 10 : 14,
-    },
-    currentRoomHintText: {
-      backgroundColor: colors.paperLight,
-      borderColor: colors.accent,
-      borderWidth: 1,
-      color: colors.ink,
-      fontSize: compact ? 7 : 9,
-      fontWeight: "900",
-      lineHeight: compact ? 9 : 11,
-      paddingHorizontal: 2,
-      textAlign: "center",
     },
     iconOverlay: { position: "absolute" },
     lockIcon: { fontSize: 12, lineHeight: 14, textAlign: "center" },

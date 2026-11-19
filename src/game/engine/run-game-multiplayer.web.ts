@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { getMultiplayerPlayerView } from "@/game/engine/multiplayer-view";
+import { isBotPlayerId } from "@/game/engine/multiplayer-bot";
 import type { MultiplayerState, PlayerAction } from "@/game/engine/multiplayer-rules";
 import type { GameSettings } from "@/utils/settings-storage";
 import type { MultiplayerPlayerOptions } from "@/multiplayer/player-options";
@@ -12,6 +13,7 @@ type RoomResponse = {
   playerId: string;
   revision: number;
   deadlineAt: number | null;
+  turnSubmitted: boolean;
   state: MultiplayerState | null;
   players: { id: string; health: number; ready: boolean }[];
   playerOptions: MultiplayerPlayerOptions;
@@ -37,6 +39,7 @@ export function useRunMultiplayerGame(settings: GameSettings) {
   const [state, setState] = useState<MultiplayerState | null>(null);
   const [incoming, setIncoming] = useState("");
   const [players, setPlayers] = useState<{ id: string; health: number; ready: boolean }[]>([]);
+  const botIds = players.filter(candidate => isBotPlayerId(candidate.id)).map(candidate => candidate.id);
   const [playerReady, setPlayerReady] = useState(false);
   const [readyPlayers, setReadyPlayers] = useState<string[]>([]);
   const [error, setError] = useState("");
@@ -102,6 +105,7 @@ export function useRunMultiplayerGame(settings: GameSettings) {
             setMicrogameScore(null);
           }
         }
+        if (result.turnSubmitted && result.state) setSubmitted(result.state.turn);
       } catch (cause) {
         if (!stopped) {
           logFailure("poll", cause);
@@ -160,6 +164,15 @@ export function useRunMultiplayerGame(settings: GameSettings) {
       setPlayerReady(result.playerReady);
       setConnected(true);
       setIncoming("");
+    });
+  }
+
+  async function addBot() {
+    if (!roomCode || role !== "host") return;
+    await run("add_bot", async () => {
+      const result = await requestRoom<RoomResponse>({ type: "add-bot", code: roomCode, playerId });
+      revision.current = result.revision;
+      updatePlayers(result.players);
     });
   }
 
@@ -259,6 +272,7 @@ export function useRunMultiplayerGame(settings: GameSettings) {
     role,
     playerId,
     state,
+    botIds,
     outgoing: roomCode,
     incoming,
     setIncoming,
@@ -278,6 +292,7 @@ export function useRunMultiplayerGame(settings: GameSettings) {
     map: view.map,
     snapshot: view.snapshot,
     hostGame: () => void hostGame(),
+    addBot: () => void addBot(),
     start: () => void start(),
     submit: (action: PlayerAction) => void submit(action),
     playerOptions: activePlayerOptions,

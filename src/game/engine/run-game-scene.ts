@@ -12,10 +12,10 @@ export function getRoomDoorways(room: ReturnType<typeof getCurrentRoom>): RoomDo
   return { bottom: room.south, left: room.west, right: room.east, top: room.north };
 }
 
-function createMonsterSceneActor(monster: WorldMonster, isActive: boolean, position: ScenePosition): RoomSceneActor {
+function createMonsterSceneActor(monster: WorldMonster, isActive: boolean, position: ScenePosition, isDoorwayGuard = false): RoomSceneActor {
   return {
     id: monster.id, currentHealth: monster.currentHealth, sprite: monster.sprite,
-    kind: "enemy", isActive, isWerewolf: Boolean(monster.chases), label: monster.name, maxHealth: monster.maximumHealth, position,
+    kind: "enemy", isActive, isWerewolf: Boolean(monster.chases), isDoorwayGuard, label: monster.name, maxHealth: monster.maximumHealth, position,
   };
 }
 
@@ -63,7 +63,7 @@ export function getRoomSceneActors({
       const monster = dungeonMap.entities.monsters[guard.monsterId];
       if (!monster || monster.currentHealth <= 0 || seenMonsterIds.has(monster.id)) continue;
       seenMonsterIds.add(monster.id);
-      sceneActors.push(createMonsterSceneActor(monster, monster.id === currentMonsterId, directionScenePositions[direction]));
+      sceneActors.push(createMonsterSceneActor(monster, monster.id === currentMonsterId, directionScenePositions[direction], true));
     }
   }
 

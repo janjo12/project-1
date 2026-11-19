@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./styles.css";
 
 export const metadata: Metadata = {
-  title: "[Project 1]",
+  title: "Dungeon Run",
   description: "Play a seeded dungeon adventure solo or with friends.",
 };
 

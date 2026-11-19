@@ -9,6 +9,7 @@ dist/
 web-build/
 expo-env.d.ts
 .next/
+.next-dev/
 .next-test/
 playwright-report/
 test-results/

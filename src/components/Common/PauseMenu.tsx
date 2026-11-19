@@ -9,8 +9,8 @@ import type { GameSettings } from "@/utils/settings-storage";
 export type PauseMenuProps = {
   onBackToGame: () => void;
   onQuitToTitle: () => void;
-  onPractice: () => void;
-  onPracticeRuneTracer: () => void;
+  onPracticeAttacking: () => void;
+  onPracticeDefending: () => void;
   onOpenMap?: () => void;
   onSettingsChange: (settings: Partial<GameSettings>) => void;
   microgamesEnabled: boolean;
@@ -25,8 +25,8 @@ export type PauseMenuProps = {
 export function PauseMenu({
   onBackToGame,
   onQuitToTitle,
-  onPractice,
-  onPracticeRuneTracer,
+  onPracticeAttacking,
+  onPracticeDefending,
   onOpenMap,
   onSettingsChange,
   microgamesEnabled,
@@ -38,7 +38,8 @@ export function PauseMenu({
   visible,
 }: PauseMenuProps) {
   const [showInstructions, setShowInstructions] = useState(false);
-  const tinyLayout = useWindowDimensions().height < 500;
+  const { height } = useWindowDimensions();
+  const tinyLayout = height < 500;
   return (
     <StyledModal
       accessibilityLabel="Game menu"
@@ -48,7 +49,8 @@ export function PauseMenu({
       visible={visible}
     >
       <ScrollView
-        style={{ maxHeight: "95%", width: "100%" }}
+        showsVerticalScrollIndicator={false}
+        style={{ maxHeight: height * 0.88, width: "100%" }}
         contentContainerStyle={{ alignItems: "center", gap: tinyLayout ? 3 : 16, width: "100%" }}
       >
       <Title>{showInstructions ? "Instructions" : "Menu"}</Title>
@@ -81,8 +83,8 @@ export function PauseMenu({
         </Container>
         {onOpenMap ? <NormalButton accessibilityLabel="Open dungeon map" accessibilityRole="button" label="Dungeon Map" onPress={onOpenMap} /> : null}
         <NormalButton accessibilityLabel="Open instructions" accessibilityRole="button" label="Instructions" onPress={() => setShowInstructions(true)} />
-        {microgamesEnabled ? <NormalButton accessibilityLabel="Practice attack microgame" accessibilityRole="button" label="Practice Attack" onPress={onPractice} /> : null}
-        {microgamesEnabled ? <NormalButton accessibilityLabel="Practice Rune Tracer microgame" accessibilityRole="button" label="Practice Rune Tracer" onPress={onPracticeRuneTracer} /> : null}
+        {microgamesEnabled ? <NormalButton accessibilityLabel="Practice Attacking" accessibilityRole="button" label="Practice Attacking" onPress={onPracticeAttacking} /> : null}
+        {microgamesEnabled ? <NormalButton accessibilityLabel="Practice Defending" accessibilityRole="button" label="Practice Defending" onPress={onPracticeDefending} /> : null}
         <PrimaryButton accessibilityLabel="Back to Game" accessibilityRole="button" label="Back to Game" onPress={onBackToGame} />
         <DestructiveButton accessibilityLabel="Quit to Title" accessibilityRole="button" label="Quit to Title" onPress={onQuitToTitle} />
       </>}

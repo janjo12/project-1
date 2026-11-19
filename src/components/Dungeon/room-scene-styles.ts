@@ -31,17 +31,21 @@ export function createStyles(colors: ThemeColors) {
       zIndex: 6,
     },
     doorwayIcon: {
-      fontSize: 17,
+      fontSize: 24,
       fontWeight: "900",
-      lineHeight: 20,
+      lineHeight: 28,
       textAlign: "center",
     },
     doorwayArrow: {
+      includeFontPadding: false,
       color: colors.accent,
-      fontSize: 32,
+      fontSize: 42,
       fontWeight: "900",
-      lineHeight: 38,
+      letterSpacing: -2,
+      lineHeight: 48,
       textAlign: "center",
+      textShadowColor: colors.accent,
+      textShadowRadius: 1.2,
     },
     bottomDoorwayGap: {
       bottom: 0,
@@ -72,9 +76,10 @@ export function createStyles(colors: ThemeColors) {
       color: "#dc2626",
     },
     horizontalDoorwayGap: {
-      height: 56,
-      left: "36%",
-      width: "28%",
+      height: 64,
+      left: "50%",
+      marginLeft: -32,
+      width: 64,
     },
     leftDoorwayGap: {
       left: 0,
@@ -101,9 +106,10 @@ export function createStyles(colors: ThemeColors) {
       top: 0,
     },
     verticalDoorwayGap: {
-      height: "24%",
-      top: "38%",
-      width: 56,
+      height: 64,
+      marginTop: -32,
+      top: "50%",
+      width: 64,
     },
   });
 }

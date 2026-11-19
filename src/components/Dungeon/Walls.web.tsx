@@ -1,26 +1,14 @@
 import { PixelSprite } from "@/components/Common/PixelSprite";
+import { Pressable, Text, View } from "react-native";
 
-import { Pressable, Text, View, type TextStyle } from "react-native";
-
+import { TutorialSpeechBubble } from "@/components/Common/TutorialSpeechBubble";
+import { DoorwayArrow, getDoorwayPlayerOffset, type DoorPosition } from "@/components/Dungeon/DoorwayArrow";
 import { createStyles } from "@/components/Dungeon/room-scene-styles";
 import { useThemeColors } from "@/components/Common/theme";
 
-export type DoorPosition = "top" | "right" | "bottom" | "left";
+export type { DoorPosition } from "@/components/Dungeon/DoorwayArrow";
 export type DoorState = "guarded" | "locked" | "open" | "wall";
 export type RoomDoorways = Record<DoorPosition, DoorState>;
-
-const DOOR_ARROWS: Record<DoorPosition, string> = {
-  top: "↑",
-  right: "→",
-  bottom: "↓",
-  left: "←",
-};
-const DOOR_ARROW_MOTION = {
-  top: { from: { transform: [{ translateY: 0 }] }, to: { transform: [{ translateY: -2 }] } },
-  right: { from: { transform: [{ translateX: 0 }] }, to: { transform: [{ translateX: 2 }] } },
-  bottom: { from: { transform: [{ translateY: 0 }] }, to: { transform: [{ translateY: 2 }] } },
-  left: { from: { transform: [{ translateX: 0 }] }, to: { transform: [{ translateX: -2 }] } },
-};
 
 export function canPressDoorway(
   state: DoorState,
@@ -55,17 +43,6 @@ export function RoomWalls({
 }) {
   const styles = createStyles(useThemeColors());
   const positions: DoorPosition[] = ["top", "right", "bottom", "left"];
-  const arrowMotionStyle = (position: DoorPosition) =>
-    !reducedMotion
-      ? ({
-          animationName: DOOR_ARROW_MOTION[position],
-          animationDuration: "900ms",
-          animationDirection: "alternate",
-          animationIterationCount: "infinite",
-          animationTimingFunction: "ease-in-out",
-          animationPlayState: animationsPaused ? "paused" : "running",
-        } as unknown as TextStyle)
-      : null;
 
   return (
     <>
@@ -95,21 +72,13 @@ export function RoomWalls({
               position === "bottom" && styles.bottomDoorwayGap,
               position === "left" && styles.leftDoorwayGap,
               position === "right" && styles.rightDoorwayGap,
-              position === playerPosition && (position === "top" || position === "bottom" ? { height: 24 } : { width: 24 }),
+              getDoorwayPlayerOffset(position, playerPosition),
               pressed && styles.pressedActor,
             ]}
           >
-            {showMoveHints && !isDisabled ? <Text pointerEvents="none" testID="tutorial-move" style={{ position: "absolute", bottom: "100%", backgroundColor: "#fff7cc", borderColor: "#8a5a00", borderWidth: 1, color: "#5b3a00", fontSize: 10, fontWeight: "900", lineHeight: 12, paddingHorizontal: 3 }}>Move</Text> : null}
+            {showMoveHints && !isDisabled ? <View pointerEvents="none" style={{ position: "absolute", bottom: "100%" }}><TutorialSpeechBubble label="Move" testID="tutorial-move" reducedMotion={reducedMotion} animationsPaused={animationsPaused} /></View> : null}
             {state === "open" ? (
-              <Text
-                accessible={false}
-                style={[
-                  styles.doorwayArrow,
-                  arrowMotionStyle(position),
-                ]}
-              >
-                {DOOR_ARROWS[position]}
-              </Text>
+              <DoorwayArrow animationsPaused={animationsPaused} position={position} reducedMotion={reducedMotion} style={styles.doorwayArrow} />
             ) : state === "locked" ? <Text accessible={false} style={[styles.doorwayIcon, styles.lockedDoorwayIcon]}>🔒</Text> : null}
           </Pressable>
         );

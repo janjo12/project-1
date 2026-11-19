@@ -40,7 +40,7 @@ export default function Home() {
           <ScreenShell>
             <View style={{ flex: 1, justifyContent: "center", gap: 24, width: "100%" }}>
               <View style={{ alignItems: "center", gap: 16 }}>
-                <Title>[Project 1]</Title>
+                <Title>Dungeon Run</Title>
                 <StyledText style={{ textAlign: "center" }}>How would you like to play?</StyledText>
               </View>
               <View style={{ gap: 16, width: "100%" }}>
@@ -61,6 +61,7 @@ export default function Home() {
             onSettings={() => setPage("settings")}
             onUpdate={updateSettings}
             showSeed={mode === "singleplayer" || hostAfterSetup}
+            multiplayerHostOptions={mode === "multiplayer" && hostAfterSetup}
             onStart={async () => {
               const next = { ...settings, seed: settings.seed.trim() || generateRandomSeed() };
               await saveSettings(next);

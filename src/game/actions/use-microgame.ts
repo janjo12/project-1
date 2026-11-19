@@ -6,7 +6,7 @@ import type { Difficulty } from "@/utils/settings-storage";
 
 export type MicrogameKind = "concentration" | "timed-attack" | "multitap" | "multiswipe" | "rune-tracer" | "defense";
 export type MultitapTargetSpot = { x: number; y: number };
-export type MultiswipeTarget = { start: MultitapTargetSpot; end: MultitapTargetSpot; axis: "horizontal" | "vertical"; path?: MultitapTargetSpot[] };
+export type MultiswipeTarget = { start: MultitapTargetSpot; end: MultitapTargetSpot; axis: "horizontal" | "vertical" | "diagonal" };
 export type RuneNode = { id: string; point: MultitapTargetSpot };
 export type RuneEdge = { id: string; from: string; to: string };
 export type RuneTracerPattern = { nodes: RuneNode[]; edges: RuneEdge[]; columns: number; rows: number; diameter: number };
@@ -17,11 +17,14 @@ export const MICROGAME_MAX_DURATION_MS = 1500;
 export const CONCENTRATION_TARGET_DURATION_MS = MICROGAME_MAX_DURATION_MS;
 export const TIMED_ATTACK_CUE_DELAY_MS = 1000;
 export const TIMED_ATTACK_WINDOW_MS = TIMED_ATTACK_CUE_DELAY_MS + HUMAN_REACTION_WINDOW_MS + 500;
-export const MULTITAP_WINDOW_MS = 3000;
-export const MULTISWIPE_WINDOW_MS = MULTITAP_WINDOW_MS;
-export const RUNE_TRACER_WINDOW_MS = MULTITAP_WINDOW_MS;
+export const MULTITAP_WINDOW_MS = 2000;
+export const MULTISWIPE_WINDOW_MS = 3000;
+export const RUNE_TRACER_WINDOW_MS = 3000;
 export const DEFENSE_CUE_DELAY_MS = 300;
+export const TARGET_TIMING_VARIANCE_MS: Record<Difficulty, number> = { easy: 20, normal: 45, hard: 70 };
 export const DEFENSE_WINDOW_MS = 1300;
+export const DEFENSE_TARGET_OUTER_DIAMETER = 62;
+export const DEFENSE_TARGET_INNER_DIAMETER = 54;
 export const MULTITAP_DOT_DIAMETER = 44;
 const now = () => globalThis.performance?.now?.() ?? Date.now();
 const scoreWithinRange = (score: number) => Math.max(0, Math.min(100, Math.round(score)));
@@ -31,6 +34,27 @@ const normalizeScore = (score: number, kind: MicrogameKind) => kind === "multita
 
 const focusTolerance = (easeLevel: number) => [1, 1.35, 1.7, 2.2, 2.8][Math.max(0, Math.min(4, Math.floor(easeLevel)))];
 const focusScoreFloor = (easeLevel: number) => [0, 12, 24, 38, 52][Math.max(0, Math.min(4, Math.floor(easeLevel)))];
+
+export function getVariedTargetTiming(baseMs: number, difficulty: Difficulty, random = Math.random) {
+  const variance = TARGET_TIMING_VARIANCE_MS[difficulty];
+  return Math.round(baseMs + (random() * 2 - 1) * variance);
+}
+
+export function getDefenseRingDiameter(elapsed: number, targetDelay: number) {
+  const safeDuration = Math.max(1, DEFENSE_WINDOW_MS);
+  const safeTarget = Math.max(1, Math.min(safeDuration - 1, targetDelay));
+  const safeElapsed = Math.max(0, Math.min(safeDuration, elapsed));
+  const targetDiameter = (DEFENSE_TARGET_OUTER_DIAMETER + DEFENSE_TARGET_INNER_DIAMETER) / 2;
+  if (safeElapsed <= safeTarget) {
+    return 136 - (136 - targetDiameter) * safeElapsed / safeTarget;
+  }
+  return targetDiameter * (1 - (safeElapsed - safeTarget) / (safeDuration - safeTarget));
+}
+
+export function isDefenseRingWithinTargets(diameter: number) {
+  // Account for the 3 px moving stroke and 2 px target strokes.
+  return diameter >= DEFENSE_TARGET_INNER_DIAMETER + 2 && diameter <= DEFENSE_TARGET_OUTER_DIAMETER - 4;
+}
 
 function applyFocusScoreFloor(score: number, easeLevel: number) {
   if (easeLevel <= 0 || score >= 100) return score;
@@ -85,46 +109,31 @@ export function getNextMultiswipeTarget(trackWidth: number, trackHeight: number,
   }
   const { columns, rows } = getMultiswipeGrid(trackWidth, trackHeight, requestedDiameter);
   const point = (column: number, row: number): MultitapTargetSpot => ({ x: (column + 0.5) / columns, y: (row + 0.5) / rows });
-  const steps = [
-    { id: "up", dx: 0, dy: -1, opposite: "down" },
-    { id: "down", dx: 0, dy: 1, opposite: "up" },
-    { id: "left", dx: -1, dy: 0, opposite: "right" },
-    { id: "right", dx: 1, dy: 0, opposite: "left" },
-  ] as const;
-  const starts = Array.from({ length: columns * rows }, (_, index) => ({ column: index % columns, row: Math.floor(index / columns) }));
-  for (let index = starts.length - 1; index > 0; index -= 1) {
-    const swapIndex = Math.floor(random() * (index + 1));
-    [starts[index], starts[swapIndex]] = [starts[swapIndex], starts[index]];
-  }
-  for (const start of starts) {
-    const route = [start];
-    const directionsUsed: string[] = [];
-    const walk = (): boolean => {
-      if (route.length === 4) return true;
-      const current = route[route.length - 1];
-      const options = steps.filter(step => !directionsUsed.includes(step.opposite) &&
-        current.column + step.dx >= 0 && current.column + step.dx < columns && current.row + step.dy >= 0 && current.row + step.dy < rows);
-      for (let index = options.length - 1; index > 0; index -= 1) {
-        const swapIndex = Math.floor(random() * (index + 1));
-        [options[index], options[swapIndex]] = [options[swapIndex], options[index]];
+  const candidates: { start: MultitapTargetSpot; end: MultitapTargetSpot; axis: MultiswipeTarget["axis"] }[] = [];
+  for (let startRow = 0; startRow < rows; startRow += 1) {
+    for (let startColumn = 0; startColumn < columns; startColumn += 1) {
+      for (let endRow = 0; endRow < rows; endRow += 1) {
+        for (let endColumn = 0; endColumn < columns; endColumn += 1) {
+          const deltaX = endColumn - startColumn;
+          const deltaY = endRow - startRow;
+          const span = Math.max(Math.abs(deltaX), Math.abs(deltaY));
+          if (span < 2 || span > 4) continue;
+          candidates.push({
+            start: point(startColumn, startRow),
+            end: point(endColumn, endRow),
+            axis: deltaX === 0 ? "vertical" : deltaY === 0 ? "horizontal" : "diagonal",
+          });
+        }
       }
-      for (const step of options) {
-        directionsUsed.push(step.id);
-        route.push({ column: current.column + step.dx, row: current.row + step.dy });
-        if (walk()) return true;
-        route.pop();
-        directionsUsed.pop();
-      }
-      return false;
-    };
-    if (walk()) {
-      const path = route.map(({ column, row }) => point(column, row));
-      const firstStep = route[1];
-      const axis = firstStep.row === start.row ? "horizontal" : "vertical";
-      return { start: path[0], end: path[path.length - 1], axis, path };
     }
   }
-  return { start: { x: 0.2, y: 0.5 }, end: { x: 0.8, y: 0.5 }, axis: "horizontal" };
+  if (candidates.length === 0) return { start: { x: 0.2, y: 0.5 }, end: { x: 0.8, y: 0.5 }, axis: "horizontal" };
+  const roll = Math.max(0, Math.min(0.999999, random()));
+  const preferredAxis = roll < 1 / 3 ? "horizontal" : roll < 2 / 3 ? "vertical" : "diagonal";
+  const directionalCandidates = candidates.filter(candidate => candidate.axis === preferredAxis);
+  const options = directionalCandidates.length > 0 ? directionalCandidates : candidates;
+  const choice = Math.max(0, Math.min(options.length - 1, Math.floor(random() * options.length)));
+  return options[choice];
 }
 
 function distanceToSpot(point: MultitapTargetSpot, spot: MultitapTargetSpot, width: number, height: number) {
@@ -133,6 +142,24 @@ function distanceToSpot(point: MultitapTargetSpot, spot: MultitapTargetSpot, wid
 
 export function isMultiswipeEndpoint(point: MultitapTargetSpot, spot: MultitapTargetSpot, width: number, height: number, diameter: number) {
   return distanceToSpot(point, spot, width, height) <= diameter / 2;
+}
+
+export function getMultiswipeStrokeProgress(point: MultitapTargetSpot, target: MultiswipeTarget, width: number, height: number, tolerance: number) {
+  if (width <= 0 || height <= 0) return null;
+  const startX = target.start.x * width;
+  const startY = target.start.y * height;
+  const deltaX = (target.end.x - target.start.x) * width;
+  const deltaY = (target.end.y - target.start.y) * height;
+  const lengthSquared = deltaX * deltaX + deltaY * deltaY;
+  if (lengthSquared <= 0) return null;
+
+  const pointX = point.x - startX;
+  const pointY = point.y - startY;
+  const projectedProgress = (pointX * deltaX + pointY * deltaY) / lengthSquared;
+  const progress = Math.max(0, Math.min(1, projectedProgress));
+  const nearestX = startX + deltaX * progress;
+  const nearestY = startY + deltaY * progress;
+  return Math.hypot(point.x - nearestX, point.y - nearestY) <= tolerance ? progress : null;
 }
 
 export function getMultitapGrid(trackWidth: number, trackHeight: number, requestedDiameter: number) {
@@ -224,6 +251,7 @@ export function getNextMultitapTargetSpot(currentSpot: MultitapTargetSpot, hande
 
 export function useMicrogame(onComplete: (result: MicrogameResult) => void) {
   const [active, setActive] = useState(false);
+  const [sessionId, setSessionId] = useState(0);
   const [kind, setKind] = useState<MicrogameKind>("concentration");
   const [elapsedStore] = useState(() => createNumberStore(0));
   const [targetDelay, setTargetDelay] = useState(500);
@@ -232,7 +260,9 @@ export function useMicrogame(onComplete: (result: MicrogameResult) => void) {
   const [targetSpot, setTargetSpot] = useState(0.76);
   const [multitapTargetSpot, setMultitapTargetSpot] = useState<MultitapTargetSpot>({ x: 0.76, y: 0.5 });
   const [multiswipeTarget, setMultiswipeTarget] = useState<MultiswipeTarget>({ start: { x: 0.2, y: 0.5 }, end: { x: 0.8, y: 0.5 }, axis: "horizontal" });
+  const [actionProgress, setActionProgress] = useState(0);
   const startedAt = useRef(0);
+  const defenseFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const leftHandedRef = useRef(false);
   const nowRef = useRef(now);
   const completed = useRef(false);
@@ -245,11 +275,19 @@ export function useMicrogame(onComplete: (result: MicrogameResult) => void) {
   useLayoutEffect(() => {
     onCompleteRef.current = onComplete;
   }, [onComplete]);
-  const finish = useCallback((score: number, gameKind = kind) => {
+  const finish = useCallback((score: number, gameKind = kind, visualHoldMs = 0) => {
     // A single completion guard prevents tap/timeout races from submitting twice.
     if (completed.current) return;
     completed.current = true;
-    setActive(false);
+    if (defenseFeedbackTimer.current) clearTimeout(defenseFeedbackTimer.current);
+    if (visualHoldMs > 0) {
+      defenseFeedbackTimer.current = setTimeout(() => {
+        defenseFeedbackTimer.current = null;
+        setActive(false);
+      }, visualHoldMs);
+    } else {
+      setActive(false);
+    }
     const normalized = applyFocusScoreFloor(normalizeScore(score, gameKind), easeLevel);
     onCompleteRef.current({ score: Math.min(100, normalized), damageScore: normalized });
   }, [easeLevel, kind]);
@@ -279,6 +317,9 @@ export function useMicrogame(onComplete: (result: MicrogameResult) => void) {
   }, [easeLevel]);
   const start = useCallback(
     (gameKind: MicrogameKind = "concentration", handedness: "left" | "right" = "right", options?: MicrogameOptions) => {
+      if (defenseFeedbackTimer.current) clearTimeout(defenseFeedbackTimer.current);
+      defenseFeedbackTimer.current = null;
+      setSessionId(current => current + 1);
       completed.current = false;
       setKind(gameKind);
       const nextEaseLevel = Math.max(0, Math.min(4, Math.floor(options?.easeLevel ?? 0)));
@@ -289,10 +330,22 @@ export function useMicrogame(onComplete: (result: MicrogameResult) => void) {
       swipeStartedAtEndpoint.current = false;
       swipeStartEndpoint.current = null;
       runeProgress.current = 0;
-      setTargetDelay(gameKind === "timed-attack" ? TIMED_ATTACK_CUE_DELAY_MS : gameKind === "defense" ? DEFENSE_CUE_DELAY_MS + Math.floor(Math.random() * 601) : 200 + Math.floor(Math.random() * 401));
+      setActionProgress(0);
+      const difficulty = options?.difficulty ?? "normal";
+      const concentrationTargetMs = getVariedTargetTiming(Math.round(CONCENTRATION_TARGET_DURATION_MS * 0.875), difficulty);
+      const nextTargetDelay = gameKind === "timed-attack"
+        ? getVariedTargetTiming(TIMED_ATTACK_CUE_DELAY_MS, difficulty)
+        : gameKind === "defense"
+          ? getVariedTargetTiming(600, difficulty)
+          : gameKind === "concentration"
+            ? concentrationTargetMs
+            : 200 + Math.floor(Math.random() * 401);
+      setTargetDelay(nextTargetDelay);
       setTargetTaps(getFocusedMultitapTargetTaps(options?.difficulty ?? "normal", options?.level ?? 1, nextEaseLevel));
       leftHandedRef.current = handedness === "left";
-      const handednessSpot = handedness === "right" ? 0.2 : 0.8;
+      const handednessSpot = gameKind === "concentration"
+        ? handedness === "right" ? 0.9 - 0.8 * (concentrationTargetMs / CONCENTRATION_TARGET_DURATION_MS) : 0.1 + 0.8 * (concentrationTargetMs / CONCENTRATION_TARGET_DURATION_MS)
+        : handedness === "right" ? 0.2 : 0.8;
       setTargetSpot(handednessSpot);
       setMultitapTargetSpot({ x: handedness === "right" ? 0.76 : 0.24, y: 0.5 });
       startedAt.current = nowRef.current();
@@ -300,25 +353,25 @@ export function useMicrogame(onComplete: (result: MicrogameResult) => void) {
     },
     [elapsedStore],
   );
-  const tap = useCallback((trackWidth = 0, dotDiameter = MULTITAP_DOT_DIAMETER, trackHeight = 0) => {
+  const tap = useCallback((trackWidth = 0, dotDiameter = MULTITAP_DOT_DIAMETER, trackHeight = 0, elapsedOverride?: number) => {
     if (!active || completed.current) return;
-    const elapsedMs = nowRef.current() - startedAt.current;
+    const elapsedMs = elapsedOverride ?? nowRef.current() - startedAt.current;
     if (kind === "multitap") {
       const next = clickCount.current + 1;
       clickCount.current = next;
+      setActionProgress(Math.min(1, next / targetTaps));
       setMultitapTargetSpot(currentSpot => getNextMultitapTargetSpot(currentSpot, leftHandedRef.current ? "left" : "right", trackWidth, trackHeight, dotDiameter));
       return;
     }
-    const targetProgress = leftHandedRef.current ? (targetSpot - 0.1) / 0.8 : (0.9 - targetSpot) / 0.8;
     const score = kind === "concentration"
-      ? getConcentrationScore(elapsedMs, targetProgress * CONCENTRATION_TARGET_DURATION_MS, easeLevel)
+      ? getConcentrationScore(elapsedMs, targetDelay, easeLevel)
       : kind === "defense" && elapsedMs < targetDelay
         ? 0
         : kind === "defense"
           ? scoreWithinRange(100 - Math.abs(elapsedMs - targetDelay) * 100 / (500 * focusTolerance(easeLevel)))
         : getTimedAttackScore(elapsedMs - targetDelay, easeLevel);
-    finish(score);
-  }, [active, easeLevel, finish, kind, targetDelay, targetSpot]);
+    finish(score, kind, kind === "defense" ? 180 : 0);
+  }, [active, easeLevel, finish, kind, targetDelay, targetTaps]);
   const startSwipe = useCallback((x: number, y: number, width: number, height: number, dotDiameter = MULTITAP_DOT_DIAMETER) => {
     if (!active || completed.current || kind !== "multiswipe") return;
     if (width <= 0 || height <= 0) return;
@@ -339,6 +392,7 @@ export function useMicrogame(onComplete: (result: MicrogameResult) => void) {
   }, []);
   const updateRuneProgress = useCallback((progress: number) => {
     runeProgress.current = Math.max(0, Math.min(1, progress));
+    setActionProgress(runeProgress.current);
   }, []);
   const endSwipe = useCallback((x: number, y: number, width: number, height: number, dotDiameter = MULTITAP_DOT_DIAMETER) => {
     if (!active || completed.current || kind !== "multiswipe") return false;
@@ -355,12 +409,14 @@ export function useMicrogame(onComplete: (result: MicrogameResult) => void) {
     const completedBar = reachedOtherEnd;
     if (!completedBar) return false;
     swipeCount.current += 1;
+    setActionProgress(Math.min(1, swipeCount.current / Math.max(1, Math.ceil(targetTaps / 3))));
     setMultiswipeTarget(getNextMultiswipeTarget(width, height, dotDiameter));
     return true;
-  }, [active, kind, multiswipeTarget]);
+  }, [active, kind, multiswipeTarget, targetTaps]);
   useEffect(() => {
     if (!active) return;
     const interval = setInterval(() => {
+      if (completed.current) return;
       const duration = getMicrogameWindow(kind);
       const value = Math.min(duration, nowRef.current() - startedAt.current);
       elapsedStore.setSnapshot(value);
@@ -375,9 +431,11 @@ export function useMicrogame(onComplete: (result: MicrogameResult) => void) {
   }, [active, elapsedStore, finish, finishMultitap, finishMultiswipe, finishRuneTracer, kind, targetTaps]);
   return {
     active,
+    sessionId,
     kind,
     get elapsed() { return elapsedStore.getSnapshot(); },
     elapsedStore,
+    actionProgress,
     targetDelay,
     targetSpot,
     multitapTargetSpot,

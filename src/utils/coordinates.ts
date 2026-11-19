@@ -20,44 +20,105 @@ export function getActorSpriteSize(sprite: string) {
 export const ACTOR_ENVELOPE = 80;
 export type SceneSlot = { x: number; y: number; size: number };
 
-export function layoutRoomActors(actors: { id: string; position?: ScenePosition }[]) {
+export function layoutRoomActors(actors: { id: string; position?: ScenePosition; isDoorwayGuard?: boolean }[], activeDoorways: Exclude<ScenePosition, "center">[] = []) {
   // Actors occupy non-overlapping 3x3 grid blocks. Dense rooms step down to 2x2
   // or 1x1 blocks while keeping every placement aligned to the same invisible grid.
   const slots: Record<string, SceneSlot> = {};
-  const blockSpan = actors.length <= 12 ? 3 : actors.length <= 24 ? 2 : 1;
+  let blockSpan = actors.length <= 12 ? 3 : actors.length <= 24 ? 2 : 1;
+  const doorwayBounds: Record<Exclude<ScenePosition, "center">, { left: number; top: number; right: number; bottom: number }> = {
+    top: { left: (SCENE_WIDTH - 64) / 2, top: 0, right: (SCENE_WIDTH + 64) / 2, bottom: 64 },
+    right: { left: SCENE_WIDTH - 64, top: (SCENE_HEIGHT - 64) / 2, right: SCENE_WIDTH, bottom: (SCENE_HEIGHT + 64) / 2 },
+    bottom: { left: (SCENE_WIDTH - 64) / 2, top: SCENE_HEIGHT - 64, right: (SCENE_WIDTH + 64) / 2, bottom: SCENE_HEIGHT },
+    left: { left: 0, top: (SCENE_HEIGHT - 64) / 2, right: 64, bottom: (SCENE_HEIGHT + 64) / 2 },
+  };
+  const hasDoorwayOverlap = (left: number, top: number) => activeDoorways.some(position => {
+    const doorway = doorwayBounds[position];
+    return left < doorway.right && left + ACTOR_ENVELOPE > doorway.left
+      && top < doorway.bottom && top + ACTOR_ENVELOPE > doorway.top;
+  });
+  const getCells = (span: number) => {
+    const blockSize = span * SPRITE_SIZE;
+    const spriteSize = Math.min(ACTOR_ENVELOPE, blockSize);
+    const cells: { column: number; row: number }[] = [];
+    for (let row = 0; row + span <= ROOM_GRID_ROWS; row += span) {
+      for (let column = 0; column + span <= ROOM_GRID_COLUMNS; column += span) {
+        const left = column * SPRITE_SIZE + (blockSize - spriteSize) / 2;
+        const top = row * SPRITE_SIZE + (blockSize - spriteSize) / 2;
+        if (!hasDoorwayOverlap(left, top)) cells.push({ column, row });
+      }
+    }
+    return cells;
+  };
+  let cells = getCells(blockSpan);
+  while (cells.length < actors.length && blockSpan > 1) {
+    blockSpan -= 1;
+    cells = getCells(blockSpan);
+  }
   const blockSize = blockSpan * SPRITE_SIZE;
   const spriteSize = Math.min(ACTOR_ENVELOPE, blockSize);
-  const cells: { column: number; row: number }[] = [];
-  for (let row = 0; row + blockSpan <= ROOM_GRID_ROWS; row += blockSpan) {
-    for (let column = 0; column + blockSpan <= ROOM_GRID_COLUMNS; column += blockSpan) {
-      cells.push({ column, row });
-    }
-  }
-  const centerColumn = (ROOM_GRID_COLUMNS - blockSpan) / 2;
-  const centerRow = (ROOM_GRID_ROWS - blockSpan) / 2;
-  const regionOrder = (position: ScenePosition, a: typeof cells[number], b: typeof cells[number]) => {
-    if (position === "top" && a.row !== b.row) return a.row - b.row;
-    if (position === "bottom" && a.row !== b.row) return b.row - a.row;
-    if (position === "left" && a.column !== b.column) return a.column - b.column;
-    if (position === "right" && a.column !== b.column) return b.column - a.column;
-    const aDistance = Math.abs(a.column - centerColumn) + Math.abs(a.row - centerRow);
-    const bDistance = Math.abs(b.column - centerColumn) + Math.abs(b.row - centerRow);
-    return aDistance - bDistance || a.row - b.row || a.column - b.column;
+  const center = { x: (SCENE_WIDTH - spriteSize) / 2, y: (SCENE_HEIGHT - spriteSize) / 2 };
+  const sideTargets: Record<Exclude<ScenePosition, "center">, { x: number; y: number }> = {
+    top: { x: (SCENE_WIDTH - ACTOR_ENVELOPE) / 2, y: 64 },
+    right: { x: SCENE_WIDTH - 64 - ACTOR_ENVELOPE, y: (SCENE_HEIGHT - ACTOR_ENVELOPE) / 2 },
+    bottom: { x: (SCENE_WIDTH - ACTOR_ENVELOPE) / 2, y: SCENE_HEIGHT - 64 - ACTOR_ENVELOPE },
+    left: { x: 64, y: (SCENE_HEIGHT - ACTOR_ENVELOPE) / 2 },
   };
-  const occupied = new Set<string>();
-  for (const position of ["center", "top", "bottom", "left", "right"] as const) {
+  const guardTargets: Record<Exclude<ScenePosition, "center">, { x: number; y: number }> = {
+    top: { x: (SCENE_WIDTH - ACTOR_ENVELOPE) / 2, y: 32 - ACTOR_ENVELOPE / 2 },
+    right: { x: SCENE_WIDTH - 32 - ACTOR_ENVELOPE / 2, y: (SCENE_HEIGHT - ACTOR_ENVELOPE) / 2 },
+    bottom: { x: (SCENE_WIDTH - ACTOR_ENVELOPE) / 2, y: SCENE_HEIGHT - 32 - ACTOR_ENVELOPE / 2 },
+    left: { x: 32 - ACTOR_ENVELOPE / 2, y: (SCENE_HEIGHT - ACTOR_ENVELOPE) / 2 },
+  };
+  const candidatePositions = [
+    ...cells.map(({ column, row }) => ({
+      column,
+      row,
+      x: column * SPRITE_SIZE + (blockSize - spriteSize) / 2,
+      y: row * SPRITE_SIZE + (blockSize - spriteSize) / 2,
+    })),
+    ...(actors.length <= ROOM_GRID_COLUMNS * 2 ? [{ column: -1, row: -1, ...center }] : []),
+    ...(actors.some(actor => actor.position && actor.position !== "center")
+      ? Object.values(sideTargets).map(({ x, y }) => ({ column: -1, row: -1, x, y }))
+      : []),
+    ...(actors.some(actor => actor.isDoorwayGuard)
+      ? Object.values(guardTargets).map(({ x, y }) => ({ column: -1, row: -1, x, y }))
+      : []),
+  ].filter((candidate, index, candidates) =>
+    candidates.findIndex(other => other.x === candidate.x && other.y === candidate.y) === index,
+  );
+  const overlapsDoorway = (candidate: { x: number; y: number }, actorPosition: ScenePosition, isDoorwayGuard: boolean) => activeDoorways.some(position => {
+    if (isDoorwayGuard && actorPosition === position) return false;
+    const doorway = doorwayBounds[position];
+    return candidate.x < doorway.right && candidate.x + ACTOR_ENVELOPE > doorway.left
+      && candidate.y < doorway.bottom && candidate.y + ACTOR_ENVELOPE > doorway.top;
+  });
+  const distanceFromTarget = (actor: { position?: ScenePosition; isDoorwayGuard?: boolean }, candidate: { x: number; y: number }) => {
+    const position = actor.position ?? "center";
+    const target = position === "center" ? center : actor.isDoorwayGuard ? guardTargets[position] : sideTargets[position];
+    return Math.abs(candidate.x - target.x) + Math.abs(candidate.y - target.y);
+  };
+  const occupied: { x: number; y: number }[] = [];
+  // Pin doorway actors to their own side first, then place ordinary actors around the center.
+  for (const position of ["top", "right", "bottom", "left", "center"] as const) {
     const group = actors.filter(actor => (actor.position ?? "center") === position)
       .sort((a, b) => a.id.localeCompare(b.id));
     if (!group.length) continue;
-    const orderedCells = [...cells].sort((a, b) => regionOrder(position, a, b));
     for (const actor of group) {
-      const cell = orderedCells.find(candidate => !occupied.has(`${candidate.column}:${candidate.row}`))
-        ?? cells.find(candidate => !occupied.has(`${candidate.column}:${candidate.row}`));
-      if (!cell) break;
-      occupied.add(`${cell.column}:${cell.row}`);
+      const orderedCandidates = [...candidatePositions].sort((a, b) =>
+        distanceFromTarget(actor, a) - distanceFromTarget(actor, b)
+        || a.y - b.y
+        || a.x - b.x,
+      );
+      const candidate = orderedCandidates.find(slot => {
+        if (overlapsDoorway(slot, position, Boolean(actor.isDoorwayGuard))) return false;
+        return occupied.every(other => slot.x + spriteSize <= other.x || other.x + spriteSize <= slot.x
+          || slot.y + spriteSize <= other.y || other.y + spriteSize <= slot.y);
+      });
+      if (!candidate) break;
+      occupied.push(candidate);
       slots[actor.id] = {
-        x: cell.column * SPRITE_SIZE + (blockSize - spriteSize) / 2,
-        y: cell.row * SPRITE_SIZE + (blockSize - spriteSize) / 2,
+        x: candidate.x,
+        y: candidate.y,
         size: spriteSize,
       };
     }

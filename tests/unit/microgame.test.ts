@@ -1,4 +1,4 @@
-import { CONCENTRATION_TARGET_DURATION_MS, getConcentrationScore, getMicrogameWindow, getMultitapGrid, getMultitapScore, getMultitapTargetTaps, getNextMultitapTargetSpot, getTimedAttackScore, HUMAN_REACTION_WINDOW_MS, MICROGAME_MAX_DURATION_MS, MULTITAP_DOT_DIAMETER, MULTITAP_WINDOW_MS, TIMED_ATTACK_CUE_DELAY_MS, TIMED_ATTACK_WINDOW_MS, getMultiswipeScore, getNextMultiswipeTarget, isMultiswipeEndpoint, MULTISWIPE_WINDOW_MS, getMultiswipeTargetBars, getMultiswipeGrid } from "@/game/actions/use-microgame";
+import { CONCENTRATION_TARGET_DURATION_MS, DEFENSE_TARGET_INNER_DIAMETER, DEFENSE_TARGET_OUTER_DIAMETER, DEFENSE_WINDOW_MS, getDefenseRingDiameter, isDefenseRingWithinTargets, getConcentrationScore, getMicrogameWindow, getMultitapGrid, getMultitapScore, getMultitapTargetTaps, getNextMultitapTargetSpot, getTimedAttackScore, MICROGAME_MAX_DURATION_MS, MULTITAP_DOT_DIAMETER, MULTITAP_WINDOW_MS, TIMED_ATTACK_CUE_DELAY_MS, TIMED_ATTACK_WINDOW_MS, getMultiswipeScore, getNextMultiswipeTarget, getMultiswipeStrokeProgress, isMultiswipeEndpoint, MULTISWIPE_WINDOW_MS, getMultiswipeTargetBars, getMultiswipeGrid, getVariedTargetTiming, TARGET_TIMING_VARIANCE_MS } from "@/game/actions/use-microgame";
 import { getGameClass } from "@/game/config/game-classes";
 
 test("microgames fit within a 1.5 second window and concentration targets the visible alignment", () => {
@@ -7,8 +7,9 @@ test("microgames fit within a 1.5 second window and concentration targets the vi
   expect(TIMED_ATTACK_WINDOW_MS - TIMED_ATTACK_CUE_DELAY_MS).toBeGreaterThanOrEqual(500);
   expect(getMicrogameWindow("multitap")).toBe(MULTITAP_WINDOW_MS);
   expect(getMicrogameWindow("multiswipe")).toBe(MULTISWIPE_WINDOW_MS);
-  expect(MULTITAP_WINDOW_MS).toBe(3000);
-  expect(MULTITAP_WINDOW_MS).toBeGreaterThanOrEqual(getMultitapTargetTaps("hard", 10) * HUMAN_REACTION_WINDOW_MS);
+  expect(MULTITAP_WINDOW_MS).toBe(2000);
+  expect(MULTISWIPE_WINDOW_MS).toBe(3000);
+  expect(MULTITAP_WINDOW_MS).toBeGreaterThanOrEqual(getMultitapTargetTaps("hard", 10) * 200);
 });
 
 test("microgame modes use their own score rules", () => {
@@ -23,6 +24,39 @@ test("microgame modes use their own score rules", () => {
   expect(getMultitapScore(targetTaps - 1, targetTaps)).toBeCloseTo(83, 0);
   expect(getMultitapScore(targetTaps, targetTaps)).toBe(100);
   expect(getMultitapScore(targetTaps + 2, targetTaps)).toBeGreaterThan(100);
+});
+
+test("Block, Concentration, and Timed Attack timing variance grows by difficulty but stays small", () => {
+  for (const base of [600, Math.round(CONCENTRATION_TARGET_DURATION_MS * 0.875), TIMED_ATTACK_CUE_DELAY_MS]) {
+    const easyMin = getVariedTargetTiming(base, "easy", () => 0);
+    const easyMax = getVariedTargetTiming(base, "easy", () => 0.999);
+    const normalMin = getVariedTargetTiming(base, "normal", () => 0);
+    const normalMax = getVariedTargetTiming(base, "normal", () => 0.999);
+    const hardMin = getVariedTargetTiming(base, "hard", () => 0);
+    const hardMax = getVariedTargetTiming(base, "hard", () => 0.999);
+
+    expect(easyMin).toBeGreaterThanOrEqual(base - TARGET_TIMING_VARIANCE_MS.easy);
+    expect(easyMax).toBeLessThanOrEqual(base + TARGET_TIMING_VARIANCE_MS.easy);
+    expect(normalMin).toBeLessThan(easyMin);
+    expect(normalMax).toBeGreaterThan(easyMax);
+    expect(hardMin).toBeLessThan(normalMin);
+    expect(hardMax).toBeGreaterThan(normalMax);
+    expect(hardMax - hardMin).toBeLessThanOrEqual(2 * TARGET_TIMING_VARIANCE_MS.hard);
+  }
+});
+
+test("Block's ring reaches the target gap at its score time and shrinks to the center by timeout", () => {
+  const targetDelay = 600;
+  const diameterAtStart = getDefenseRingDiameter(0, targetDelay);
+  const diameterAtScoreTime = getDefenseRingDiameter(targetDelay, targetDelay);
+  const diameterAtTimeout = getDefenseRingDiameter(DEFENSE_WINDOW_MS, targetDelay);
+
+  expect(diameterAtStart).toBe(136);
+  expect(diameterAtScoreTime).toBe((DEFENSE_TARGET_OUTER_DIAMETER + DEFENSE_TARGET_INNER_DIAMETER) / 2);
+  expect(isDefenseRingWithinTargets(diameterAtScoreTime)).toBe(true);
+  expect(isDefenseRingWithinTargets(diameterAtScoreTime + 5)).toBe(false);
+  expect(isDefenseRingWithinTargets(diameterAtScoreTime - 5)).toBe(false);
+  expect(diameterAtTimeout).toBe(0);
 });
 
 test("Multitap perfect taps scale with difficulty and level", () => {
@@ -77,24 +111,38 @@ test("Warrior attacks use Multiswipe and each full swipe is worth three taps", (
   expect(getMultiswipeScore(barTarget + 1, tapTarget)).toBeGreaterThan(100);
 });
 
-test("Multiswipe targets use exactly three orthogonal steps without reversing direction", () => {
+test.each([
+  ["horizontal", 0],
+  ["vertical", 0.5],
+  ["diagonal", 0.99],
+] as const)("Multiswipe generates one straight %s target without any bends", (expectedAxis, roll) => {
   const width = 640;
   const height = 450;
-  const { columns, rows } = getMultiswipeGrid(width, height, MULTITAP_DOT_DIAMETER);
-  const target = getNextMultiswipeTarget(width, height, MULTITAP_DOT_DIAMETER, () => 0.37);
-  const path = target.path!;
-  expect(path).toHaveLength(4);
-  const directions = path.slice(1).map((point, index) => {
-    const dx = Math.round((point.x - path[index].x) * columns);
-    const dy = Math.round((point.y - path[index].y) * rows);
-    expect(Math.abs(dx) + Math.abs(dy)).toBe(1);
-    return `${dx},${dy}`;
-  });
-  const deltas = directions.map(direction => direction.split(",").map(Number));
-  expect(deltas.some(([dx]) => dx > 0) && deltas.some(([dx]) => dx < 0)).toBe(false);
-  expect(deltas.some(([, dy]) => dy > 0) && deltas.some(([, dy]) => dy < 0)).toBe(false);
-  expect(path[0]).toEqual(target.start);
-  expect(path[path.length - 1]).toEqual(target.end);
+  const random = jest.fn().mockReturnValueOnce(roll).mockReturnValueOnce(0.37);
+  const target = getNextMultiswipeTarget(width, height, MULTITAP_DOT_DIAMETER, random);
+  expect(target.axis).toBe(expectedAxis);
+  expect("path" in target).toBe(false);
+  expect(target.start).not.toEqual(target.end);
+  const deltaX = (target.end.x - target.start.x) * width;
+  const deltaY = (target.end.y - target.start.y) * height;
+  expect(Math.hypot(deltaX, deltaY)).toBeGreaterThan(MULTITAP_DOT_DIAMETER * 2);
+  if (target.axis === "diagonal") {
+    expect(deltaX).not.toBe(0);
+    expect(deltaY).not.toBe(0);
+  }
+  if (target.axis === "horizontal") expect(deltaY).toBe(0);
+  if (target.axis === "vertical") expect(deltaX).toBe(0);
   expect(isMultiswipeEndpoint(target.start, target.start, width, height, MULTITAP_DOT_DIAMETER)).toBe(true);
   expect(isMultiswipeEndpoint(target.end, target.start, width, height, MULTITAP_DOT_DIAMETER)).toBe(false);
+});
+
+test("Multiswipe stroke progress follows the straight bar and ignores points away from it", () => {
+  const target = {
+    start: { x: 0.2, y: 0.2 },
+    end: { x: 0.8, y: 0.8 },
+    axis: "diagonal" as const,
+  };
+  expect(getMultiswipeStrokeProgress({ x: 180, y: 55 }, target, 360, 110, 20)).toBeCloseTo(0.5);
+  expect(getMultiswipeStrokeProgress({ x: 72, y: 22 }, target, 360, 110, 20)).toBeCloseTo(0);
+  expect(getMultiswipeStrokeProgress({ x: 180, y: 5 }, target, 360, 110, 20)).toBeNull();
 });

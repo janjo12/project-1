@@ -142,6 +142,7 @@ export function useRunGame({
   const [sceneFrameStore] = useState(createSceneFrameStore);
   const setAnimationFrame = sceneFrameStore.setFrame;
   const [enemyHealthLossAmount, setEnemyHealthLossAmount] = useState(0);
+  const [damageDealtKey, setDamageDealtKey] = useState(0);
   const [activeMonsterId, setActiveMonsterId] = useState<string | null>(null);
   const [isResolving, setIsResolving] = useState(false);
   const [isCharged, setIsCharged] = useState(false);
@@ -477,6 +478,7 @@ export function useRunGame({
         if (reflects) {
           const reflectedDamage = getWarriorRiposteDamage(monster, GAME_PARAMETERS.combat.warriorRiposteDamage);
           console.info(`[combat] Player reflected ${reflectedDamage} damage to ${monster.name}.`);
+          if (reflectedDamage > 0) setDamageDealtKey(key => key + 1);
           setEnemyHealthLossAmount(GAME_PARAMETERS.combat.warriorRiposteDamage);
           restartAnimations(setAnimationFrame, ["playerAttackElapsed", "enemyDamageElapsed", "enemyHealthLossElapsed"]);
           resolvedMap = commitMap(
@@ -706,6 +708,7 @@ export function useRunGame({
         });
       lastActionRefundsChargeRef.current = false;
       const damage = Math.min(monster.currentHealth, totalDamage);
+      if (damage > 0) setDamageDealtKey(key => key + 1);
       const chainTargets = playerClass.id === "wizard" && damage > 0
         ? getTargetableMonsters(dungeonMap, getCurrentRoom(dungeonMap)).filter(target => target.id !== monster.id)
         : [];
@@ -897,6 +900,7 @@ export function useRunGame({
     disabledDirections,
     dungeonMap,
     enemyHealthLossAmount,
+    damageDealtKey,
     hasLost,
     hasRoomEnemy,
     roomHasStairs,

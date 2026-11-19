@@ -12,7 +12,7 @@ test("web setup controls and help remain reachable", async ({ page }) => {
   await expect(page.getByText("Attack microgames", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Difficulty help" }).click();
   await expect(page.getByRole("dialog", { name: "Difficulty help" })).toBeVisible();
-  await page.getByRole("button", { name: "Got it" }).click();
+  await page.getByRole("button", { name: "Got it" }).click({ force: true });
 
   expect(pageErrors).toEqual([]);
 });

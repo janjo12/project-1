@@ -90,6 +90,7 @@ test("rejects malformed signaling and messages and sending before open", async (
   expect(() => parseMessage(JSON.stringify({ type: "TURN_RESULT", turn: 2, state: { turn: 1 } }))).toThrow("Invalid game message");
   expect(() => parseMessage(JSON.stringify({ type: "SUBMIT_ACTION", turn: -1, action: { type: "SUPPORT" } }))).toThrow("Invalid game message");
   expect(() => parseMessage(JSON.stringify({ type: "SUBMIT_ACTION", turn: 0, action: { type: "DEFEND" } }))).toThrow("Invalid game message");
+  expect(parseMessage(JSON.stringify({ type: "SUBMIT_ACTION", turn: 0, action: { type: "PASS" } }))).toMatchObject({ action: { type: "PASS" } });
   const host = await createHostConnection();
   expect(() => sendMessage(host.channel, { type: "SUBMIT_ACTION", turn: 0, action: { type: "SUPPORT" } })).toThrow("not open");
 });

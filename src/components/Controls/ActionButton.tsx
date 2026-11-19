@@ -36,6 +36,7 @@ type NormalButtonProps = {
 type PrimaryButtonProps = {
   accessibilityLabel: string;
   accessibilityRole: "button";
+  disabled?: boolean;
   label: string;
   onPress: () => void;
 };
@@ -161,7 +162,7 @@ export function NormalButton({
   );
 }
 
-export function PrimaryButton({ accessibilityLabel, label, onPress }: PrimaryButtonProps) {
+export function PrimaryButton({ accessibilityLabel, label, onPress, disabled = false }: PrimaryButtonProps) {
   const colors = useThemeColors();
   const styles = createInputStyles(colors);
 
@@ -169,9 +170,12 @@ export function PrimaryButton({ accessibilityLabel, label, onPress }: PrimaryBut
     <Pressable
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [
         styles.primaryButton,
+        disabled && { opacity: 0.45 },
         pressed && styles.pressed,
       ]}
     >

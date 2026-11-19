@@ -1,4 +1,5 @@
 import { GET, POST } from "../../app/api/multiplayer/route";
+import type { MultiplayerState } from "@/game/engine/multiplayer-rules";
 
 async function post(data: Record<string, unknown>) {
   return POST(new Request("http://localhost/api/multiplayer", {
@@ -22,6 +23,7 @@ type RoomResponse = {
   playerOptions?: { difficulty: string; handedness: string; microgamesEnabled: boolean; reducedMotion: boolean };
   playerReady?: boolean;
   deadlineAt?: number | null;
+  turnSubmitted?: boolean;
 };
 
 test.each([
@@ -59,6 +61,38 @@ test("room API rejects unauthorized starts, invalid options, and duplicate or st
   expect((await post({ type: "action", code: host.code, playerId: host.playerId, turn: 0, action: { type: "SUPPORT" } })).status).toBe(409);
   expect((await post({ type: "action", code: host.code, playerId: guest.playerId, turn: 0, action: { type: "CLASS_READY" } })).ok).toBe(true);
   expect((await post({ type: "action", code: host.code, playerId: host.playerId, turn: 1, action: { type: "SUPPORT" } })).ok).toBe(true);
+  await post({ type: "leave", code: host.code, playerId: host.playerId });
+});
+
+test("host can start with a bot that is ready, follows host settings, and acts automatically", async () => {
+  const host = await body<RoomResponse>(await post({
+    type: "create", seed: "bot-room", difficulty: "easy",
+    handedness: "right", microgamesEnabled: true, reducedMotion: false,
+  }));
+  const added = await body<{ players: { id: string; ready: boolean }[] }>(await post({ type: "add-bot", code: host.code, playerId: host.playerId }));
+  expect(added.players).toContainEqual({ id: "bot-1", health: 100, ready: true });
+
+  await post({ type: "configure", code: host.code, playerId: host.playerId, difficulty: "normal", handedness: "left", microgamesEnabled: true, reducedMotion: true });
+  const started = await body<{ state: MultiplayerState | null }>(await post({ type: "start", code: host.code, playerId: host.playerId }));
+  expect(started.state?.players["bot-1"].gameplayOptions).toEqual({
+    difficulty: "normal", handedness: "left", microgamesEnabled: false, reducedMotion: true,
+  });
+
+  const briefing = await body<{ state: MultiplayerState | null }>(await post({
+    type: "action", code: host.code, playerId: host.playerId, turn: 0, action: { type: "CLASS_READY" },
+  }));
+  expect(briefing.state).toMatchObject({ phase: "playing", turn: 1 });
+  expect((await post({ type: "action", code: host.code, playerId: "bot-1", turn: 1, action: { type: "SUPPORT" } })).status).toBe(403);
+
+  const state = briefing.state!;
+  const hostRoom = state.map.rooms.flat().find(room => room.id === state.players.host.roomId)!;
+  const direction = (["north", "east", "south", "west"] as const).find(value => hostRoom[value] === "open");
+  expect(direction).toBeDefined();
+  const moved = await body<{ state: MultiplayerState | null }>(await post({
+    type: "action", code: host.code, playerId: host.playerId, turn: 1, action: { type: "MOVE", target: direction },
+  }));
+  expect(moved.state?.turn).toBe(2);
+  expect(moved.state?.players["bot-1"].roomId).toBe(moved.state?.players.host.roomId);
   await post({ type: "leave", code: host.code, playerId: host.playerId });
 });
 
@@ -107,7 +141,7 @@ test("configure rejects invalid shared settings without starting or changing the
   await post({ type: "leave", code: host.code, playerId: host.playerId });
 });
 
-test("a guest leaving does not cancel the hard-mode room timer", async () => {
+test("Hard action timeout passes only the Hard host while an Easy guest keeps their turn", async () => {
   jest.useFakeTimers();
   try {
     const host = await body<RoomResponse>(await post({ type: "create", seed: "timer-check", difficulty: "hard" }));
@@ -118,10 +152,61 @@ test("a guest leaving does not cancel the hard-mode room timer", async () => {
     const before = await GET(new Request(`http://localhost/api/multiplayer?code=${host.code}&playerId=${host.playerId}`));
     const beforeData = await body<RoomResponse>(before);
     expect(beforeData.deadlineAt).not.toBeNull();
-    await post({ type: "leave", code: host.code, playerId: guest.playerId });
+    expect(beforeData.deadlineAt! - Date.now()).toBe(5_000);
+    expect(beforeData.state).toMatchObject({ difficulty: "normal" });
+    expect(beforeData.state?.players.host.gameplayOptions?.difficulty).toBe("hard");
+    expect(beforeData.state?.players[guest.playerId].gameplayOptions?.difficulty).toBe("easy");
+    const easyView = await body<RoomResponse>(await GET(new Request(`http://localhost/api/multiplayer?code=${host.code}&playerId=${guest.playerId}`)));
+    expect(easyView.deadlineAt).toBeNull();
+    expect(easyView.turnSubmitted).toBe(false);
     jest.advanceTimersByTime(20_000);
-    const after = await GET(new Request(`http://localhost/api/multiplayer?code=${host.code}&playerId=${host.playerId}`));
-    expect((await body<RoomResponse>(after)).state?.turn).toBeGreaterThan(beforeData.state?.turn ?? 0);
+    const afterHostTimeout = await body<RoomResponse>(await GET(new Request(`http://localhost/api/multiplayer?code=${host.code}&playerId=${host.playerId}`)));
+    expect(afterHostTimeout.state?.turn).toBe(beforeData.state?.turn);
+    expect(afterHostTimeout.turnSubmitted).toBe(true);
+    expect(afterHostTimeout.deadlineAt).toBeNull();
+    const afterGuestAction = await body<RoomResponse>(await post({
+      type: "action", code: host.code, playerId: guest.playerId,
+      turn: beforeData.state!.turn, action: { type: "SUPPORT" },
+    }));
+    expect(afterGuestAction.state?.turn).toBe(beforeData.state!.turn + 1);
+    expect(afterGuestAction.state?.players.host.gameplayOptions?.difficulty).toBe("hard");
+    expect(afterGuestAction.state?.players[guest.playerId].gameplayOptions?.difficulty).toBe("easy");
+    await post({ type: "leave", code: host.code, playerId: host.playerId });
+  } finally { jest.useRealTimers(); }
+});
+
+test("a Hard guest gets a personal action deadline while an Easy host does not", async () => {
+  jest.useFakeTimers();
+  try {
+    const host = await body<RoomResponse>(await post({ type: "create", seed: "guest-hard-timer", difficulty: "easy" }));
+    const guest = await body<RoomResponse>(await post({ type: "join", code: host.code }));
+    await post({
+      type: "options", code: host.code, playerId: guest.playerId,
+      difficulty: "hard", handedness: "right", microgamesEnabled: true, reducedMotion: false,
+    });
+    await post({ type: "ready", code: host.code, playerId: guest.playerId });
+    await post({ type: "start", code: host.code, playerId: host.playerId });
+    for (const playerId of [host.playerId, guest.playerId]) {
+      await post({ type: "action", code: host.code, playerId, turn: 0, action: { type: "CLASS_READY" } });
+    }
+
+    const hostView = await body<RoomResponse>(await GET(new Request(`http://localhost/api/multiplayer?code=${host.code}&playerId=${host.playerId}`)));
+    const guestView = await body<RoomResponse>(await GET(new Request(`http://localhost/api/multiplayer?code=${host.code}&playerId=${guest.playerId}`)));
+    expect(hostView.deadlineAt).toBeNull();
+    expect(guestView.deadlineAt).not.toBeNull();
+
+    jest.advanceTimersByTime(5_000);
+    const timedOutGuest = await body<RoomResponse>(await GET(new Request(`http://localhost/api/multiplayer?code=${host.code}&playerId=${guest.playerId}`)));
+    expect(timedOutGuest.turnSubmitted).toBe(true);
+    expect(timedOutGuest.state?.turn).toBe(1);
+    const hostAfterTimeout = await body<RoomResponse>(await GET(new Request(`http://localhost/api/multiplayer?code=${host.code}&playerId=${host.playerId}`)));
+    expect(hostAfterTimeout.turnSubmitted).toBe(false);
+
+    const nextTurn = await body<RoomResponse>(await post({
+      type: "action", code: host.code, playerId: host.playerId,
+      turn: 1, action: { type: "SUPPORT" },
+    }));
+    expect(nextTurn.state?.turn).toBe(2);
     await post({ type: "leave", code: host.code, playerId: host.playerId });
   } finally { jest.useRealTimers(); }
 });

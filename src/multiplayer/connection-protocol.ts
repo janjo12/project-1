@@ -1,7 +1,7 @@
 import { isMultiplayerPlayerOptions, type MultiplayerPlayerOptions } from "@/multiplayer/player-options";
 
 export type GameState = { turn: number; [key: string]: unknown };
-export type PlayerAction = { type: "MOVE" | "ATTACK" | "SUPPORT" | "CLASS_READY" | "PICKUP" | "PICKUP_EQUIPMENT" | "DROP_EQUIPMENT" | "USE_ITEM" | "DESCEND"; target?: string; charged?: boolean; microgameScore?: number };
+export type PlayerAction = { type: "MOVE" | "ATTACK" | "SUPPORT" | "CLASS_READY" | "PICKUP" | "PICKUP_EQUIPMENT" | "DROP_EQUIPMENT" | "USE_ITEM" | "DESCEND" | "PASS"; target?: string; charged?: boolean; microgameScore?: number };
 export type NetworkMessage =
   | { type: "PLAYER_INFO"; playerId: string; name: string }
   | { type: "SUBMIT_ACTION"; turn: number; action: PlayerAction }
@@ -18,7 +18,7 @@ export function isValidTurn(value: unknown): value is number {
 }
 
 export function isValidPlayerAction(value: unknown): value is PlayerAction {
-  return isRecord(value) && ["MOVE", "ATTACK", "SUPPORT", "CLASS_READY", "PICKUP", "PICKUP_EQUIPMENT", "DROP_EQUIPMENT", "DESCEND"].includes(String(value.type)) &&
+  return isRecord(value) && ["MOVE", "ATTACK", "SUPPORT", "CLASS_READY", "PICKUP", "PICKUP_EQUIPMENT", "DROP_EQUIPMENT", "DESCEND", "PASS"].includes(String(value.type)) &&
     (value.charged === undefined || typeof value.charged === "boolean") &&
     (value.microgameScore === undefined || (typeof value.microgameScore === "number" && Number.isFinite(value.microgameScore) && value.microgameScore >= 0 && value.microgameScore <= 100)) &&
     (value.target === undefined || typeof value.target === "string");

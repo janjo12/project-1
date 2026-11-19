@@ -1,4 +1,5 @@
 import { PixelSprite } from "@/components/Common/PixelSprite";
+import { FontAwesome } from "@expo/vector-icons";
 import { type Ref } from "react";
 import { Pressable, StyleSheet, Text, View, type ViewInstance } from "react-native";
 
@@ -51,10 +52,12 @@ export function ChargeControl({ charged, chargeCost, disabled, onPress }: {
   disabled: boolean;
   onPress: () => void;
 }) {
+  const colors = useThemeColors();
+  const label = charged ? "Cancel charge up" : "Charge up";
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={charged ? "Cancel Charge Up" : "Charge Up"}
+      accessibilityLabel={label}
       accessibilityState={{ selected: charged, disabled }}
       accessibilityHint={`Reserves ${chargeCost} Energy for the next action. Press again to cancel and refund it.`}
       disabled={disabled}
@@ -63,17 +66,17 @@ export function ChargeControl({ charged, chargeCost, disabled, onPress }: {
       style={({ pressed }) => ({
         flex: 1, minWidth: 0, minHeight: 48, borderRadius: 12, padding: 4,
         justifyContent: "center", alignItems: "center",
-        backgroundColor: charged ? "#14532d" : "#21833e",
-        borderColor: charged ? "#a3e635" : "#166534",
+        backgroundColor: charged ? "#14532d" : colors.paperLight,
+        borderColor: charged ? "#a3e635" : colors.energy,
         borderWidth: 2, opacity: disabled ? 0.45 : pressed ? 0.75 : 1,
       })}
     >
-      <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={{ color: "white", fontSize: 15, fontWeight: "800", textAlign: "center" }}>
-        {charged ? "Charged ⚡ · Cancel" : "Charge Up ⚡"}
-      </Text>
-      <Text numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.8} style={{ color: "#ecfccb", fontSize: 10, textAlign: "center" }}>
-        {charged ? `Tap to refund ${chargeCost} Energy` : `Next action · ${chargeCost} Energy`}
-      </Text>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4 }}>
+        <FontAwesome color={colors.energy} name="bolt" size={15} />
+        <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={{ color: colors.energy, fontSize: 15, fontWeight: "800", textAlign: "center" }}>
+          {charged ? "Charged" : "Charge up"}
+        </Text>
+      </View>
     </Pressable>
   );
 }

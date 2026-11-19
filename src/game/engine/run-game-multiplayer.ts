@@ -5,6 +5,7 @@ import type { createClientConnection, createHostSession } from "@/multiplayer/co
 import { describeMultiplayerFailure } from "@/multiplayer/multiplayer-errors";
 import { getTurnDuration } from "@/game/engine/resolveTurn";
 import { getMultiplayerPlayerView } from "@/game/engine/multiplayer-view";
+import { getBotPlayerOptions, getMultiplayerBotActions, MAX_MULTIPLAYER_PLAYERS } from "@/game/engine/multiplayer-bot";
 import type { GameSettings } from "@/utils/settings-storage";
 import type { MultiplayerPlayerOptions } from "@/multiplayer/player-options";
 import { createMultiplayerState, isMultiplayerState, resolveMultiplayerTurn } from "@/game/engine/multiplayer-rules";
@@ -30,6 +31,9 @@ export function useRunMultiplayerGame(settings: GameSettings) {
   const mounted = useRef(true);
   const busyRef = useRef(false);
   const nextGuest = useRef(2);
+  const nextBotNumber = useRef(1);
+  const botIdsRef = useRef<string[]>([]);
+  const [botIds, setBotIds] = useState<string[]>([]);
   const [role, setRole] = useState<"host" | "guest" | null>(null);
   const [playerId, setPlayerId] = useState("host");
   const [state, setState] = useState<MultiplayerState | null>(null);
@@ -70,14 +74,20 @@ export function useRunMultiplayerGame(settings: GameSettings) {
     return () => { mounted.current = false; subscription.remove(); host.current?.close(); client.current?.close(); };
   }, []);
   useEffect(() => {
-    if (!state || state.ended || state.phase !== "playing" || role !== "host" || state.difficulty !== "hard" || !foreground) return;
-    const duration = getTurnDuration({ difficulty: state.difficulty, level: state.level });
+    if (!state || state.ended || state.phase !== "playing" || !role || localPlayerOptions.difficulty !== "hard" || submitted === state.turn || !foreground) return;
+    const duration = getTurnDuration({ difficulty: "hard", level: state.level });
     const deadline = Date.now() + duration;
 
     const tick = setInterval(() => setSeconds(Math.max(0, Math.ceil((deadline - Date.now()) / 1000))), 250);
-    const timeout = setTimeout(() => { try { host.current?.finishTurn(); } catch (e) { report(e); } }, duration);
+    const timeout = setTimeout(() => {
+      try {
+        setSubmitted(state.turn);
+        if (host.current) host.current.submitHostAction(state.turn, { type: "PASS" });
+        else client.current?.send({ type: "SUBMIT_ACTION", turn: state.turn, action: { type: "PASS" } });
+      } catch (e) { report(e); }
+    }, duration);
     return () => { clearInterval(tick); clearTimeout(timeout); };
-  }, [state, role, foreground, report]);
+  }, [state, role, foreground, report, localPlayerOptions.difficulty, submitted]);
 
   async function run(task: () => Promise<void>) {
     if (busyRef.current) return;
@@ -87,14 +97,19 @@ export function useRunMultiplayerGame(settings: GameSettings) {
   }
   function hostGame() {
     try {
+      botIdsRef.current = [];
+      nextBotNumber.current = 1;
+      setBotIds([]);
       const api = networking();
       host.current = api.createHostSession<MultiplayerState>({
-        hostPlayerId: "host", initialState: withLocalOptions(createMultiplayerState(settings.seed, settings.difficulty, ["host"]), "host", settings),
+        hostPlayerId: "host", initialState: withLocalOptions(createMultiplayerState(settings.seed, "normal", ["host"]), "host", settings),
         connectionOptions: { configuration: { iceServers: [] } },
         resolveTurn: (previous, actions) => {
-          const ids = new Set(["host", ...(host.current?.readyPlayerIds ?? [])]);
+          const ids = new Set(["host", ...(host.current?.readyPlayerIds ?? []), ...botIdsRef.current]);
           const players = Object.fromEntries(Object.entries(previous.players).filter(([id]) => ids.has(id)));
-          return resolveMultiplayerTurn({ ...previous, players }, actions);
+          const turnActions = new Map(actions);
+          for (const [botId, action] of getMultiplayerBotActions(previous, botIdsRef.current, actions)) turnActions.set(botId, action);
+          return resolveMultiplayerTurn({ ...previous, players }, turnActions);
         },
         // Fallen players remain active participants as ghosts until the shared descent revives them.
         isActivePlayer: (current, id) => !current.ended && current.players[id] !== undefined,
@@ -109,6 +124,18 @@ export function useRunMultiplayerGame(settings: GameSettings) {
       });
       setRole("host");
     } catch (error) { report(error); }
+  }
+  function addBot() {
+    if (role !== "host" || state) return;
+    if (lobbyPlayers.length + botIdsRef.current.length + 1 >= MAX_MULTIPLAYER_PLAYERS) {
+      setError("This room already has the maximum of eight players.");
+      return;
+    }
+    const botId = `bot-${nextBotNumber.current++}`;
+    const next = [...botIdsRef.current, botId];
+    botIdsRef.current = next;
+    setBotIds(next);
+    setError("");
   }
   async function addGuest() {
     const id = `player-${nextGuest.current++}`;
@@ -149,10 +176,11 @@ export function useRunMultiplayerGame(settings: GameSettings) {
   function start() {
     try {
       if (role === "guest") { markReady(); return; }
-      if (!ready.length) throw new Error("Connect at least one other device first.");
+      if (!ready.length && botIdsRef.current.length === 0) throw new Error("Add a bot or connect at least one other device first.");
       if (ready.some(id => !prepared.includes(id))) throw new Error("Wait for every player to choose their options and press Start.");
-      const next = createMultiplayerState(settings.seed, settings.difficulty, ["host", ...ready]);
+      const next = createMultiplayerState(settings.seed, "normal", ["host", ...ready, ...botIdsRef.current]);
       next.players.host.gameplayOptions = localOptions(settings);
+      for (const botId of botIdsRef.current) next.players[botId].gameplayOptions = getBotPlayerOptions(localOptions(settings), settings.difficulty);
       host.current!.start(next);
     } catch (e) { report(e); }
   }
@@ -192,13 +220,17 @@ export function useRunMultiplayerGame(settings: GameSettings) {
     client.current?.close(); client.current = null;
     setRole(null); setState(null); setConnected(false); setDisconnected(false);
     setSubmitted(null); setReady([]); setPrepared([]); setPlayerReady(false); setLobbyPlayers([]); setOutgoing(""); setIncoming(""); setPendingId("");
+    botIdsRef.current = [];
+    nextBotNumber.current = 1;
+    setBotIds([]);
   }
   return {
     role, playerId, state, outgoing, incoming, setIncoming, pendingId, ready, prepared, readyPlayers: prepared, playerReady,
-    lobbyPlayers, error, busy, connected, submitted, charged, seconds, disconnected,
+    lobbyPlayers, botIds, error, busy, connected, submitted, charged, seconds, disconnected,
     player: view.player, map: view.map, snapshot: view.snapshot, hostGame, start, submit, removePlayer,
     playerOptions: view.player?.gameplayOptions ?? localPlayerOptions,
     setPlayerOptions, markReady,
+    addBot,
     chooseGuest: () => setRole("guest"),
     leave,
     addGuest: () => run(addGuest),

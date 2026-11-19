@@ -1,7 +1,7 @@
 import { GAME_PARAMETERS } from "@/game/config/gameparameters";
 import { createLevelMap } from "@/game/engine/run-game-level";
 import { PLAYER_MAX_ENERGY, PLAYER_MAX_HEALTH } from "@/game/state/types";
-import { getHardTurnLimit, hasTurnLimit, resolveTurnLoss } from "@/game/engine/resolveTurn";
+import { getHardTurnLimit, resolveTurnLoss } from "@/game/engine/resolveTurn";
 import { getNeighborInGrid, getRoomId, placeDoorwayGuard, setConnectionBoundary, POSSIBLE_EQUIPMENT, POSSIBLE_ITEMS, type Direction, type DungeonMap } from "@/game/dungeon/types";
 import { createMonster } from "@/game/entities/enemies";
 import { createEquipment, createItem } from "@/game/entities/items";
@@ -34,7 +34,7 @@ import { isMultiplayerPlayerOptions, type MultiplayerPlayerOptions } from "@/mul
 
 export type GameState = { turn: number; [key: string]: unknown };
 export type PlayerAction = {
-  type: "MOVE" | "ATTACK" | "SUPPORT" | "CLASS_READY" | "PICKUP" | "PICKUP_EQUIPMENT" | "DROP_EQUIPMENT" | "USE_ITEM" | "DESCEND";
+  type: "MOVE" | "ATTACK" | "SUPPORT" | "CLASS_READY" | "PICKUP" | "PICKUP_EQUIPMENT" | "DROP_EQUIPMENT" | "USE_ITEM" | "DESCEND" | "PASS";
   target?: string;
   charged?: boolean;
   microgameScore?: number;
@@ -175,6 +175,14 @@ function applyPlayerDamage(player: MultiplayerPlayer, damage: number) {
   if (miracle.triggered) player.miracleUsed = true;
 }
 
+function isTurnBudgeted(player: MultiplayerPlayer, fallbackDifficulty: Difficulty) {
+  return (player.gameplayOptions?.difficulty ?? fallbackDifficulty) !== "easy";
+}
+
+function hasSharedTurnBudget(state: MultiplayerState) {
+  return Object.values(state.players).some(player => isTurnBudgeted(player, state.difficulty));
+}
+
 function grantThiefReward(state: MultiplayerState, target: MultiplayerPlayer) {
   // The thief reward fills an empty slot or drops the new item beside the target when full.
   if (Math.random() < 0.5) {
@@ -200,6 +208,7 @@ export function resolveMultiplayerTurn(
   previous: MultiplayerState,
   actions: ReadonlyMap<string, PlayerAction>,
 ): MultiplayerState {
+  if (previous.ended) return previous;
   // Clone the mutable player records first so resolving a turn never mutates the previous network snapshot.
   const state: MultiplayerState = {
     ...previous,
@@ -208,7 +217,6 @@ export function resolveMultiplayerTurn(
       Object.entries(previous.players).map(([id, player]) => [id, { ...player }]),
     ),
   };
-  if (state.ended) return state;
   if (state.phase === "briefing") {
     for (const playerId of Object.keys(state.players)) {
       if (actions.get(playerId)?.type === "CLASS_READY" && !state.briefingReady.includes(playerId)) {
@@ -280,7 +288,9 @@ export function resolveMultiplayerTurn(
   // Precompute all destinations before player actions so roster order cannot make an
   // enemy attack an existing occupant before another player enters that same room.
   const roomsEnteredThisTurn = new Set<string>();
-  for (const [id, action] of actions) {
+  for (const [id, submittedAction] of actions) {
+    const action = submittedAction.type === "PASS" ? null : submittedAction;
+    if (!action) continue;
     if (action.type !== "MOVE" || !["north", "east", "south", "west"].includes(action.target ?? "")) continue;
     const mover = state.players[id];
     if (!mover) continue;
@@ -300,7 +310,8 @@ export function resolveMultiplayerTurn(
   }
   for (const player of Object.values(state.players)) {
     // Player iteration follows roster insertion order; that order decides contested pickups deterministically.
-    const action = actions.get(player.id);
+    const submittedAction = actions.get(player.id);
+    const action = submittedAction?.type === "PASS" ? undefined : submittedAction;
     const room = getRoom(state.map, player.roomId);
     if (player.health <= 0) {
       if (action?.type === "MOVE" && ["north", "east", "south", "west"].includes(action.target ?? "") && room[action.target as Direction] !== "wall") {
@@ -461,7 +472,10 @@ export function resolveMultiplayerTurn(
       state.map = moveWerewolfToRoom(state.map, player.roomId);
     }
     const enemy = getRoomMonster(state.map, getRoom(state.map, player.roomId));
-    if (enemy && !roomsEnteredThisTurn.has(player.roomId)) {
+    // An absent action represents a player who let the turn timer expire. Do not
+    // resolve a hit against them: they had no opportunity to start the local
+    // defense microgame that supplies their defense score.
+    if (action && enemy && !roomsEnteredThisTurn.has(player.roomId)) {
       const protector = player.vanguardSource ? state.players[player.vanguardSource] : null;
       const recipient = protector && protector.health > 0 && protector.roomId === player.roomId ? protector : player;
       const recipientClassDefense = recipient.classId === "warrior" ? 15 : GAME_PARAMETERS.player.defense;
@@ -509,20 +523,7 @@ export function resolveMultiplayerTurn(
     if (curseDamage <= 0) continue;
     applyPlayerDamage(player, curseDamage);
   }
-  // Keep the last equipped item and carried item available to the living team once
-  // a character crosses from alive to ghost. A consumed potion is already null.
-  for (const [id, player] of Object.entries(state.players)) {
-    if (previous.players[id].health <= 0 || player.health > 0) continue;
-    if (player.item) {
-      state.map = addItemToRoom(state.map, player.roomId, player.item, false);
-      player.item = null;
-    }
-    if (player.equipment) {
-      state.map = addEquipmentToRoom(state.map, player.roomId, player.equipment, false);
-      player.equipment = null;
-    }
-  }
-  const alive = Object.values(state.players).filter(p => p.health > 0);
+  let alive = Object.values(state.players).filter(p => p.health > 0);
   if (!getWerewolf(state.map)) {
     state.werewolfAggroPlayerId = null;
     state.werewolfWitnessPlayerIds = [];
@@ -542,7 +543,7 @@ export function resolveMultiplayerTurn(
       alive.some(p => actions.get(p.id)?.type === "DESCEND")) {
     state.level++;
     state.map = createLevelMap(state.seed, state.level, undefined, state.difficulty !== "easy", Object.keys(state.players).length);
-    state.turnsLeft = getHardTurnLimit({ difficulty: state.difficulty, map: state.map });
+    state.turnsLeft = getHardTurnLimit({ difficulty: hasSharedTurnBudget(state) ? "normal" : "easy", map: state.map });
     for (const player of Object.values(state.players)) {
       player.roomId = state.map.startingRoomId; player.health = PLAYER_MAX_HEALTH; player.energy = PLAYER_MAX_ENERGY;
       player.miracleUsed = false;
@@ -553,13 +554,32 @@ export function resolveMultiplayerTurn(
     }
     state.werewolfAggroPlayerId = null;
     state.werewolfWitnessPlayerIds = [];
-  } else if (hasTurnLimit(state.difficulty)) {
+  } else if (hasSharedTurnBudget(state)) {
     const clockOwner = alive.find(p => p.item === "clock");
     const result = resolveTurnLoss(state.turnsLeft, clockOwner?.item ?? null, state.level);
     state.turnsLeft = result.nextCounter;
     if (result.usesClock && clockOwner) clockOwner.item = null;
+    if (state.turnsLeft <= 0) {
+      for (const player of Object.values(state.players)) {
+        if (player.health > 0 && isTurnBudgeted(player, state.difficulty)) player.health = 0;
+      }
+      alive = Object.values(state.players).filter(player => player.health > 0);
+    }
   }
-  state.ended = alive.length === 0 || (hasTurnLimit(state.difficulty) && state.turnsLeft <= 0);
+  // Keep items and equipment available to the remaining party when a player
+  // crosses into ghost state, including when their shared turn budget expires.
+  for (const [id, player] of Object.entries(state.players)) {
+    if (previous.players[id].health <= 0 || player.health > 0) continue;
+    if (player.item) {
+      state.map = addItemToRoom(state.map, player.roomId, player.item, false);
+      player.item = null;
+    }
+    if (player.equipment) {
+      state.map = addEquipmentToRoom(state.map, player.roomId, player.equipment, false);
+      player.equipment = null;
+    }
+  }
+  state.ended = alive.length === 0;
   return state;
 }
 

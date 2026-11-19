@@ -7,10 +7,10 @@ import {
   Footer,
   Header,
   Row,
-  StyledModal,
   StyledText,
   Title,
 } from "@/components/Common/Displays";
+import { InformationPopup } from "@/components/Common/InformationPopup";
 import { ScreenShell } from "@/components/Common/ScreenShell";
 import { ThemeProvider } from "@/components/Common/theme";
 import {
@@ -75,7 +75,7 @@ export default function Setup() {
               testID="open-settings-button"
             />
           </Header>
-          <Title>[Project 1]</Title>
+          <Title>Dungeon Run</Title>
           <Container style={compactLayout ? { gap: 4, paddingBottom: 0, paddingTop: 0 } : undefined}>
             <Row>
               <StyledText>Difficulty</StyledText>
@@ -137,26 +137,13 @@ export default function Setup() {
             />
           </Footer>
         </Container>
-        <StyledModal
-          accessibilityLabel={activeHelp ? `${activeHelp.title} help` : "Help"}
-          accessibilityRole="dialog"
-          animationType="fade"
-          onRequestClose={() => setHelpTopic(null)}
+        <InformationPopup
           visible={activeHelp !== null}
-        >
-          {activeHelp ? (
-            <>
-              <Title>{activeHelp.title}</Title>
-              <StyledText>{activeHelp.body}</StyledText>
-              <PrimaryButton
-                accessibilityLabel="Got it"
-                accessibilityRole="button"
-                label="Got it"
-                onPress={() => setHelpTopic(null)}
-              />
-            </>
-          ) : null}
-        </StyledModal>
+          title={activeHelp?.title ?? "Help"}
+          messages={activeHelp ? [activeHelp.body] : []}
+          dialogAccessibilityLabel={activeHelp ? `${activeHelp.title} help` : "Help"}
+          onClose={() => setHelpTopic(null)}
+        />
       </ScreenShell>
     </ThemeProvider>
   );

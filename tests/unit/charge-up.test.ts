@@ -130,7 +130,7 @@ test("singleplayer attacks damage a doorway guard and defeating it opens the doo
 
   await act(async () => { result.current.attackMonster("doorway-golem"); });
   await act(async () => { jest.runAllTimers(); });
-  expect(result.current.dungeonMap.entities.monsters["doorway-golem"].currentHealth).toBe(10);
+  expect(result.current.dungeonMap.entities.monsters["doorway-golem"].currentHealth).toBe(9);
   expect(getRoom(result.current.dungeonMap, "A1")!.east).toBe("guarded");
 
   await act(async () => { result.current.attackMonster("doorway-golem"); });
@@ -215,7 +215,7 @@ test("normal attacks are free; charged attacks hit harder without a second energ
   const { result } = await setup(true);
   await act(async () => { result.current.attackMonster("zombie"); });
   await act(async () => { jest.runAllTimers(); });
-  expect(result.current.dungeonMap.entities.monsters.zombie.currentHealth).toBe(10);
+  expect(result.current.dungeonMap.entities.monsters.zombie.currentHealth).toBe(9);
   expect(result.current.playerEnergy).toBe(PLAYER_MAX_ENERGY);
   await act(async () => { result.current.toggleCharge(); });
   await act(async () => { result.current.attackMonster("missing"); });

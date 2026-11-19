@@ -100,6 +100,12 @@ The play screen is composed in this order, with compact layouts allowed to hide 
 - Room scene: hero, visible room actors/loot/stairs, and directional exits.
 - Microgame overlay when a player attacks.
 
+On Level 1, the map’s “You Are Here” label stays attached to the current room for the first two room transitions and disappears after the third. Its visibility follows transition count, not room identity, so returning to a previously visited room does not restore or suppress it.
+
+Instructional labels use one shared white, rounded speech-bubble component with black text and a downward tail in either theme. They gently bob with the shared idle motion and respect reduced-motion settings. Movement arrows sit at the exact center of each open doorway in a consistent 64 × 64 hit area. They bob 2.5 logical pixels along their pointing axis over a one-second alternating loop. Actor layout reserves doorway hit areas so sprites and actor press targets do not overlap movement controls.
+
+Room actors use a logical grid for consistent placement. A lone player stays at the room center unless they have just entered, in which case they appear along the center of that room edge. A doorway guard's visible sprite occupies the center of the doorway arrow's usual position, replacing that arrow while the doorway is guarded. The guard remains clickable; its actor target may overlap its own disabled guarded doorway control, but stays clear of other doorway controls. Other actors gather around the center; multiplayer players spread around the center to make room for one another.
+
 The principal room actions are: tap a monster to attack, a room item/equipment to pick it up, a doorway to move/open it, the hero to use class support, or stairs to descend. During resolution, menu-independent actions are disabled so a repeated tap cannot submit duplicate actions.
 
 ### 4.5 Menu and map
@@ -214,13 +220,13 @@ When attack microgames are enabled, each player attack against a monster runs th
 - Overall window: 1,500 ms. Intended visual travel: 1,250 ms; the remaining 250 ms represents reaction allowance.
 - The player’s measured time is adjusted by subtracting 250 ms before scoring.
 - `score = clamp(round(100 − abs(adjustedTapMs − targetCrossingMs) × 100 / 500), 0, 100)`.
-- Each run randomizes target timing/position (the current implementation selects a target parameter in a 200–600 ms range and moves the spot based on handedness). A tap earlier or later reduces score linearly; an input 500 ms from the ideal corrected time scores 0.
+- Target crossing is based near 87.5% of the 1,500 ms travel, with a small random offset of ±20 ms on Easy, ±45 ms on Normal, or ±70 ms on Hard. The target position is derived from that same timing and mirrored for handedness. A tap earlier or later reduces score linearly; an input 500 ms from the target scores 0.
 - Handedness changes which side the target/motion favors. The visual target and hit box must remain aligned.
 
 ### 8.3 Timed Attack (Thief)
 
 - Show an instruction to wait for the cue; “NOW!” must not appear at the beginning of the wait.
-- Cue appears 1,000 ms after the microgame starts.
+- Cue appears around 1,000 ms after the microgame starts, with timing variation of ±20 ms on Easy, ±45 ms on Normal, or ±70 ms on Hard.
 - Intended input: tap 250 ms after the cue.
 - Total scoring window: 1,750 ms from start (cue + reaction time + 500 ms tolerance).
 - Measured cue-relative time is adjusted for 16 ms scheduling tolerance in browser tests, not by the game rule.
@@ -228,20 +234,24 @@ When attack microgames are enabled, each player attack against a monster runs th
 - Input at cue time (anticipating the human reaction) scores 50, rather than perfect. Inputs 500 ms or more away from ideal score 0.
 - “NOW!” text and accessible game screen button must appear together; the cue must be visible just before the expected tap.
 
+### 8.3.1 Block timing
+
+- The shrinking ring's target alignment is based near 600 ms, with a small random offset of ±20 ms on Easy, ±45 ms on Normal, or ±70 ms on Hard. The window and ring scoring rules remain unchanged.
+
 ### 8.4 Multitap (Ranger)
 
 - A visible circular target changes position after each tap. Tap it as quickly as possible.
 - Each tap contributes approximately 16.67 points. Score is `clamp(round(taps × 100 / 6), 0, 100)`.
 - Six taps completes immediately with score 100. If the timer expires first, score is the accumulated tap score.
-- Window: 3,000 ms. The duration stays fixed; target tap count and score per hit are tuned to fit it.
+- Window: 2,000 ms. Difficulty-based damage scaling is increased to compensate for the shorter action window.
 - Browser end-to-end input should space taps by about 250 ms to model a realistic player. Input outside the target is not a successful tap.
 - Handedness affects target placement/movement direction.
 
 ### 8.5 Multiswipe (Warrior)
 
-- Show a bar made from two dots placed three orthogonal grid cells apart; either endpoint may start a swipe, but a completed swipe must end in the opposite dot.
+- Show one smooth, continuous straight bar between two dots. The bar may be horizontal, vertical, or diagonal, and never bends or reverses direction; either endpoint may start a swipe, but a completed swipe must end in the opposite dot.
 - One completed swipe is worth three Multitap hits. Score is based on completed swipes during the 3,000 ms window and may exceed 100%.
-- Handedness selects the grid half used for the swipe target.
+- Keep the complete swipe track and both endpoint dots within the screen half matching the player's dominant hand; place the progress bar on the opposite side.
 
 ### 8.6 Rune Tracer (Wizard)
 
@@ -264,7 +274,7 @@ The game applies actual damage no greater than the target’s remaining HP. Play
 
 ## 9. Items and equipment
 
-There is one carried item slot and one equipment slot. Picking up an item while carrying one swaps the carried item with the room item; the previous carried item is left in the room. Equipment behaves similarly. Items/equipment are activated through their trigger conditions, not a general “use now” button. The inventory controls expose labels/descriptions and let the player drop an item or equipment into the current room.
+There is one carried item slot and one equipment slot. Picking up an item while carrying one swaps the carried item with the room item; the previous carried item is left in the room. Equipment behaves similarly. Item details expose labels and descriptions, and allow dropping the carried item. Health Potions, Stamina Meals, and Clocks also offer “Use Item Now”: it is enabled when immediate use can have an effect, consumes the item, and counts as an action. Other items remain automatic and do not show that action.
 
 ### 9.1 Items
 
@@ -357,14 +367,14 @@ Show a grid aligned to the dungeon’s 12×6 world. Only revealed rooms are draw
 
 ### 12.4 Microgame presentation
 
-Overlay the play area without losing context. Instructions and target should be clear at a glance. Timed Attack’s `NOW!` cue appears exactly after its delay and before the intended response. Concentration target/mover must have enough contrast and precise geometric alignment. Multitap target must visibly move after successful taps. Hit areas must be at least as large as the visible target. Left-handed mode should reposition/mirror where practical without changing scoring.
+Overlay the play area without losing context. Instructions and target should be clear at a glance. Timed Attack’s `NOW!` cue appears within its difficulty-scaled timing range and before the intended response. Concentration target/mover must have enough contrast and precise geometric alignment. Multitap target must visibly move after successful taps. Hit areas must be at least as large as the visible target. Left-handed mode should reposition/mirror where practical without changing scoring.
 
 ### 12.5 Feedback, motion, and accessibility
 
 - Show numerical/stat bars with accessible current/max values and labels (Health, Energy, enemy HP, turn timer, turns remaining).
 - Buttons need accessible names, roles, and disabled/selected state where applicable.
 - Show incoming damage and resource-loss feedback; optionally vibrate on native damage if enabled.
-- Reduced motion skips room slides, doorway pulsing, and idle enemy bobbing. It should not hide state changes or disable interaction. Platform reduced-motion preference is combined with the in-app setting.
+- Reduced motion skips room slides, doorway bobbing, instructional-bubble bobbing, and idle enemy bobbing. It should not hide state changes or disable interaction. Platform reduced-motion preference is combined with the in-app setting.
 - Appearance follows System, Light, or Dark. Text and interactive state must remain distinguishable in each theme.
 - Left-handed controls relocate the Charge / inventory arrangement and microgame interaction side.
 - Known unmet accessibility goal: provide an equivalent mode for players who cannot use time/precision-based microgames; see §17.
@@ -373,17 +383,17 @@ Overlay the play area without losing context. Instructions and target should be 
 
 ### 13.1 Lobby and connection
 
-The player selects Multiplayer from title and passes through the same setup screen. One device hosts and controls difficulty/seed; a guest pastes a host invitation, creates a reply, and returns it to the host. The host accepts or cancels each pending invitation, can remove connected/lobby players, and starts when ready. Signaling data is copied and pasted by the users. Every peer must be on the same local network and the host must remain foregrounded. No automatic discovery, signaling service, configured STUN/TURN servers, host migration, or active-run rejoin exists.
+The player selects Multiplayer from title and passes through the same setup screen. The host provides the shared seed; every human player chooses personal difficulty and gameplay options. The host's difficulty also sets the bots' difficulty. A guest pastes a host invitation, creates a reply, and returns it to the host. The host accepts or cancels each pending invitation, can remove connected/lobby players, and starts when ready. Signaling data is copied and pasted by the users. Every peer must be on the same local network and the host must remain foregrounded. No automatic discovery, signaling service, configured STUN/TURN servers, host migration, or active-run rejoin exists.
 
 ### 13.2 Shared run model
 
-The host is authoritative for dungeon and shared enemy/door state. Each player has an ID, current room, Health, Energy, carried item, equipment, class ID, defense buff, and Warrior retaliation state. The roster currently receives one randomly selected class shared by all players. Each peer has its own position and resources; dungeon layout and enemies are shared.
+The host is authoritative for dungeon and shared enemy/door state. Each player has an ID, current room, Health, Energy, carried item, equipment, independently rolled class ID, defense buff, Warrior retaliation state, and personal difficulty/gameplay options. Each peer has its own position and resources; dungeon layout and enemies are shared. Easy players do not have a floor turn budget. Normal and Hard players share one floor budget; when it expires, living Normal/Hard characters become ghosts while Easy allies can continue. A mixed party ends only when every player is fallen or ghosted. Descending revives the party and resets the budget for the next floor.
 
 ### 13.3 Team turns and resolution
 
-Living players submit one action each. The host resolves actions in stable roster order, making contested item pickup deterministic. Easy and Normal wait for all living players. Hard uses the host’s countdown; missing players’ actions are skipped and enemies still act. All surviving players must reach stairs before the party descends. Fallen players spectate and revive on the next level. Run ends when all players fall or the shared turn budget expires. A host disconnect/foreground loss may stop the run; the UX should clearly say the host controls timing and state.
+Living players submit one action each. The host resolves actions in stable roster order, making contested item pickup deterministic. Easy and Normal players have no action countdown. Each Hard player has a personal action countdown; expiration passes only that player's action, does not force Easy/Normal players to submit, and does not end the shared turn until the remaining participants act. A player who submits no action does not take an enemy hit. Entering a room with an enemy is safe for that turn; the enemy responds after a later action taken from that room. The team shares one floor budget for Normal/Hard players. Easy players do not see or consume that budget. When the shared budget expires, living Normal/Hard players become ghosts; Easy survivors can continue, and descending revives the party and resets the budget. All surviving players must reach stairs before the party descends. The multiplayer Game Over screen appears when no players remain alive, and ending a run must stop its action timer. A host disconnect/foreground loss may stop the run; the UX should clearly say the host controls shared state.
 
-Actions include movement, attack with score, pickup, descent, support targeting self or a co-located ally, and equipment drop. Test seeds pin the class for repeatable testing. Transport tests may replace the native WebRTC boundary; gameplay resolution tests should exercise real shared rules.
+Actions include movement, attack with score, pickup, item use, descent, support targeting self or a co-located ally, and equipment drop. A Hard timeout records an internal pass for that player. Test seeds pin classes for repeatable testing. Transport tests may replace the native WebRTC boundary; gameplay resolution tests should exercise real shared rules.
 
 ## 14. Game architecture for a faithful remake
 
@@ -404,7 +414,7 @@ Treat an action as a state transition with explicit effects and outcome. Invalid
 
 ### 14.3 Timing and randomness
 
-Use a monotonic clock for microgame elapsed time and a single run-loop owner for Hard timing. A timer starts/restarts on either turn-number change or level-number change. Pause/microgame/menu states must have an explicit timer policy; current single-player pauses the countdown while menu or microgame is active. Keep RNG injectable at game creation and partitioned by purpose/level to permit deterministic replay, but do not substitute mocked game rules in gameplay tests.
+Use a monotonic clock for microgame elapsed time and one authoritative timer owner per run: the single-player run loop or multiplayer host server. A timer starts/restarts on either turn-number change or level-number change. Pause/microgame/menu states must have an explicit timer policy; current single-player pauses the countdown while menu or microgame is active. Keep RNG injectable at game creation and partitioned by purpose/level to permit deterministic replay, but do not substitute mocked game rules in gameplay tests.
 
 ## 15. Sound and haptics
 
@@ -414,20 +424,20 @@ No sound system or sound catalog is specified in the current app. Do not invent 
 
 ### 16.1 Rule and generator tests
 
-Verify exact combat math, class effects, charge cost/refund, equipment modifiers, all item triggers, item-slot swap/drop, door symmetry, Thief lock flow, guard defeat/opening, Werewolf chase and Silver Bullet, turn budget, Clock rescue, level transition, deterministic generation, and reachability. Control RNG only where a known randomized branch must be reproducible. Use real rule modules.
+Verify exact combat math, class effects, charge cost/refund, equipment modifiers, all item triggers, item-slot swap/drop, door symmetry, Thief lock flow, guard defeat/opening, Werewolf chase and Silver Bullet, turn budget, Clock rescue, level transition, deterministic generation, and reachability. Multiplayer rules must cover Easy-only parties without a floor budget, shared Normal/Hard budgets, timeout passes that do not consume another player's turn, budget expiry ghosting only Normal/Hard players, and continued Easy-player actions. Control RNG only where a known randomized branch must be reproducible. Use real rule modules.
 
 ### 16.2 Microgame tests
 
 Exercise the real microgame state/scoring with realistic human input. At minimum:
 
-- Timed Attack: no cue before 1,000 ms; cue then visible `NOW!`; tap around 250 ms later scores near 100; anticipatory and late taps score lower; timeout scores zero; completion fires once.
+- Timed Attack: cue stays within its difficulty-scaled range; cue then visible `NOW!`; tap around 250 ms later scores near 100; anticipatory and late taps score lower; timeout scores zero; completion fires once.
 - Concentration: target/mover geometry corresponds to the target progress; corrected 250 ms human response at crossing scores near 100; early/late response degrades linearly; timeout returns zero.
 - Multitap: target relocates, each real tap adds ten points, ten taps reaches 100, timeout retains earned score, and 250 ms spaced input is achievable within the window.
 - Both handedness layouts keep target and hit area aligned.
 
 ### 16.3 End-to-end tests
 
-Browser tests should start from title and use visible accessible controls. Reserved fixture seeds may guarantee a route/content order. A complete Hard run should use realistic microgame input and demonstrate items, ordinary combat, Werewolf combat (and, where route permits, its bullet), class support, charged/uncharged class abilities, Thief lockpick without Key, Level 2, and eventual timeout/game-over. The end-to-end route must not exhaust its turn budget just collecting optional content; route planning should prioritize required assertions and use as many available test items as feasible. Tests should model approximately 250 ms reaction time instead of perfect instantaneous taps. Avoid mocks except at true outside boundaries such as storage, WebRTC, RNG control, and human input.
+Browser tests should start from title and use visible accessible controls. Reserved fixture seeds may guarantee a route/content order. A complete Hard run should use realistic microgame input and demonstrate items, ordinary combat, Werewolf combat (and, where route permits, its bullet), class support, charged/uncharged class abilities, Thief lockpick without Key, Level 2, and eventual timeout/game-over. Mixed-difficulty multiplayer browser coverage must verify Hard-only personal action timers, no Easy timer or floor counter, a Normal floor counter without an action timer, Normal/Hard budget ghosting while Easy allies survive, and continued Easy actions after budget expiry. The end-to-end route must not exhaust its turn budget just collecting optional content; route planning should prioritize required assertions and use as many available test items as feasible. Tests should model approximately 250 ms reaction time instead of perfect instantaneous taps. Avoid mocks except at true outside boundaries such as storage, WebRTC, RNG control, and human input.
 
 ### 16.4 Accessibility and platform verification
 
@@ -451,7 +461,7 @@ For every behavior change: (1) state the design-level change, (2) add/modify a b
 ### Gameplay and balance
 
 - Difficulty labels are described, but there is no formal expected completion rate or target run duration.
-- Easy still uses enemy combat and microgames; it only removes the run-wide turn limit and visible action timer.
+- In singleplayer, Easy still uses enemy combat and microgames; it removes the run-wide turn limit and visible action timer. In multiplayer, Easy players do not consume/show the shared Normal/Hard floor budget and have no personal action timer.
 - Normal has a run-wide turn budget but no visible countdown, so the player sees turns remaining rather than seconds remaining.
 - Optional item/equipment placement is not guaranteed per floor. A fixed route is available only for reserved Level 1 test seeds.
 - Class selection is random in ordinary runs and cannot be manually chosen or rerolled.
@@ -465,7 +475,7 @@ For every behavior change: (1) state the design-level change, (2) add/modify a b
 - Manual copy/paste signaling is cumbersome and error-prone.
 - No STUN/TURN configuration means some NATs, guest networks, or client-isolated Wi-Fi prevent peer connections.
 - Host is a single point of failure; no migration, rejoin, or durable lobby exists.
-- All players share the same class, limiting cooperative variety.
+- Each multiplayer player gets an independently rolled class; players cannot choose or reroll it.
 - Host must stay foregrounded; background lifecycle handling and connection recovery are constrained.
 - Native multiplayer cannot be validated with Expo Go; a native-capable build is needed.
 
@@ -480,7 +490,7 @@ For every behavior change: (1) state the design-level change, (2) add/modify a b
 ### Recommended roadmap decisions
 
 1. Define an accessible non-timing attack alternative and test it with assistive technology.
-2. Decide whether class choice/reroll, class-specific multiplayer roster, and/or difficulty selection for each player are desired.
+2. Decide whether class choice/reroll should be added to the existing independently rolled multiplayer roster.
 3. Choose reconnect/host migration and signaling service requirements before adding online multiplayer infrastructure.
 4. Define save/resume semantics, schema versioning, and whether a run resumes automatically.
 5. Specify floor cap/ending, expected run length, enemy scaling, and a balance target for each difficulty.
@@ -495,7 +505,7 @@ These are source-observed mismatches; a no-code remake should resolve them inten
 2. **Charged Thief lockpick cost:** ordinary charged movement and pickup refund charge after resolution. A charged Thief lockpick also refunds charge immediately in its movement path. Preserve this behavior when implementing the combined open-and-move action.
 3. **Thief carrying a Key:** ordinary movement uses the Key for non-Thieves; Thieves pick locks and do not consume it. The fixture/test expects the Thief to open a lock with no Key. Keep the distinction explicit.
 4. **Displayed attack damage:** class briefing shows `10 + equipment attack`; charged ordinary attacks, Werewolf profile, microgame score, and target defense can yield different actual results. Prefer display text that names baseline and charged damage separately.
-5. **Multitap timing policy:** the prior implementation used a 4,500 ms window for ten taps. The current design shortens the window to 3,000 ms and reduces the perfect-score target to six taps; future tuning should fit interaction requirements by changing tap count/scoring before extending microgame duration.
+5. **Multitap timing policy:** the prior implementation used a 4,500 ms window for ten taps. The current design uses a 2,000 ms window; difficulty-based damage scaling compensates for the shorter window.
 6. **Microgame concentration parameters:** the microgame selects target position/delay, while the visual mover uses progress geometry. Verify that all position/delay variants align exactly before treating the target formula as a final design guarantee.
 7. **Level transition start position:** descent computes a destination start position from the current exit location in the connected flow. The exact mapping between floors should be confirmed as intended; this spec requires a valid centered start room and does not promise the same grid coordinate unless the design chooses it.
 8. **Procedural guards:** guard count targets half the active room count but is capped by unique open connections. The generated number can be lower than the nominal target.

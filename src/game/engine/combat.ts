@@ -3,16 +3,17 @@ import { GAME_PARAMETERS } from "@/game/config/gameparameters";
 import type { Difficulty } from "@/utils/settings-storage";
 import type { GameClassId } from "@/game/config/game-classes";
 
-/** Turns raw minigame performance into a combat result; hard preserves the current scoring curve. */
+/** Turns raw minigame performance into a combat result, with a difficulty-wide damage bonus. */
 export function scaleMicrogameScore(score: number, difficulty: Difficulty = "hard"): number {
   const bounded = Math.max(0, score);
-  if (difficulty === "hard") return bounded;
   const standardScore = Math.min(100, bounded);
   const scaled = difficulty === "easy"
     ? Math.min(100, 75 + standardScore * 0.625)
-    : 25 + standardScore * 0.75;
+    : difficulty === "normal"
+      ? 25 + standardScore * 0.75
+      : bounded;
   // Multitap scores above 100 retain their existing bonus damage on every setting.
-  return scaled + Math.max(0, bounded - 100);
+  return scaled * 1.1 + Math.max(0, bounded - 100);
 }
 
 /** Easy-mode defense stays forgiving but starts from a lower guaranteed reduction. */
