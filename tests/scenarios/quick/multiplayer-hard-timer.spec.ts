@@ -47,10 +47,10 @@ test("a hard-mode host sees the multiplayer turn timer and the stairs counter fi
 
     await page.getByRole("button", { name: /host · Support/ }).click();
     await expect(timer).toBeVisible();
-    const timerFill = page.getByTestId("multiplayer-turn-timer-fill");
-    const widthWhileWaiting = await timerFill.evaluate(element => getComputedStyle(element).width);
+    const timerValue = page.getByRole("progressbar", { name: "Turn timer" });
+    const valueWhileWaiting = await timerValue.getAttribute("aria-valuenow");
     await page.waitForTimeout(300);
-    expect(await timerFill.evaluate(element => getComputedStyle(element).width)).toBe(widthWhileWaiting);
+    expect(await timerValue.getAttribute("aria-valuenow")).toBe(valueWhileWaiting);
   } finally {
     await guestContext.close();
     await page.request.post("/api/multiplayer", { data: { type: "leave", code: roomCode, playerId: "host" } }).catch(() => undefined);

@@ -106,9 +106,8 @@ test("mixed difficulty gives only Hard players timed turns and turn-budget ghost
     expect(state.players[easyId!].health).toBeGreaterThan(0);
     expect(state.ended).toBe(false);
 
-    await expect(page.getByText(/You are a ghost/)).toBeVisible();
+    await expect(page.getByRole("button", { name: /Ghost · host · Support/ })).toBeVisible();
     await expect(page.getByTestId("multiplayer-turn-timer")).toHaveCount(0);
-    await expect(easyPage.getByText(/You are a ghost/)).toHaveCount(0);
     await expect(easyPage.getByTestId("hard-turn-counter")).toHaveCount(0);
 
     const room = state.map.rooms.flat().find(candidate => candidate.id === state.players.host.roomId)!;

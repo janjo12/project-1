@@ -17,7 +17,7 @@ for (const viewport of [
     await openFreshApp(page);
     await startTestGame(page);
 
-    await expect(page.getByText("Find the Stairs to Reach the Next Level")).toBeVisible();
+    await expect(page.getByTestId("hard-turn-counter")).toBeVisible();
     const showsMap = viewport.height >= 500 && viewport.width <= 430;
     if (showsMap) await expect(page.getByTestId("tutorial-you-are-here")).toBeVisible();
     await expect(page.getByTestId("tutorial-move").first()).toBeVisible();
