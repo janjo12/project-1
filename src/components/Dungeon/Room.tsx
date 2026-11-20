@@ -18,6 +18,7 @@ import { getAdjacentRoomTransition } from "@/utils/room-transition";
 import { AccessibilityInfo } from "react-native";
 import Animated from "react-native-reanimated";
 import type { SceneFrameStore } from "@/game/state/sceneFrameStore";
+import type { SupportEffectStore } from "@/game/state/supportEffectStore";
 
 const ROOM_FADE_IN = { from: { opacity: 0 }, to: { opacity: 1 } };
 const ROOM_TRANSITION_DURATION_MS = GAME_PARAMETERS.animation.roomTransitionDurationMs;
@@ -55,6 +56,15 @@ export type RoomSceneActor = {
 
 export type SupportEffect = { targetId: string | null; emoji: string; label: string; key: number };
 
+function SupportFeedbackTarget({ store, targetId }: { store?: SupportEffectStore; targetId: string | null }) {
+  const subscribe = useCallback((listener: () => void) => store?.subscribe(targetId, listener) ?? (() => undefined), [store, targetId]);
+  const getSnapshot = useCallback(() => store?.getSnapshot(targetId) ?? null, [store, targetId]);
+  const effect = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  return effect?.targetId === targetId
+    ? <SupportFeedback key={effect.key} emoji={effect.emoji} label={effect.label} />
+    : null;
+}
+
 const STATIC_ATTACK_VECTOR = { x: 1, y: 0 };
 const STATIC_DAMAGE_VECTOR = { x: -1, y: 0 };
 type RoomActorLayoutEntry = { id: string; position?: ScenePosition; isDoorwayGuard?: boolean };
@@ -87,7 +97,7 @@ type RoomSceneProps = {
   showAttackHints?: boolean;
   showGetHint?: boolean;
   completedTutorialHints?: ("Attack" | "Get")[];
-  supportEffect?: SupportEffect | null;
+  supportEffectStore?: SupportEffectStore;
 };
 
 export function RoomScene({
@@ -118,7 +128,7 @@ export function RoomScene({
   showAttackHints = false,
   showGetHint = false,
   completedTutorialHints = [],
-  supportEffect = null,
+  supportEffectStore,
 }: RoomSceneProps) {
   // Render in fixed logical coordinates, then scale once to the measured device width.
   const colors = useThemeColors();
@@ -262,7 +272,8 @@ export function RoomScene({
           entryPosition={actor.entryPosition ?? "center"}
           showAttackHint={showAttackHints && actor.kind === "enemy"}
           showGetHint={showGetHint && (actor.kind === "item" || actor.kind === "equipment")}
-          supportEffect={supportEffect?.targetId === actor.id ? supportEffect : null}
+          supportEffectStore={supportEffectStore}
+          supportTargetId={actor.id}
           sceneScale={sceneScale}
         />
       ))}
@@ -289,7 +300,7 @@ export function RoomScene({
         entryPosition={playerPosition}
         completedTutorialHints={completedTutorialHints}
         onPress={onPlayerPress}
-        supportEffect={supportEffect?.targetId === null ? supportEffect : null}
+        supportEffectStore={supportEffectStore}
       />
       </Animated.View>
       </Animated.View>
@@ -342,7 +353,8 @@ type SceneActorProps = {
   entryPosition: EntryPosition;
   showAttackHint?: boolean;
   showGetHint?: boolean;
-  supportEffect?: SupportEffect | null;
+  supportEffectStore?: SupportEffectStore;
+  supportTargetId: string | null;
 };
 
 const SceneActor = memo(function SceneActor({
@@ -364,7 +376,8 @@ const SceneActor = memo(function SceneActor({
   entryPosition,
   showAttackHint = false,
   showGetHint = false,
-  supportEffect = null,
+  supportEffectStore,
+  supportTargetId,
 }: SceneActorProps) {
   const actorRef = useRef<ViewInstance>(null);
   const colors = useThemeColors();
@@ -456,7 +469,7 @@ const SceneActor = memo(function SceneActor({
         </View>
       ) : (
         <View style={styles.actorContent}>
-          {supportEffect ? <SupportFeedback key={supportEffect.key} emoji={supportEffect.emoji} label={supportEffect.label} /> : null}
+          <SupportFeedbackTarget store={supportEffectStore} targetId={supportTargetId} />
           {actor.kind === "player" && actor.auraColor ? <PlayerAura color={actor.auraColor} /> : null}
           <SceneSprite accessibilityLabel={actor.label} sprite={actor.sprite} scale={sceneScale} size={getActorSpriteSize(actor.sprite)} />
         </View>
@@ -487,7 +500,7 @@ type PlayerActorProps = {
   entering: boolean;
   entryPosition: ScenePosition;
   onPress?: () => void;
-  supportEffect?: SupportEffect | null;
+  supportEffectStore?: SupportEffectStore;
   completedTutorialHints?: ("Attack" | "Get")[];
 };
 
@@ -512,7 +525,7 @@ const PlayerActor = memo(function PlayerActor({
   entering,
   entryPosition,
   onPress,
-  supportEffect,
+  supportEffectStore,
   completedTutorialHints = [],
 }: PlayerActorProps) {
   const colors = useThemeColors();
@@ -584,7 +597,7 @@ const PlayerActor = memo(function PlayerActor({
         testID={entering && !reducedMotion ? "player-room-entry-animation" : undefined}
       >
         <View testID="player-sprite-envelope" pointerEvents="none" style={{ width: ACTOR_ENVELOPE, height: ACTOR_ENVELOPE, alignItems: "center", justifyContent: "center", transform: [{ scale: slotScale }] }}>
-          {supportEffect ? <SupportFeedback key={supportEffect.key} emoji={supportEffect.emoji} label={supportEffect.label} /> : null}
+          <SupportFeedbackTarget store={supportEffectStore} targetId={null} />
           {auraColor ? <PlayerAura color={auraColor} /> : null}
           <PlayerAnimationLayer
             accessibilityLabel={playerLabel}

@@ -103,7 +103,7 @@ export const GAME_CLASSES: Record<GameClassId, GameClass> = {
   ghost: {
     id: "ghost",
     name: "Ghost",
-    sprite: "ghost_graphic",
+    sprite: "banshee_graphic",
     description: "A fallen ally who haunts the dungeon, moving freely and helping the living fight on.",
     support: {
       singleplayer: "Ghosts only appear in multiplayer after a character falls.",

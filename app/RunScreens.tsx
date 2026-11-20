@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Text, View, useWindowDimensions, type ViewInstance } from "react-native";
 
-import { Container, Footer, Header, Row, StyledModal, StyledText, Title } from "@/components/Common/Displays";
-import { InformationPopup } from "@/components/Common/InformationPopup";
+import { Container, Header, Row, StyledModal, StyledText, Title } from "@/components/Common/Displays";
+import { GameHeader } from "@/components/Common/GameHeader";
 import { MicrogameOverlay } from "@/components/Common/MicrogameOverlay";
 import { ClassBriefing } from "@/components/Common/ClassBriefing";
 import { PauseMenu } from "@/components/Common/PauseMenu";
@@ -12,7 +12,7 @@ import { ScreenShell } from "@/components/Common/ScreenShell";
 import { animateSpriteFlight, measureViewCenterNow } from "@/components/Common/SpriteFlight";
 import { useThemeColors } from "@/components/Common/theme";
 import { getGridPosition, getNeighborInGrid, getRoomId } from "@/game/dungeon/types";
-import { CancelButton, DestructiveButton, HelpButton, NormalButton, PrimaryButton, SegmentedButton, TextEntry, ToggleButton } from "@/components/Controls/ActionButton";
+import { CancelButton, DestructiveButton, NormalButton, PrimaryButton, SegmentedButton, ToggleButton } from "@/components/Controls/ActionButton";
 import { ChargeControl, EquipmentControl, ItemControl } from "@/components/Controls/ActionMenu";
 import { EquipmentDetailsMenu, ItemDetailsMenu } from "@/components/Controls/InventoryDetailsMenu";
 import { DungeonMap } from "@/components/Dungeon/DungeonMap";
@@ -27,61 +27,9 @@ import type { GameSettings } from "@/utils/settings-storage";
 import { isTestSeed } from "@/utils/seed";
 import { getSupportFeedback } from "@/game/engine/support-feedback";
 import { createTutorialHintsState, leaveTutorialRoom, markTutorialAttack, markTutorialPickup, shouldShowCurrentRoomHint } from "@/game/engine/tutorial-hints";
-export function SetupScreen({ settings, onBack, onSettings, onUpdate, onStart, showSeed = true, multiplayerHostOptions = false }: {
-  settings: GameSettings;
-  onBack: () => void;
-  onSettings: () => void;
-  onUpdate: (settings: Partial<GameSettings>) => void;
-  onStart: () => void;
-  showSeed?: boolean;
-  multiplayerHostOptions?: boolean;
-}) {
-  const [helpTopic, setHelpTopic] = useState<"difficulty" | "seed" | null>(null);
-  const compactLayout = useWindowDimensions().height < 500;
-  const helpContent = helpTopic === "difficulty"
-    ? { title: "Difficulty", body: "Choose Easy for a casual experience. Normal requires you to beat each level in a limited number of turns. Hard keeps that turn limit and adds a timer for every turn." }
-    : helpTopic === "seed" ? { title: "Seed", body: "Used for determining the random layout of each level." } : null;
-
-  return (
-    <ScreenShell compact={compactLayout}>
-      <Container style={compactLayout ? { gap: 4, paddingBottom: 0, paddingTop: 0 } : undefined}>
-        <Header>
-          <NormalButton accessibilityLabel="Back" accessibilityRole="button" label="Back" onPress={onBack} />
-          <NormalButton accessibilityLabel="Settings" accessibilityRole="button" icon="cog" onPress={onSettings} />
-        </Header>
-        <Title>Dungeon Run</Title>
-        <Container style={compactLayout ? { gap: 4, paddingBottom: 0, paddingTop: 0 } : undefined}>
-          <Row>
-            <StyledText>Difficulty</StyledText>
-            <SegmentedButton onChange={difficulty => onUpdate({ difficulty })} options={["easy", "normal", "hard"] as const} value={settings.difficulty} />
-            <HelpButton accessibilityLabel="Difficulty help" accessibilityRole="button" onPress={() => setHelpTopic("difficulty")} />
-          </Row>
-          {multiplayerHostOptions ? (
-            <Row>
-              <StyledText>Attack microgames</StyledText>
-              <SegmentedButton onChange={choice => onUpdate({ microgamesEnabled: choice === "On" })} options={["On", "Off"] as const} value={settings.microgamesEnabled ? "On" : "Off"} />
-            </Row>
-          ) : (
-            <ToggleButton label="Attack microgames" value={settings.microgamesEnabled} onValueChange={microgamesEnabled => onUpdate({ microgamesEnabled })} />
-          )}
-          <StyledText>Turn off for direct attacks without a timing game.</StyledText>
-          <ToggleButton label="Left-handed controls" value={settings.handedness === "left"} onValueChange={value => onUpdate({ handedness: value ? "left" : "right" })} />
-          {showSeed ? (
-            <Row>
-              <StyledText>Seed</StyledText>
-              <TextEntry accessibilityLabel="Seed" accessibilityRole="textbox" onChangeText={seed => onUpdate({ seed })} placeholder="Random" value={settings.seed} />
-              <HelpButton accessibilityLabel="Seed help" accessibilityRole="button" onPress={() => setHelpTopic("seed")} />
-            </Row>
-          ) : null}
-        </Container>
-        <Footer>
-          <PrimaryButton accessibilityLabel="Start" accessibilityRole="button" label="Start" onPress={onStart} />
-        </Footer>
-      </Container>
-      <InformationPopup visible={helpContent !== null} title={helpContent?.title ?? "Help"} messages={helpContent ? [helpContent.body] : []} dialogAccessibilityLabel={helpContent ? `${helpContent.title} help` : "Help"} onClose={() => setHelpTopic(null)} />
-    </ScreenShell>
-  );
-}
+import { createSupportEffectStore } from "@/game/state/supportEffectStore";
+import { SetupScreen } from "@/components/Common/SetupScreen";
+export { SetupScreen } from "@/components/Common/SetupScreen";
 
 export function SettingsScreen({ settings, onBack, onUpdate }: {
   settings: GameSettings;
@@ -131,7 +79,7 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
   const [microgameScoreTotal, setMicrogameScoreTotal] = useState(0);
   const [microgameCount, setMicrogameCount] = useState(0);
   const [tutorial, setTutorial] = useState(createTutorialHintsState);
-  const [supportEffect, setSupportEffect] = useState<{ targetId: string | null; emoji: string; label: string; key: number } | null>(null);
+  const [supportEffectStore] = useState(createSupportEffectStore);
   const colors = useThemeColors();
   const pendingDefense = useRef<((score: number) => void) | null>(null);
   const startDefenseMicrogame = useRef<(resolve: (score: number) => void) => void>(() => undefined);
@@ -248,7 +196,7 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
         showAttackHints={tutorial.attackPending}
         showGetHint={tutorial.getPending}
         completedTutorialHints={completedTutorialHints}
-        supportEffect={supportEffect}
+        supportEffectStore={supportEffectStore}
         onActorPress={(actor, source) => {
           if (actor.kind === "enemy") {
             const werewolfWithSilver = !!game.dungeonMap.entities.monsters[actor.id]?.chases && game.inventoryItem === "silver-bullet";
@@ -286,7 +234,7 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
         }}
         onDoorwayPress={moveToTutorialRoom}
         onPlayerPress={() => {
-          setSupportEffect(previous => ({ targetId: null, ...getSupportFeedback(game.playerClass.id), key: (previous?.key ?? 0) + 1 }));
+          supportEffectStore.trigger({ targetId: null, ...getSupportFeedback(game.playerClass.id) });
           game.supportSelf();
         }}
         playerPosition={game.playerScenePosition}
@@ -356,6 +304,3 @@ export function SingleplayerScreen({ settings, onSettingsChange, onGameOver, onE
   );
 }
 
-function GameHeader({ onMenu }: { onMenu: () => void }) {
-  return <Header><NormalButton accessibilityLabel="Menu" accessibilityRole="button" label="Menu" onPress={onMenu} /></Header>;
-}

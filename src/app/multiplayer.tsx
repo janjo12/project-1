@@ -6,13 +6,14 @@ import { useGameSettings } from "@/hooks/use-game-settings";
 
 export default function MultiplayerRoute() {
   const { host } = useLocalSearchParams<{ host?: string }>();
-  const { settings, isLoading } = useGameSettings();
+  const { settings, isLoading, updateSettings } = useGameSettings();
   if (isLoading) return null;
 
   return (
     <ThemeProvider appearance={settings.appearance}>
       <MultiplayerScreen
         settings={settings}
+        onSettingsChange={updateSettings}
         startAsHost={host === "true"}
         onHostSelect={() => router.replace({ pathname: "/setup", params: { mode: "multiplayer", host: "true" } })}
         onPlaySolo={() => router.replace({ pathname: "/setup", params: { mode: "singleplayer" } })}

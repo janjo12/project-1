@@ -51,7 +51,6 @@ export function useRunMultiplayerGame(settings: GameSettings) {
   const [submitted, setSubmitted] = useState<number | null>(null);
   const [charged, setCharged] = useState(false);
   const [microgameScore, setMicrogameScore] = useState<number | null>(null);
-  const [seconds, setSeconds] = useState(0);
   const [disconnected, setDisconnected] = useState(false);
   const [foreground, setForeground] = useState(true);
   const report = useCallback((e: unknown) => {
@@ -74,11 +73,8 @@ export function useRunMultiplayerGame(settings: GameSettings) {
     return () => { mounted.current = false; subscription.remove(); host.current?.close(); client.current?.close(); };
   }, []);
   useEffect(() => {
-    if (!state || state.ended || state.phase !== "playing" || !role || localPlayerOptions.difficulty !== "hard" || submitted === state.turn || !foreground) return;
+    if (!state || state.ended || state.phase !== "playing" || !role || state.players[playerId]?.health <= 0 || localPlayerOptions.difficulty !== "hard" || submitted === state.turn || !foreground) return;
     const duration = getTurnDuration({ difficulty: "hard", level: state.level });
-    const deadline = Date.now() + duration;
-
-    const tick = setInterval(() => setSeconds(Math.max(0, Math.ceil((deadline - Date.now()) / 1000))), 250);
     const timeout = setTimeout(() => {
       try {
         setSubmitted(state.turn);
@@ -86,8 +82,8 @@ export function useRunMultiplayerGame(settings: GameSettings) {
         else client.current?.send({ type: "SUBMIT_ACTION", turn: state.turn, action: { type: "PASS" } });
       } catch (e) { report(e); }
     }, duration);
-    return () => { clearInterval(tick); clearTimeout(timeout); };
-  }, [state, role, foreground, report, localPlayerOptions.difficulty, submitted]);
+    return () => { clearTimeout(timeout); };
+  }, [state, playerId, role, foreground, report, localPlayerOptions.difficulty, submitted]);
 
   async function run(task: () => Promise<void>) {
     if (busyRef.current) return;
@@ -226,7 +222,7 @@ export function useRunMultiplayerGame(settings: GameSettings) {
   }
   return {
     role, playerId, state, outgoing, incoming, setIncoming, pendingId, ready, prepared, readyPlayers: prepared, playerReady,
-    lobbyPlayers, botIds, error, busy, connected, submitted, charged, seconds, disconnected,
+    lobbyPlayers, botIds, error, busy, connected, submitted, charged, disconnected,
     player: view.player, map: view.map, snapshot: view.snapshot, hostGame, start, submit, removePlayer,
     playerOptions: view.player?.gameplayOptions ?? localPlayerOptions,
     setPlayerOptions, markReady,

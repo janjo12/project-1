@@ -159,7 +159,8 @@ test("a newly fallen multiplayer character drops carried items and equipment for
 
   expect(state.players.host.item).toBe("silver-bullet");
   expect(state.players.host.equipment).toBe("good-weapon");
-  expect(fallen.players.host).toMatchObject({ health: 0, item: null, equipment: null });
+  expect(fallen.players.host).toMatchObject({ health: 0, classId: "ghost", item: null, equipment: null });
+  expect(getGameClass(fallen.players.host.classId).sprite).toBe("banshee_graphic");
   const fallenRoom = getRoom(fallen.map, hostRoom.id)!;
   const droppedItem = fallenRoom.contents.find(content => content.type === "item" && content.isChest === false && fallen.map.entities.items[content.id]?.itemId === "silver-bullet");
   const droppedEquipment = fallenRoom.contents.find(content => content.type === "equipment" && content.isChest === false && fallen.map.entities.equipment[content.id]?.equipmentId === "good-weapon");
@@ -335,10 +336,21 @@ test.each(["normal", "hard"] as const)("a shared %s turn budget ghosts only appl
     ["guest", { type: "SUPPORT" }],
   ]));
   expect(exhausted.turnsLeft).toBe(0);
-  expect(exhausted.players.host.health).toBe(0);
+  expect(exhausted.players.host).toMatchObject({ health: 0, classId: "ghost" });
+  expect(getGameClass(exhausted.players.host.classId).sprite).toBe("banshee_graphic");
   expect(exhausted.players.guest.health).toBe(PLAYER_MAX_HEALTH);
   expect(exhausted.ended).toBe(false);
-  expect(resolveMultiplayerTurn(exhausted, new Map()).turn).toBe(exhausted.turn + 1);
+  const ghostRoom = getRoom(exhausted.map, exhausted.players.host.roomId)!;
+  const openDirection = (["north", "east", "south", "west"] as Direction[]).find(direction => ghostRoom[direction] === "open");
+  expect(openDirection).toBeDefined();
+  const destination = getConnectedRoomId(exhausted.map, exhausted.players.host.roomId, openDirection!)!;
+  ghostRoom[openDirection!] = "guarded";
+  const ghostMoved = resolveMultiplayerTurn(exhausted, new Map([
+    ["host", { type: "MOVE", target: openDirection! }],
+    ["guest", { type: "SUPPORT" }],
+  ]));
+  expect(ghostMoved.players.host.roomId).toBe(destination);
+  expect(ghostMoved.players.host.classId).toBe("ghost");
 });
 
 test("an Easy-only multiplayer party has no floor turn-budget expiration", () => {

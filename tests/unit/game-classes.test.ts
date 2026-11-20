@@ -34,3 +34,7 @@ test("Wizard has Chain Lightning, Empower Attacks, and Rune Tracer instructions"
   expect(wizard.microgame).toBe("rune-tracer");
   expect(getGameClass("archer").name).toBe("Ranger");
 });
+
+test("Ghost uses the banshee sprite", () => {
+  expect(getGameClass("ghost").sprite).toBe("banshee_graphic");
+});

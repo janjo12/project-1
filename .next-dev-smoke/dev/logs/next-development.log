@@ -1,0 +1,4 @@
+{"timestamp":"00:00:02.261","source":"Server","level":"LOG","message":""}
+{"timestamp":"00:00:02.264","source":"Server","level":"LOG","message":"✓ Generated AGENTS.md for AI agents. Set `agentRules: false` in next.config to disable."}
+{"timestamp":"00:00:18.807","source":"Server","level":"LOG","message":"○ Compiling /page ..."}
+{"timestamp":"00:00:27.223","source":"Server","level":"WARN","message":"The global process.env.EXPO_OS is not defined. This should be inlined by babel-preset-expo during transformation."}

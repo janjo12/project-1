@@ -9,7 +9,7 @@ export const ROOM_GRID_ROWS = SCENE_HEIGHT / SPRITE_SIZE;
 export const HUMAN_FORM_SPRITE_SIZE = 56;
 export const CREATURE_SPRITE_SIZE = 48;
 const HUMAN_FORM_SPRITES = new Set([
-  "warrior_graphic", "cleric_graphic", "thief_graphic", "archer_graphic", "wizard_graphic", "ghost_graphic",
+  "warrior_graphic", "cleric_graphic", "thief_graphic", "archer_graphic", "wizard_graphic", "ghost_graphic", "banshee_graphic",
   "zombie_graphic", "vampire_graphic", "werewolf_graphic",
 ]);
 

@@ -80,7 +80,7 @@ function publicSession(session: Session, playerId: string) {
     code: session.code,
     playerId,
     revision: session.revision,
-    deadlineAt: personalOptions.difficulty === "hard" && !session.actions.has(playerId) ? session.deadlineAt : null,
+    deadlineAt: personalOptions.difficulty === "hard" && (session.state?.players[playerId]?.health ?? 0) > 0 && !session.actions.has(playerId) ? session.deadlineAt : null,
     turnSubmitted: session.actions.has(playerId),
     state: session.state,
     playerOptions: session.playerOptions[playerId] ?? DEFAULT_MULTIPLAYER_PLAYER_OPTIONS,
@@ -118,7 +118,7 @@ function finishTurn(session: Session) {
 function scheduleTurnDeadline(session: Session) {
   if (!session.state || session.state.ended || session.state.phase !== "playing") return;
   const hasUnsubmittedHardPlayer = session.playerIds.some(id =>
-    !session.botPlayerIds.has(id) && session.playerOptions[id]?.difficulty === "hard" && !session.actions.has(id));
+    !session.botPlayerIds.has(id) && (session.state?.players[id]?.health ?? 0) > 0 && session.playerOptions[id]?.difficulty === "hard" && !session.actions.has(id));
   if (!hasUnsubmittedHardPlayer) {
     if (session.timer) clearTimeout(session.timer);
     session.timer = null;
@@ -132,7 +132,7 @@ function scheduleTurnDeadline(session: Session) {
     session.timer = null;
     session.deadlineAt = null;
     const timedOutPlayers = session.playerIds.filter(id =>
-      !session.botPlayerIds.has(id) && session.playerOptions[id]?.difficulty === "hard" && !session.actions.has(id));
+      !session.botPlayerIds.has(id) && (session.state?.players[id]?.health ?? 0) > 0 && session.playerOptions[id]?.difficulty === "hard" && !session.actions.has(id));
     for (const id of timedOutPlayers) session.actions.set(id, { type: "PASS" });
     const humanPlayers = eligiblePlayers(session).filter(id => !session.botPlayerIds.has(id));
     if (session.actions.size === humanPlayers.length) finishTurn(session);

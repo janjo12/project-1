@@ -48,12 +48,12 @@ export function useRunMultiplayerGame(settings: GameSettings) {
   const [submitted, setSubmitted] = useState<number | null>(null);
   const [charged, setCharged] = useState(false);
   const [microgameScore, setMicrogameScore] = useState<number | null>(null);
-  const [seconds, setSeconds] = useState(0);
   const [disconnected, setDisconnected] = useState(false);
   const [playerOptions, setPlayerOptionsState] = useState<RoomResponse["playerOptions"]>({ difficulty: settings.difficulty, handedness: settings.handedness, microgamesEnabled: settings.microgamesEnabled, reducedMotion: settings.reducedMotion });
   const revision = useRef(-1);
   const deadlineAt = useRef<number | null>(null);
   const mounted = useRef(true);
+  const playerOptionsSave = useRef<Promise<void>>(Promise.resolve());
 
   function updatePlayers(next: RoomResponse["players"]) {
     setPlayers(current => samePlayers(current, next) ? current : next);
@@ -119,13 +119,6 @@ export function useRunMultiplayerGame(settings: GameSettings) {
     return () => { stopped = true; clearInterval(interval); };
   }, [roomCode, playerId, logFailure]);
 
-  useEffect(() => {
-    const tick = () => setSeconds(deadlineAt.current ? Math.max(0, Math.ceil((deadlineAt.current - Date.now()) / 1000)) : 0);
-    tick();
-    const interval = setInterval(tick, 250);
-    return () => clearInterval(interval);
-  }, []);
-
   async function run(operation: string, task: () => Promise<void>) {
     if (busy) return;
     setBusy(true);
@@ -180,6 +173,7 @@ export function useRunMultiplayerGame(settings: GameSettings) {
     if (!roomCode) return;
     await run("start_room", async () => {
       if (role === "guest") {
+        await playerOptionsSave.current;
         const result = await requestRoom<RoomResponse>({ type: "ready", code: roomCode, playerId, ...playerOptions });
         revision.current = result.revision;
         updatePlayers(result.players);
@@ -198,7 +192,18 @@ export function useRunMultiplayerGame(settings: GameSettings) {
         revision.current = configured.revision;
         updatePlayerOptions(configured.playerOptions);
       }
-      const result = await requestRoom<RoomResponse>({ type: "start", code: roomCode, playerId });
+      const readyDeadline = Date.now() + 5_000;
+      let result: RoomResponse;
+      while (true) {
+        try {
+          result = await requestRoom<RoomResponse>({ type: "start", code: roomCode, playerId });
+          break;
+        } catch (cause) {
+          const waitingForPlayers = cause instanceof Error && cause.message.includes("Wait for every player to finish their own options");
+          if (!waitingForPlayers || Date.now() >= readyDeadline) throw cause;
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      }
       revision.current = result.revision;
       if (result.state) setState(result.state);
       updatePlayers(result.players);
@@ -211,13 +216,17 @@ export function useRunMultiplayerGame(settings: GameSettings) {
     updatePlayerOptions(options);
     setPlayerReady(false);
     if (!roomCode) return;
-    try {
-      const result = await requestRoom<RoomResponse>({ type: "options", code: roomCode, playerId, ...options });
+    const code = roomCode;
+    const id = playerId;
+    const save = playerOptionsSave.current.then(async () => {
+      const result = await requestRoom<RoomResponse>({ type: "options", code, playerId: id, ...options });
       revision.current = result.revision;
-    } catch (cause) {
+    });
+    playerOptionsSave.current = save.catch(cause => {
       logFailure("save_player_options", cause);
       setError(describeRoomOperationFailure(cause, "save_player_options"));
-    }
+    });
+    await playerOptionsSave.current;
   }
 
   async function submit(action: PlayerAction) {
@@ -286,7 +295,6 @@ export function useRunMultiplayerGame(settings: GameSettings) {
     connected,
     submitted,
     charged,
-    seconds,
     disconnected,
     player: view.player,
     map: view.map,

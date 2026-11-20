@@ -44,6 +44,13 @@ test("a hard-mode host sees the multiplayer turn timer and the stairs counter fi
       element.scrollWidth <= element.clientWidth + 1 && element.scrollHeight <= element.clientHeight + 1,
     );
     expect(objectiveFits).toBe(true);
+
+    await page.getByRole("button", { name: /host · Support/ }).click();
+    await expect(timer).toBeVisible();
+    const timerFill = page.getByTestId("multiplayer-turn-timer-fill");
+    const widthWhileWaiting = await timerFill.evaluate(element => getComputedStyle(element).width);
+    await page.waitForTimeout(300);
+    expect(await timerFill.evaluate(element => getComputedStyle(element).width)).toBe(widthWhileWaiting);
   } finally {
     await guestContext.close();
     await page.request.post("/api/multiplayer", { data: { type: "leave", code: roomCode, playerId: "host" } }).catch(() => undefined);

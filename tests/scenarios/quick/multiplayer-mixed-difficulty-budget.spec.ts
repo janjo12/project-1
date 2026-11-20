@@ -47,6 +47,14 @@ test("mixed difficulty gives only Hard players timed turns and turn-budget ghost
     await easyPage.getByRole("button", { name: "Join game", exact: true }).click();
     await easyPage.getByRole("textbox", { name: "Room code" }).fill(roomCode);
     await easyPage.getByRole("button", { name: "Join room", exact: true }).click();
+    await easyPage.route("**/api/multiplayer", async route => {
+      const request = route.request();
+      if (request.method() === "POST" && (request.postDataJSON() as { type?: string } | null)?.type === "options") {
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+      await route.continue();
+    });
+    await easyPage.getByRole("button", { name: "hard", exact: true }).click();
     await easyPage.getByRole("button", { name: "easy", exact: true }).click();
     await easyPage.getByRole("button", { name: "Start", exact: true }).click();
 
@@ -99,6 +107,7 @@ test("mixed difficulty gives only Hard players timed turns and turn-budget ghost
     expect(state.ended).toBe(false);
 
     await expect(page.getByText(/You are a ghost/)).toBeVisible();
+    await expect(page.getByTestId("multiplayer-turn-timer")).toHaveCount(0);
     await expect(easyPage.getByText(/You are a ghost/)).toHaveCount(0);
     await expect(easyPage.getByTestId("hard-turn-counter")).toHaveCount(0);
 

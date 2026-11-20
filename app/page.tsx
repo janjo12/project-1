@@ -61,7 +61,6 @@ export default function Home() {
             onSettings={() => setPage("settings")}
             onUpdate={updateSettings}
             showSeed={mode === "singleplayer" || hostAfterSetup}
-            multiplayerHostOptions={mode === "multiplayer" && hostAfterSetup}
             onStart={async () => {
               const next = { ...settings, seed: settings.seed.trim() || generateRandomSeed() };
               await saveSettings(next);
@@ -92,6 +91,7 @@ export default function Home() {
         {page === "multiplayer" || (mode === "multiplayer" && hostAfterSetup && (page === "setup" || page === "settings")) ? (
           <MultiplayerScreen
             settings={settings}
+            onSettingsChange={updateSettings}
             startAsHost={hostAfterSetup}
             startRequest={startHostedGame}
             onHostSelect={() => {

@@ -214,7 +214,12 @@ export function resolveMultiplayerTurn(
     ...previous,
     turn: previous.turn + 1,
     players: Object.fromEntries(
-      Object.entries(previous.players).map(([id, player]) => [id, { ...player }]),
+      Object.entries(previous.players).map(([id, player]) => [id, {
+        ...player,
+        // A zero-health player is a ghost immediately, including in the state
+        // snapshot rendered on every peer after this turn resolves.
+        classId: player.health <= 0 ? "ghost" : player.classId,
+      }]),
     ),
   };
   if (state.phase === "briefing") {
@@ -308,12 +313,13 @@ export function resolveMultiplayerTurn(
     const neighbor = getNeighborInGrid(state.map.rooms, room, direction);
     if (neighbor) roomsEnteredThisTurn.add(getRoomId(neighbor));
   }
+  const expiredSharedBudget = state.turnsLeft <= 0;
   for (const player of Object.values(state.players)) {
     // Player iteration follows roster insertion order; that order decides contested pickups deterministically.
     const submittedAction = actions.get(player.id);
     const action = submittedAction?.type === "PASS" ? undefined : submittedAction;
     const room = getRoom(state.map, player.roomId);
-    if (player.health <= 0) {
+    if (player.health <= 0 || (expiredSharedBudget && isTurnBudgeted(player, state.difficulty))) {
       if (action?.type === "MOVE" && ["north", "east", "south", "west"].includes(action.target ?? "") && room[action.target as Direction] !== "wall") {
         const neighbor = getNeighborInGrid(state.map.rooms, room, action.target as Direction);
         if (neighbor) {
@@ -546,6 +552,7 @@ export function resolveMultiplayerTurn(
     state.turnsLeft = getHardTurnLimit({ difficulty: hasSharedTurnBudget(state) ? "normal" : "easy", map: state.map });
     for (const player of Object.values(state.players)) {
       player.roomId = state.map.startingRoomId; player.health = PLAYER_MAX_HEALTH; player.energy = PLAYER_MAX_ENERGY;
+      player.classId = previous.players[player.id].classId === "ghost" ? randomGameClass().id : player.classId;
       player.miracleUsed = false;
       player.focusTurns = 0;
       player.focusBoost = 0;
@@ -554,7 +561,7 @@ export function resolveMultiplayerTurn(
     }
     state.werewolfAggroPlayerId = null;
     state.werewolfWitnessPlayerIds = [];
-  } else if (hasSharedTurnBudget(state)) {
+  } else if (state.turnsLeft > 0 && hasSharedTurnBudget(state)) {
     const clockOwner = alive.find(p => p.item === "clock");
     const result = resolveTurnLoss(state.turnsLeft, clockOwner?.item ?? null, state.level);
     state.turnsLeft = result.nextCounter;
@@ -565,6 +572,9 @@ export function resolveMultiplayerTurn(
       }
       alive = Object.values(state.players).filter(player => player.health > 0);
     }
+  }
+  for (const player of Object.values(state.players)) {
+    if (player.health <= 0) player.classId = "ghost";
   }
   // Keep items and equipment available to the remaining party when a player
   // crosses into ghost state, including when their shared turn budget expires.

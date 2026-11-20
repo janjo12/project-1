@@ -7,6 +7,7 @@ import { RoomScene, type RoomDoorways } from "@/components/Dungeon/Room";
 import { GameViewPanel } from "@/components/Dungeon/GameViewPanel";
 import { CombatantSprite } from "@/components/Enemy/Enemy";
 import { createCombatAnimationFrame } from "@/game/entities";
+import { createSupportEffectStore } from "@/game/state/supportEffectStore";
 import { GAME_PARAMETERS } from "@/game/config/gameparameters";
 
 const doorways: RoomDoorways = {
@@ -122,6 +123,8 @@ test("a Werewolf hit with no damage shows No Effect in the floating damage posit
 });
 
 test("support feedback is shown over the selected ally", async () => {
+  const supportEffectStore = createSupportEffectStore();
+  supportEffectStore.trigger({ targetId: "ally", emoji: "🛡️", label: "Vanguard" });
   const screen = await render(
     <RoomScene
       actors={[{ id: "ally", kind: "player", label: "Cleric · ally", sprite: "cleric_graphic", position: "center" }]}
@@ -133,7 +136,7 @@ test("support feedback is shown over the selected ally", async () => {
       playerSprite="warrior_graphic"
       roomId="A1"
       sceneScale={1}
-      supportEffect={{ targetId: "ally", emoji: "🛡️", label: "Vanguard", key: 1 }}
+      supportEffectStore={supportEffectStore}
     />,
   );
 
@@ -257,7 +260,7 @@ test("pressing an enemy sends that actor to the game handler", async () => {
   expect(screen.queryByText("Player")).toBeNull();
 });
 
-test("waiting for other players remains readable in dark mode", async () => {
+test("waiting for other players displays a message while dimming the room", async () => {
   const screen = await render(
     <GameViewPanel
       animationFrame={createCombatAnimationFrame()}
@@ -266,7 +269,9 @@ test("waiting for other players remains readable in dark mode", async () => {
     />,
   );
 
-  expect(screen.getByText(/Waiting for other players/).props.style.color).toBe("#ffffff");
+  expect(screen.getByText("Waiting for other players…")).toBeTruthy();
+  expect(StyleSheet.flatten(screen.getByTestId("game-scene-content").props.style).opacity).toBe(0.28);
+  expect(screen.queryByText(/Help your party reach the stairs/)).toBeNull();
 });
 
 test("player and enemy press targets cover the full actor sprite envelope", async () => {

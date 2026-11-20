@@ -9,6 +9,7 @@ import type { GameSettings } from "@/utils/settings-storage";
 export type PauseMenuProps = {
   onBackToGame: () => void;
   onQuitToTitle: () => void;
+  quitLabel?: string;
   onPracticeAttacking: () => void;
   onPracticeDefending: () => void;
   onOpenMap?: () => void;
@@ -25,6 +26,7 @@ export type PauseMenuProps = {
 export function PauseMenu({
   onBackToGame,
   onQuitToTitle,
+  quitLabel = "Quit to Title",
   onPracticeAttacking,
   onPracticeDefending,
   onOpenMap,
@@ -86,7 +88,7 @@ export function PauseMenu({
         {microgamesEnabled ? <NormalButton accessibilityLabel="Practice Attacking" accessibilityRole="button" label="Practice Attacking" onPress={onPracticeAttacking} /> : null}
         {microgamesEnabled ? <NormalButton accessibilityLabel="Practice Defending" accessibilityRole="button" label="Practice Defending" onPress={onPracticeDefending} /> : null}
         <PrimaryButton accessibilityLabel="Back to Game" accessibilityRole="button" label="Back to Game" onPress={onBackToGame} />
-        <DestructiveButton accessibilityLabel="Quit to Title" accessibilityRole="button" label="Quit to Title" onPress={onQuitToTitle} />
+        <DestructiveButton accessibilityLabel={quitLabel} accessibilityRole="button" label={quitLabel} onPress={onQuitToTitle} />
       </>}
       </ScrollView>
     </StyledModal>
