@@ -12,7 +12,7 @@ const tile = (row: number, column: number): Tile => ({ source: tiles, width: 544
 const emojiSprites: Record<string, string> = { clock_graphic: "⏰", guard_graphic: "🛡️", spyglass_graphic: "🔭" };
 // Atlas coordinates follow the pack's accompanying row / letter indexes.
 const sprites: Record<string, Tile> = {
-  "stone-floor": { source: tiles, width: 544, height: 832, row: 6, column: 1 },
+  "stone-floor": { source: tiles, width: 544, height: 832, row: 6, column: 2 },
   chest_closed_graphic: tile(17, 0),
   stairs_graphic: tile(16, 7),
   warrior_graphic: { source: rogues, width: 224, height: 224, row: 1, column: 0 },
@@ -21,6 +21,7 @@ const sprites: Record<string, Tile> = {
   archer_graphic: { source: rogues, width: 224, height: 224, row: 0, column: 2 },
   wizard_graphic: { source: rogues, width: 224, height: 224, row: 4, column: 1 },
   ghost_graphic: { source: monsters, width: 384, height: 416, row: 3, column: 1 },
+  banshee_graphic: monster(5, 0),
   pixel_golem_graphic: monster(7, 2),
   zombie_graphic: monster(4, 4),
   dragon_graphic: monster(8, 2),

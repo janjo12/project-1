@@ -30,6 +30,31 @@ test("the player reaches the exit before the room changes and enters from the op
   const doorwayBounds = await doorway.boundingBox();
   expect(doorwayBounds).not.toBeNull();
   expect(Math.min(doorwayBounds!.width, doorwayBounds!.height)).toBeGreaterThan(32);
+  const doorways = await page.getByRole("button", { name: /^Tap (top|right|bottom|left) doorway to move$/ }).evaluateAll(elements => elements.map(element => {
+    const bounds = element.getBoundingClientRect();
+    return { left: bounds.left, top: bounds.top, right: bounds.right, bottom: bounds.bottom };
+  }));
+  const actors = await page.locator('[data-testid^="room-actor-"]').evaluateAll(elements => elements.map(element => {
+    const bounds = element.getBoundingClientRect();
+    return { left: bounds.left, top: bounds.top, right: bounds.right, bottom: bounds.bottom };
+  }));
+  for (const door of doorways) {
+    for (const actor of actors) {
+      const overlaps = door.left < actor.right && door.right > actor.left && door.top < actor.bottom && door.bottom > actor.top;
+      expect(overlaps, "movement hit targets must not overlap actor sprites or clickable actor areas").toBe(false);
+    }
+  }
+  const arrow = page.getByTestId(`doorway-arrow-${direction}`);
+  const arrowMotion = await page.getByTestId(`doorway-arrow-position-${direction}`).evaluate(element => {
+    const style = getComputedStyle(element);
+    const effect = element.getAnimations()[0]?.effect as KeyframeEffect | null;
+    return { duration: style.animationDuration, keyframes: effect?.getKeyframes() };
+  });
+  expect(arrowMotion.duration).toBe("1s");
+  expect(arrowMotion.keyframes?.length).toBeGreaterThan(1);
+  const expectedAxis = direction === "top" || direction === "bottom" ? "Y" : "X";
+  expect(arrowMotion.keyframes?.[0]?.transform).toContain(`translate${expectedAxis}`);
+  expect(arrowMotion.keyframes?.[arrowMotion.keyframes.length - 1]?.transform).toContain(`translate${expectedAxis}`);
   const roomFrameBounds = await page.getByTestId("dungeon-room-frame").boundingBox();
   expect(roomFrameBounds).not.toBeNull();
   const horizontalCenter = doorwayBounds!.x + doorwayBounds!.width / 2;
@@ -50,6 +75,7 @@ test("the player reaches the exit before the room changes and enters from the op
   });
 
   await doorway.click();
+  await expect(arrow).toBeVisible();
   const exitAnimation = page.getByTestId("player-room-exit-animation");
   await expect(exitAnimation).toBeVisible();
   const exitKeyframes = await exitAnimation.evaluate(element => {
@@ -165,6 +191,11 @@ test("the player reaches the exit before the room changes and enters from the op
   await page.clock.runFor(GAME_PARAMETERS.animation.roomTransitionDurationMs);
   await expect(page.getByTestId("room-transition-snapshot")).toHaveCount(0);
   await expect(incomingSnapshot).toHaveCSS("opacity", "1");
+  const entryDirection = ({ top: "bottom", right: "left", bottom: "top", left: "right" } as const)[direction as "top" | "right" | "bottom" | "left"];
+  const entryDoorway = page.getByRole("button", { name: `Tap ${entryDirection} doorway to move` });
+  if (await entryDoorway.count()) await expect(page.getByTestId(`doorway-arrow-${entryDirection}`)).toBeVisible();
+  const openDoorwayCount = await page.getByRole("button", { name: /^Tap (top|right|bottom|left) doorway to move$/ }).count();
+  await expect(page.getByTestId(/^doorway-arrow-(top|right|bottom|left)$/)).toHaveCount(openDoorwayCount);
   const spriteStayedMounted = await playerSprite.evaluate(element => element === (window as any).__playerSpriteImage);
   expect(spriteStayedMounted).toBe(true);
 });

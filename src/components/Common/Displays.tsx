@@ -23,12 +23,15 @@ type StyledModalProps = ChildrenProps & {
   accessibilityLabel: string;
   accessibilityRole: string;
   animationType: "none" | "slide" | "fade";
+  contentStyle?: StyleProp<ViewStyle>;
+  contentTestID?: string;
   onRequestClose: () => void;
   visible: boolean;
 };
 
 type StyledTextProps = ChildrenProps & {
   style?: StyleProp<TextStyle>;
+  testID?: string;
 };
 
 export function Container({ children, style }: ViewProps) {
@@ -64,6 +67,8 @@ export function StyledModal({
   animationType,
   onRequestClose,
   accessibilityLabel,
+  contentStyle,
+  contentTestID,
   visible,
 }: StyledModalProps) {
   const colors = useThemeColors();
@@ -79,25 +84,25 @@ export function StyledModal({
       visible={visible}
     >
       <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>{children}</View>
+        <View testID={contentTestID} style={[styles.modalContent, contentStyle]}>{children}</View>
       </View>
     </Modal>
   );
 }
 
-export function StyledText({ children, style }: StyledTextProps) {
+export function StyledText({ children, style, testID }: StyledTextProps) {
   const colors = useThemeColors();
   const styles = createStyles(colors);
 
-  return <Text style={[styles.styledText, style]}>{children}</Text>;
+  return <Text testID={testID} style={[styles.styledText, style]}>{children}</Text>;
 }
 
-export function Title({ children }: ChildrenProps) {
+export function Title({ children, style, testID }: ChildrenProps & { style?: StyleProp<TextStyle>; testID?: string }) {
   const colors = useThemeColors();
   const { height } = useWindowDimensions();
   const styles = createStyles(colors, height < 500);
 
-  return <Text style={styles.title}>{children}</Text>;
+  return <Text testID={testID} style={[styles.title, style]}>{children}</Text>;
 }
 
 function createStyles(colors: ThemeColors, compactModal = false) {

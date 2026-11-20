@@ -3,7 +3,7 @@ export const GAME_PARAMETERS = Object.freeze({
   animation: Object.freeze({
     attackDurationMs: 500,
     attackImpactDelayMs: 250,
-    attackTravelDistance: 8,
+    attackTravelDistance: 38,
     bounceDistance: 4,
     bounceDurationMs: 1400,
     damageDurationMs: 248,

@@ -1,13 +1,14 @@
 import type { NextConfig } from "next";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import webpack from "webpack";
+import { getNextDistDir } from "./scripts/next-dist-dir.mjs";
 
 const projectRoot = fileURLToPath(new URL(".", import.meta.url));
 
 const nextConfig: NextConfig = {
-  distDir: process.env.NEXT_DIST_DIR ?? ".next",
+  distDir: getNextDistDir(),
   outputFileTracingRoot: projectRoot,
-  eslint: { ignoreDuringBuilds: true },
   transpilePackages: [
     "react-native",
     "react-native-web",
@@ -33,9 +34,21 @@ const nextConfig: NextConfig = {
       type: "asset/resource",
       generator: { filename: "static/fonts/[name].[contenthash][ext]" },
     });
+    if (!isServer) {
+      // Expo Font's browser loader imports its server-only AsyncLocalStorage helper.
+      // Browser code only uses the helper's window-safe branches, so replace Node's
+      // builtin import with an inert shim in the client bundle.
+      config.plugins.push(new webpack.NormalModuleReplacementPlugin(
+        /^node:async_hooks$/,
+        path.resolve(projectRoot, "src/utils/expo-font-async-hooks.web.ts"),
+      ));
+    }
     config.plugins.push(
       new webpack.DefinePlugin({
         __DEV__: JSON.stringify(process.env.NODE_ENV !== "production"),
+        // This Next.js webpack path does not run babel-preset-expo, so inline
+        // Expo's platform constant for the browser bundle here.
+        ...(!isServer ? { "process.env.EXPO_OS": JSON.stringify("web") } : {}),
         // Reanimated's web bundle expects the Node-style `global`; browsers expose the same object as `globalThis`.
         ...(!isServer ? { global: "globalThis" } : {
           // Reanimated Worklets can schedule frames while Next evaluates the

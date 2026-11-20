@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { HUMAN_REACTION_WINDOW_MS, MULTITAP_WINDOW_MS } from "@/game/actions/use-microgame";
+import { CONCENTRATION_TARGET_DURATION_MS, HUMAN_REACTION_WINDOW_MS, MULTITAP_WINDOW_MS, TARGET_TIMING_VARIANCE_MS, TIMED_ATTACK_CUE_DELAY_MS } from "@/game/actions/use-microgame";
 import { openScenarioApp } from "../helpers";
 test.beforeEach(async ({ page }) => {
   const frozenTime = new Date("2026-01-01T00:00:00Z");
@@ -17,12 +17,19 @@ test("Timed Attack reveals NOW! before the 250 ms human response and scores that
   await expect(overlay.getByText("Wait for NOW!", { exact: true })).toHaveCount(0);
   await expect(overlay.getByText("Tap in 250 ms", { exact: true })).toHaveCount(0);
   await expect(page.getByTestId("timed-attack-now")).toHaveCount(0);
-  await page.clock.runFor(999);
+  const minCueDelay = TIMED_ATTACK_CUE_DELAY_MS - TARGET_TIMING_VARIANCE_MS.hard;
+  const maxCueDelay = TIMED_ATTACK_CUE_DELAY_MS + TARGET_TIMING_VARIANCE_MS.hard;
+  await page.clock.runFor(minCueDelay - 1);
   await expect(instruction).toBeVisible();
   await expect(page.getByTestId("timed-attack-now")).toHaveCount(0);
-  await page.clock.runFor(16);
   const cue = page.getByTestId("timed-attack-now");
+  let elapsedToCue = minCueDelay - 1;
+  while (elapsedToCue <= maxCueDelay && await cue.count() === 0) {
+    await page.clock.runFor(16);
+    elapsedToCue += 16;
+  }
   await expect(cue).toBeVisible();
+  expect(elapsedToCue).toBeLessThanOrEqual(maxCueDelay + 16);
   await expect(instruction).toBeVisible();
 
   await page.clock.runFor(HUMAN_REACTION_WINDOW_MS);
@@ -54,7 +61,7 @@ test("Concentration scores the press at the moment the moving circle reaches the
   const expectedTargetMs = ((0.9 - (targetCenter - trackBox!.x) / trackBox!.width) / 0.8) * 1500;
   await page.clock.runFor(32);
   let alignedAt: number | null = null;
-  for (let elapsed = 0; elapsed < 1250; elapsed += 16) {
+  for (let elapsed = 0; elapsed < CONCENTRATION_TARGET_DURATION_MS - 32; elapsed += 16) {
     const moverBox = await movingCircle.boundingBox();
     expect(moverBox).not.toBeNull();
     const moverCenter = moverBox!.x + moverBox!.width / 2;
@@ -74,6 +81,28 @@ test("Concentration scores the press at the moment the moving circle reaches the
 
 test("Multitap target stays on the right hand side for right-handed controls", async ({ page }) => verifyMultitapHandedness(page, "right"));
 test("Multitap target stays on the left hand side for left-handed controls", async ({ page }) => verifyMultitapHandedness(page, "left"));
+test("Multiswipe target stays on the right hand side for right-handed controls", async ({ page }) => verifyMultiswipeHandedness(page, "right"));
+test("Multiswipe target stays on the left hand side for left-handed controls", async ({ page }) => verifyMultiswipeHandedness(page, "left"));
+
+async function verifyMultiswipeHandedness(page: import("@playwright/test").Page, handedness: "left" | "right") {
+  await startPractice(page, "testwarrior", handedness);
+  const overlay = page.getByTestId("microgame-overlay");
+  const track = page.getByTestId("multiswipe-track");
+  await expect(overlay.getByTestId("multiswipe-instruction")).toHaveAttribute("aria-label", "Swipe Across");
+  const trackBounds = await track.boundingBox();
+  expect(trackBounds).not.toBeNull();
+  const trackCenter = trackBounds!.x + trackBounds!.width / 2;
+  const screenCenter = (page.viewportSize()?.width ?? 0) / 2;
+  if (handedness === "right") expect(trackCenter).toBeGreaterThan(screenCenter);
+  else expect(trackCenter).toBeLessThan(screenCenter);
+
+  for (const testID of ["multiswipe-start-dot", "multiswipe-end-dot"]) {
+    const dotBounds = await page.getByTestId(testID).boundingBox();
+    expect(dotBounds).not.toBeNull();
+    expect(dotBounds!.x).toBeGreaterThanOrEqual(trackBounds!.x - 1);
+    expect(dotBounds!.x + dotBounds!.width).toBeLessThanOrEqual(trackBounds!.x + trackBounds!.width + 1);
+  }
+}
 
 async function verifyMultitapHandedness(page: import("@playwright/test").Page, handedness: "left" | "right") {
   await startPractice(page, "testranger", handedness);
@@ -118,7 +147,7 @@ async function startPractice(page: import("@playwright/test").Page, seed: string
     await page.getByRole("button", { name: "Start playing", exact: true }).click();
   }
   await page.getByRole("button", { name: "Menu" }).click();
-  await page.getByRole("dialog", { name: "Game menu" }).getByRole("button", { name: "Practice attack microgame" }).click();
+  await page.getByRole("dialog", { name: "Game menu" }).getByRole("button", { name: "Practice Attacking" }).click();
   await expect(page.getByTestId("microgame-overlay")).toBeVisible();
   await expect(page.getByTestId("microgame-overlay").getByText("TEST", { exact: true })).toHaveCount(0);
 }

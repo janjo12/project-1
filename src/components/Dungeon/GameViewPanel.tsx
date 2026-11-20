@@ -1,4 +1,5 @@
 import type { SceneFrameStore } from "@/game/state/sceneFrameStore";
+import type { SupportEffectStore } from "@/game/state/supportEffectStore";
 import { memo, useEffect, useState, type ReactNode } from "react";
 import { Animated, Platform, StyleSheet, Text, View } from "react-native";
 
@@ -9,12 +10,11 @@ import {
   type RoomSceneActor,
   type ScenePosition,
   type ScreenPoint,
-  type SupportEffect,
 } from "@/components/Dungeon/Room";
 import {
   type CombatAnimationFrame,
 } from "@/game/entities";
-export type { RoomDoorways, RoomSceneActor, ScenePosition, ScreenPoint, SupportEffect };
+export type { RoomDoorways, RoomSceneActor, ScenePosition, ScreenPoint };
 
 type GameViewPanelProps = {
   canUnlockDoors?: boolean;
@@ -29,7 +29,7 @@ type GameViewPanelProps = {
   showAttackHints?: boolean;
   showGetHint?: boolean;
   completedTutorialHints?: ("Attack" | "Get")[];
-  supportEffect?: SupportEffect | null;
+  supportEffectStore?: SupportEffectStore;
   waitingForPlayers?: boolean;
   playerPosition?: ScenePosition;
   playerLabel?: string;
@@ -69,7 +69,7 @@ export const GameViewPanel = memo(function GameViewPanel({
   showAttackHints = false,
   showGetHint = false,
   completedTutorialHints = [],
-  supportEffect = null,
+  supportEffectStore,
   waitingForPlayers = false,
   playerPosition = "center",
   playerLabel = "Player",
@@ -107,23 +107,28 @@ export const GameViewPanel = memo(function GameViewPanel({
   return (
     <Animated.View style={[styles.panel, { opacity: panelOpacity }]}>
       <View style={[styles.sceneBox, Platform.OS === "web" && styles.webSceneBox]} onLayout={event => setSceneBoxHeight(event.nativeEvent.layout.height)}>
-        <View style={waitingForPlayers ? styles.waitingScene : undefined}>
+        <View testID="game-scene-content" style={[styles.sceneContent, waitingForPlayers ? styles.waitingScene : undefined, { gap: showStairsObjective || hardTurnCounter !== null ? 12 : 8 }]}>
         {showStairsObjective || hardTurnCounter !== null ? (
           <Text
-            accessibilityLabel={hardTurnCounter !== null ? "Turns remaining" : "Level objective"}
+            accessibilityLabel={showStairsObjective ? "Party objective" : "Level objective"}
+            adjustsFontSizeToFit
+            minimumFontScale={0.72}
+            numberOfLines={1}
             style={styles.turnCounter}
             testID="hard-turn-counter"
           >
-            {hardTurnCounter !== null
-              ? `Reach the Stairs in ${hardTurnCounter} ${hardTurnCounter === 1 ? "Turn" : "Turns"}`
-              : "Find the Stairs to Reach the Next Level"}
+            {showStairsObjective
+              ? "Help your party reach the stairs"
+              : hardTurnCounter !== null
+                ? `Reach the Stairs in ${hardTurnCounter} ${hardTurnCounter === 1 ? "turn" : "turns"}`
+                : "Find the Stairs to Reach the Next Level"}
           </Text>
         ) : null}
 
         <RoomScene
           actors={visibleActors}
           roomId={roomId}
-          maxHeight={sceneBoxHeight || undefined}
+          maxHeight={sceneBoxHeight ? Math.max(0, sceneBoxHeight - (showStairsObjective || hardTurnCounter !== null ? 30 : 0)) : undefined}
           reducedMotion={reducedMotion}
           animationsPaused={pauseAnimations}
           floorLayer={floorLayer}
@@ -147,14 +152,14 @@ export const GameViewPanel = memo(function GameViewPanel({
           showAttackHints={showAttackHints}
           showGetHint={showGetHint}
           completedTutorialHints={completedTutorialHints}
-          supportEffect={supportEffect}
+          supportEffectStore={supportEffectStore}
           onPlayerPress={onPlayerPress}
         />
         </View>
         {waitingForPlayers ? (
-          <View pointerEvents="none" style={styles.waitingOverlay}>
-            <Text accessibilityLiveRegion="polite" style={styles.waitingText}>Action submitted{"\n"}Waiting for other players…</Text>
-          </View>
+          <Text accessibilityRole="text" pointerEvents="none" style={styles.waitingLabel}>
+            Waiting for other players…
+          </Text>
         ) : null}
       </View>
     </Animated.View>
@@ -180,39 +185,45 @@ function createStyles(colors: ThemeColors) {
       padding: 4,
       position: "relative",
     },
+    sceneContent: {
+      alignItems: "center",
+      flex: 1,
+      justifyContent: "center",
+      width: "100%",
+    },
     webSceneBox: {
       paddingBottom: 24,
     },
     waitingScene: {
       opacity: 0.28,
     },
-    waitingOverlay: {
-      alignItems: "center",
-      backgroundColor: "rgba(0, 0, 0, 0.68)",
-      borderColor: colors.accent,
-      borderRadius: 8,
-      borderWidth: 2,
-      left: 16,
-      paddingHorizontal: 18,
-      paddingVertical: 12,
+    waitingLabel: {
       position: "absolute",
-      right: 16,
-      top: "42%",
+      alignSelf: "center",
       zIndex: 10,
-    },
-    waitingText: {
-      color: colors.paper,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 10,
+      backgroundColor: colors.paper,
+      color: colors.ink,
       fontSize: 16,
       fontWeight: "900",
       textAlign: "center",
+      overflow: "hidden",
     },
     turnCounter: {
       color: colors.ink,
       fontSize: 14,
       fontVariant: ["tabular-nums"],
       fontWeight: "900",
-      lineHeight: 16,
+      flexShrink: 0,
+      height: 20,
+      lineHeight: 20,
+      maxWidth: "100%",
+      minHeight: 20,
+      paddingHorizontal: 4,
       textAlign: "center",
+      width: "100%",
     },
   });
 }

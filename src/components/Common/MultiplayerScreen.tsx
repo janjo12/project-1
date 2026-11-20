@@ -2,18 +2,22 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Platform, Text, TextInput, View, useWindowDimensions, type StyleProp, type TextStyle, type ViewInstance } from "react-native";
 
 import { ClassBriefing } from "@/components/Common/ClassBriefing";
-import { Row, StyledText, Title } from "@/components/Common/Displays";
+import { Container, Row, StyledModal, StyledText, Title } from "@/components/Common/Displays";
+import { GameHeader } from "@/components/Common/GameHeader";
+import { PauseMenu } from "@/components/Common/PauseMenu";
 import { MicrogameOverlay } from "@/components/Common/MicrogameOverlay";
 import { ScreenShell } from "@/components/Common/ScreenShell";
+import { SetupScreen } from "@/components/Common/SetupScreen";
 import { animateSpriteFlight, measureViewCenter } from "@/components/Common/SpriteFlight";
 import { useThemeColors } from "@/components/Common/theme";
-import { NormalButton, PrimaryButton, SegmentedButton, ToggleButton } from "@/components/Controls/ActionButton";
+import { NormalButton, PrimaryButton } from "@/components/Controls/ActionButton";
 import { ChargeControl, EquipmentControl, ItemControl } from "@/components/Controls/ActionMenu";
 import { DungeonMap } from "@/components/Dungeon/DungeonMap";
 import { GameViewPanel } from "@/components/Dungeon/GameViewPanel";
 import { EquipmentDetailsMenu, ItemDetailsMenu } from "@/components/Controls/InventoryDetailsMenu";
 import { ResourceBar, ResourceBarGroup } from "@/components/Player/PlayerHUD";
 import { getEquipmentStats } from "@/game/actions/items";
+import { getBotPlayerName, isBotPlayerId, MAX_MULTIPLAYER_PLAYERS } from "@/game/engine/multiplayer-bot";
 import { useMicrogame } from "@/game/actions/use-microgame";
 import { getGameClass, getMicrogameEaseLevel } from "@/game/config/game-classes";
 import { getConnectedRoomId, getRoom, getRoomMonster, unlockDoor } from "@/game/dungeon/rooms";
@@ -21,13 +25,19 @@ import { getPlayerAttackDamage, resolveAttackDamage } from "@/game/engine/combat
 import { useRunMultiplayerGame } from "@/game/engine/run-game-multiplayer";
 import type { PlayerAction } from "@/game/engine/multiplayer-rules";
 import { getMultiplayerPlayerAuraColor, getMultiplayerRoomActors } from "@/game/engine/multiplayer-presentation";
+import { getTurnDuration } from "@/game/engine/resolveTurn";
+import { createNumberStore } from "@/game/state/numberStore";
+import { TurnTimerBar } from "@/components/Player/TurnTimerBar";
 import { getSupportFeedback } from "@/game/engine/support-feedback";
 import { PLAYER_MAX_ENERGY, PLAYER_MAX_HEALTH } from "@/game/state/types";
+import { advanceAnimationFrame, hasActiveCombatAnimation } from "@/game/entities";
+import { createSupportEffectStore } from "@/game/state/supportEffectStore";
+import { createSceneFrameStore } from "@/game/state/sceneFrameStore";
 import type { GameSettings } from "@/utils/settings-storage";
-import { isTestSeed } from "@/utils/seed";
 
-export function MultiplayerScreen({ settings, onLeave, onHostSelect, onOptionsSelect, onPlaySolo, startAsHost = false, startRequest = 0, hidden = false }: {
+export function MultiplayerScreen({ settings, onSettingsChange, onLeave, onHostSelect, onOptionsSelect, onPlaySolo, startAsHost = false, startRequest = 0, hidden = false }: {
   settings: GameSettings;
+  onSettingsChange?: (settings: Partial<GameSettings>) => void;
   onLeave: () => void;
   onHostSelect: () => void;
   onOptionsSelect?: () => void;
@@ -36,11 +46,12 @@ export function MultiplayerScreen({ settings, onLeave, onHostSelect, onOptionsSe
   startRequest?: number;
   hidden?: boolean;
 }) {
-  return <View style={hidden ? { display: "none" } : undefined}><Multiplayer settings={settings} onLeave={onLeave} onHostSelect={onHostSelect} onOptionsSelect={onOptionsSelect} onPlaySolo={onPlaySolo} startAsHost={startAsHost} startRequest={startRequest} /></View>;
+  return <View style={hidden ? { display: "none" } : undefined}><Multiplayer settings={settings} onSettingsChange={onSettingsChange} onLeave={onLeave} onHostSelect={onHostSelect} onOptionsSelect={onOptionsSelect} onPlaySolo={onPlaySolo} startAsHost={startAsHost} startRequest={startRequest} /></View>;
 }
 
-function Multiplayer({ settings, onLeave, onHostSelect, onOptionsSelect, onPlaySolo, startAsHost, startRequest }: {
+function Multiplayer({ settings, onSettingsChange, onLeave, onHostSelect, onOptionsSelect, onPlaySolo, startAsHost, startRequest }: {
   settings: GameSettings;
+  onSettingsChange?: (settings: Partial<GameSettings>) => void;
   onLeave: () => void;
   onHostSelect: () => void;
   onOptionsSelect?: () => void;
@@ -61,6 +72,7 @@ function Multiplayer({ settings, onLeave, onHostSelect, onOptionsSelect, onPlayS
     setIncoming,
     pendingId,
     ready,
+    botIds,
     lobbyPlayers,
     readyPlayers,
     playerReady,
@@ -69,12 +81,12 @@ function Multiplayer({ settings, onLeave, onHostSelect, onOptionsSelect, onPlayS
     connected,
     submitted,
     charged,
-    seconds,
     disconnected,
     player,
     map,
     snapshot,
     hostGame,
+    addBot,
     start,
     submit,
     removePlayer,
@@ -89,21 +101,66 @@ function Multiplayer({ settings, onLeave, onHostSelect, onOptionsSelect, onPlayS
     setPlayerOptions,
   } = useRunMultiplayerGame(settings);
   const isWeb = Platform.OS === "web";
+  const lobbyRoster = Array.from(new Set([...lobbyPlayers, ...botIds]));
+  const lobbyIsFull = lobbyRoster.length + 1 >= MAX_MULTIPLAYER_PLAYERS;
+  const hasTeammate = ready.length > 0 || botIds.length > 0;
 
   const [introPage, setIntroPage] = useState(0);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isMapOpen, setIsMapOpen] = useState(false);
   const [combatMessage, setCombatMessage] = useState("");
+  const [turnClockStore] = useState(() => createNumberStore(1));
   const [itemDetailsOpen, setItemDetailsOpen] = useState(false);
   const [equipmentDetailsOpen, setEquipmentDetailsOpen] = useState(false);
-  const [supportEffect, setSupportEffect] = useState<{ targetId: string | null; emoji: string; label: string; key: number } | null>(null);
+  const [supportEffectStore] = useState(createSupportEffectStore);
+  const [damageDealtKey, setDamageDealtKey] = useState(0);
+  const [combatAnimationStore] = useState(createSceneFrameStore);
+  const combatAnimationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [combatTargetId, setCombatTargetId] = useState<string | null>(null);
+  const previousPlayerHealth = useRef<number | null>(null);
+  const pendingLocalAttack = useRef<{ targetId: string; health: number; turn: number } | null>(null);
   const pendingAttack = useRef<string | null>(null);
   const pendingDefenseAction = useRef<PlayerAction | null>(null);
   const microgameMode = useRef<"attack" | "defense" | "practice">("practice");
   const itemTargetRef = useRef<ViewInstance>(null);
   const equipmentTargetRef = useRef<ViewInstance>(null);
   const hostStartedRef = useRef(false);
+  const tickCombatAnimation = useCallback(() => {
+    const next = advanceAnimationFrame(combatAnimationStore.getSnapshot(), 16);
+    combatAnimationStore.setFrame(next);
+    if (hasActiveCombatAnimation(next)) {
+      combatAnimationTimer.current = setTimeout(tickCombatAnimation, 16);
+    } else {
+      combatAnimationTimer.current = null;
+      setCombatTargetId(null);
+    }
+  }, [combatAnimationStore]);
+  const startCombatAnimation = useCallback(() => {
+    if (combatAnimationTimer.current !== null) return;
+    combatAnimationTimer.current = setTimeout(tickCombatAnimation, 16);
+  }, [tickCombatAnimation]);
+  const startLocalAttackMotion = useCallback((targetId?: string) => {
+    setCombatTargetId(targetId ?? null);
+    combatAnimationStore.setFrame(frame => ({ ...frame, playerAttackElapsed: 0 }));
+    startCombatAnimation();
+  }, [combatAnimationStore, startCombatAnimation]);
   const roomActors = useMemo(() => snapshot && state && player
-    ? getMultiplayerRoomActors(snapshot.roomSceneActors, Object.values(state.players), player.roomId, playerId)
-    : [], [snapshot, state, player, playerId]);
+    ? getMultiplayerRoomActors(snapshot.roomSceneActors, Object.values(state.players), player.roomId, playerId).map(actor => actor.kind === "enemy" && combatTargetId
+      ? { ...actor, isActive: actor.id === combatTargetId }
+      : actor)
+    : [], [snapshot, state, player, playerId, combatTargetId]);
+  const hasRoomTimer = !!state && !!player && player.health > 0 && playerOptions.difficulty === "hard" && state.phase === "playing";
+  const isRoomTimerRunning = hasRoomTimer && submitted !== state.turn;
+  const roomTimerMaxMs = state ? getTurnDuration({ difficulty: "hard", level: state.level }) : 1;
+  useEffect(() => {
+    if (!isRoomTimerRunning || !state) return;
+    const duration = roomTimerMaxMs;
+    const startTime = Date.now();
+    const tick = () => turnClockStore.setSnapshot(Math.max(0, duration - (Date.now() - startTime)));
+    tick();
+    const interval = setInterval(tick, 16);
+    return () => clearInterval(interval);
+  }, [isRoomTimerRunning, state?.turn, roomTimerMaxMs, turnClockStore]);
   useEffect(() => {
     if (startAsHost && !hostStartedRef.current) {
       hostStartedRef.current = true;
@@ -121,7 +178,10 @@ function Multiplayer({ settings, onLeave, onHostSelect, onOptionsSelect, onPlayS
       const action = pendingDefenseAction.current;
       pendingDefenseAction.current = null;
       microgameMode.current = "practice";
-      if (action) submit({ ...action, defenseScore: score });
+      if (action) {
+        if (action.type === "ATTACK") startLocalAttackMotion(action.target);
+        submit({ ...action, defenseScore: score });
+      }
       return;
     }
     const target = pendingAttack.current;
@@ -129,6 +189,34 @@ function Multiplayer({ settings, onLeave, onHostSelect, onOptionsSelect, onPlayS
     microgameMode.current = "practice";
     if (target) submitAfterDefense({ type: "ATTACK", target, microgameScore: damageScore });
   });
+
+  useEffect(() => {
+    const pending = pendingLocalAttack.current;
+    if (!pending || !state) return;
+    const target = state.map.entities.monsters[pending.targetId];
+    if (target && target.currentHealth < pending.health) {
+      setDamageDealtKey(key => key + 1);
+      combatAnimationStore.setFrame(frame => ({ ...frame, enemyDamageElapsed: 0, enemyHealthLossElapsed: 0 }));
+      startCombatAnimation();
+      pendingLocalAttack.current = null;
+    } else if (state.turn !== pending.turn) {
+      pendingLocalAttack.current = null;
+    }
+  }, [combatAnimationStore, state, startCombatAnimation]);
+
+  useEffect(() => {
+    const health = player?.health ?? null;
+    const previous = previousPlayerHealth.current;
+    previousPlayerHealth.current = health;
+    if (health !== null && previous !== null && health < previous) {
+      combatAnimationStore.setFrame(frame => ({ ...frame, enemyAttackElapsed: 0, playerDamageElapsed: 0, playerHealthLossElapsed: 0 }));
+      startCombatAnimation();
+    }
+  }, [combatAnimationStore, player?.health, startCombatAnimation]);
+
+  useEffect(() => () => {
+    if (combatAnimationTimer.current !== null) clearTimeout(combatAnimationTimer.current);
+  }, []);
 
   function shouldRunDefense(action: PlayerAction) {
     if (!state || !player || player.health <= 0 || action.type === "CLASS_READY" || action.type === "DROP_EQUIPMENT") return false;
@@ -140,6 +228,9 @@ function Multiplayer({ settings, onLeave, onHostSelect, onOptionsSelect, onPlayS
       const chargedThiefUnlock = sourceRoom[direction] === "locked" && player.classId === "thief" && charged;
       const destinationMap = keyUnlock || chargedThiefUnlock ? unlockDoor(state.map, player.roomId, direction) : state.map;
       destinationRoomId = getConnectedRoomId(destinationMap, player.roomId, direction) ?? player.roomId;
+      // Entering a room is safe for this turn; enemies there only act after a
+      // later action from that room. The server follows the same rule.
+      if (destinationRoomId !== player.roomId) return false;
     }
     const targetRoom = getRoom(state.map, destinationRoomId);
     const enemy = getRoomMonster(state.map, targetRoom);
@@ -166,8 +257,13 @@ function Multiplayer({ settings, onLeave, onHostSelect, onOptionsSelect, onPlayS
   }
 
   function submitAfterDefense(action: PlayerAction) {
+    if (action.type === "ATTACK" && action.target && state) {
+      const target = state.map.entities.monsters[action.target];
+      pendingLocalAttack.current = target ? { targetId: action.target, health: target.currentHealth, turn: state.turn } : null;
+    }
     if (!shouldRunDefense(action)) {
       microgameMode.current = "practice";
+      if (action.type === "ATTACK") startLocalAttackMotion(action.target);
       submit(action);
       return;
     }
@@ -183,14 +279,14 @@ function Multiplayer({ settings, onLeave, onHostSelect, onOptionsSelect, onPlayS
   }>({ playerPress: () => undefined, doorwayPress: () => undefined, actorPress: () => undefined });
   gameViewActions.current = {
     playerPress: () => {
-      setSupportEffect(previous => ({ targetId: null, ...getSupportFeedback(player?.classId ?? "warrior"), key: (previous?.key ?? 0) + 1 }));
+      supportEffectStore.trigger({ targetId: null, ...getSupportFeedback(player?.classId ?? "warrior") });
       submitAfterDefense({ type: "SUPPORT", target: playerId });
     },
     doorwayPress: position => submitAfterDefense({ type: "MOVE", target: getDirection(position) }),
     actorPress: async (actor, source) => {
       if (!state || !player || (player.health <= 0 && actor.kind !== "enemy" && actor.kind !== "player")) return;
       if (actor.kind === "player") {
-        setSupportEffect(previous => ({ targetId: actor.id, ...getSupportFeedback(player.classId), key: (previous?.key ?? 0) + 1 }));
+        supportEffectStore.trigger({ targetId: actor.id, ...getSupportFeedback(player.classId) });
         submitAfterDefense({ type: "SUPPORT", target: actor.id });
         return;
       }
@@ -225,7 +321,7 @@ function Multiplayer({ settings, onLeave, onHostSelect, onOptionsSelect, onPlayS
   const onGameActorPress = useCallback((actor: import("@/components/Dungeon/Room").RoomSceneActor, source?: import("@/components/Dungeon/Room").ScreenPoint) => gameViewActions.current.actorPress(actor, source), []);
 
   return (
-    <ScreenShell compact={!!state}>
+    <ScreenShell compact={!!state} health={player?.health ?? null} damageDealtKey={damageDealtKey} reducedMotion={playerOptions.reducedMotion}>
       {disconnected ? (
         <>
           <StyledText>{error || "Disconnected from the host. Leave and join a new lobby."}</StyledText>
@@ -239,14 +335,16 @@ function Multiplayer({ settings, onLeave, onHostSelect, onOptionsSelect, onPlayS
         </>
       ) : (
       <>
-      <NormalButton
-        accessibilityLabel="Leave multiplayer"
-        accessibilityRole="button"
-        label="Leave multiplayer"
-        onPress={() => { if (isWeb) leave(); onLeave(); }}
-      />
-      {error ? <StyledText>{error}</StyledText> : null}
-      {busy ? <StyledText>Preparing connection…</StyledText> : null}
+      {!player && !state?.ended ? (
+        <NormalButton
+          accessibilityLabel="Leave multiplayer"
+          accessibilityRole="button"
+          label="Leave multiplayer"
+          onPress={() => { if (isWeb) leave(); onLeave(); }}
+        />
+      ) : null}
+      {!player && error ? <StyledText>{error}</StyledText> : null}
+      {!player && busy ? <StyledText>Preparing connection…</StyledText> : null}
       {!isWeb && error && onPlaySolo ? <ActionButton label="Play singleplayer instead" onPress={onPlaySolo} busy={busy} /> : null}
 
       {!state ? (
@@ -263,16 +361,18 @@ function Multiplayer({ settings, onLeave, onHostSelect, onOptionsSelect, onPlayS
           ) : null}
           {role === "host" ? (
             <>
-              <StyledText>Connected players: {ready.length + 1} (including you)</StyledText>
+              <StyledText>Players in room: {lobbyRoster.length + 1} (including you)</StyledText>
               {isWeb ? <><StyledText>Room code</StyledText><Text selectable accessibilityLabel="Room code" style={roomCodeTextStyle(colors.ink)}>{outgoing}</Text></> : null}
-              {lobbyPlayers.map(id => isWeb ? (
-                <StyledText key={id}>{id}: {readyPlayers.includes(id) ? "ready" : "connected"}</StyledText>
+              {lobbyRoster.map(id => isWeb ? (
+                <StyledText key={id}>{getBotPlayerName(id)}: {readyPlayers.includes(id) ? "ready" : "connected"}</StyledText>
+              ) : isBotPlayerId(id) ? (
+                <StyledText key={id}>{getBotPlayerName(id)}: ready</StyledText>
               ) : (
                 <NormalButton
                   key={id}
                   accessibilityLabel={`Remove ${id}`}
                   accessibilityRole="button"
-                  label={`${id}: ${ready.includes(id) ? "connected" : "connecting"} · Remove`}
+                  label={`${getBotPlayerName(id)}: ${ready.includes(id) ? "connected" : "connecting"} · Remove`}
                   onPress={() => removePlayer(id)}
                 />
               ))}
@@ -288,41 +388,34 @@ function Multiplayer({ settings, onLeave, onHostSelect, onOptionsSelect, onPlayS
                   <ActionButton label="Cancel invitation" onPress={cancelInvitation} busy={busy} />
                 </>
               ) : null}
+              <ActionButton label="+ Add Bot" onPress={addBot} busy={busy || lobbyIsFull} />
               {isWeb
-                ? ready.length > 0 ? <ActionButton label="Game options" onPress={() => onOptionsSelect?.()} busy={busy} /> : <StyledText>Join this room from another browser to continue to game options.</StyledText>
+                ? hasTeammate ? <ActionButton label="Game options" onPress={() => onOptionsSelect?.()} busy={busy} /> : <StyledText>Add a bot or join this room from another browser to continue to game options.</StyledText>
                 : <ActionButton label="Start together" onPress={start} busy={busy} />}
             </>
           ) : null}
           {role === "guest" ? (
             <>
-              {isWeb
-                ? connected
-                  ? <>
-                    <Title>[Project 1]</Title>
-                    <Row>
-                      <StyledText>Difficulty</StyledText>
-                      <SegmentedButton options={["easy", "normal", "hard"] as const} value={playerOptions.difficulty} onChange={difficulty => setPlayerOptions({ ...playerOptions, difficulty })} />
-                    </Row>
-                    <Row>
-                      <StyledText>Attack microgames</StyledText>
-                      <SegmentedButton options={["On", "Off"] as const} value={playerOptions.microgamesEnabled ? "On" : "Off"} onChange={choice => setPlayerOptions({ ...playerOptions, microgamesEnabled: choice === "On" })} />
-                    </Row>
-                    <StyledText>Turn off for direct attacks without a timing game.</StyledText>
-                    <Row>
-                      <StyledText>Handedness</StyledText>
-                      <SegmentedButton options={["Right", "Left"] as const} value={playerOptions.handedness === "left" ? "Left" : "Right"} onChange={value => setPlayerOptions({ ...playerOptions, handedness: value.toLowerCase() as GameSettings["handedness"] })} />
-                    </Row>
-                    <ToggleButton label="Reduced motion" value={playerOptions.reducedMotion} onValueChange={value => setPlayerOptions({ ...playerOptions, reducedMotion: value })} />
-                    <ActionButton label={playerReady ? "Ready" : "Start"} onPress={start} busy={busy || playerReady} />
-                  </>
-                  : <StyledText>Enter the host&apos;s room code. The room server supplies its seed and difficulty.</StyledText>
-                : <StyledText>Choose your own gameplay options. The host sets the shared seed and difficulty.</StyledText>}
-              {!isWeb ? <>
-                <SegmentedButton options={["Right", "Left"] as const} value={playerOptions.handedness === "left" ? "Left" : "Right"} onChange={value => setPlayerOptions({ ...playerOptions, handedness: value.toLowerCase() as GameSettings["handedness"] })} />
-                <ToggleButton label="Attack mini-games" value={playerOptions.microgamesEnabled} onValueChange={value => setPlayerOptions({ ...playerOptions, microgamesEnabled: value })} />
-                <ToggleButton label="Reduced motion" value={playerOptions.reducedMotion} onValueChange={value => setPlayerOptions({ ...playerOptions, reducedMotion: value })} />
-                {outgoing && connected ? <ActionButton label={playerReady ? "Ready" : "Start"} onPress={start} busy={busy || playerReady} /> : null}
-              </> : null}
+              {connected ? (
+                <SetupScreen
+                  settings={{ ...settings, ...playerOptions }}
+                  onBack={() => undefined}
+                  onSettings={() => undefined}
+                  showBack={false}
+                  showSettings={false}
+                  showSeed={false}
+                  shell={false}
+                  startLabel={playerReady ? "Ready" : "Start"}
+                  startDisabled={busy || playerReady}
+                  onUpdate={patch => setPlayerOptions({
+                    ...playerOptions,
+                    ...(patch.difficulty === undefined ? {} : { difficulty: patch.difficulty }),
+                    ...(patch.handedness === undefined ? {} : { handedness: patch.handedness }),
+                    ...(patch.microgamesEnabled === undefined ? {} : { microgamesEnabled: patch.microgamesEnabled }),
+                  })}
+                  onStart={start}
+                />
+              ) : !isWeb ? <StyledText>Choose your own gameplay options. The host sets the shared seed.</StyledText> : null}
               {(!isWeb && !outgoing) || (isWeb && !connected) ? (
                 <>
                   <LobbyTextBox
@@ -339,7 +432,7 @@ function Multiplayer({ settings, onLeave, onHostSelect, onOptionsSelect, onPlayS
                   />
                   <ActionButton label={isWeb ? "Join room" : "Create reply"} onPress={() => void join()} busy={busy} />
                 </>
-              ) : !isWeb ? (
+              ) : !isWeb && !connected ? (
                 <>
                   <StyledText>Long-press to copy this reply and send it back to the host.</StyledText>
                   <LobbyTextBox editable={false} label="Reply for host" onChangeText={setIncoming} value={outgoing} />
@@ -353,13 +446,21 @@ function Multiplayer({ settings, onLeave, onHostSelect, onOptionsSelect, onPlayS
         </>
       ) : player && map && snapshot ? (
         <>
-          {!tinyLayout ? <StyledText>{combatMessage || `${isTestSeed(state.seed) ? "TEST · " : ""}Level ${state.level} · Turn ${state.turn + 1} · You: ${playerId}`}</StyledText> : null}
-          {!compactLayout ? <StyledText>{getPlayerStatus(state.ended, state.level, player.health, submitted === state.turn)}</StyledText> : null}
-          {!tinyLayout && state.difficulty === "hard" ? (
-            <StyledText>
-              {role === "host" ? `Time left: ${seconds}s` : "The host controls the turn timer. Missing actions are skipped; enemies still attack."}
-            </StyledText>
-          ) : null}
+          {state.ended ? (
+            <Container style={{ alignItems: "center", flex: 1, justifyContent: "center" }}>
+              <Title>Game Over</Title>
+              <Title>{state.level - 1} Floor{state.level === 2 ? "" : "s"} Cleared</Title>
+              <StyledText>{state.turnsLeft <= 0 ? "The party ran out of turns." : "The entire party has fallen."}</StyledText>
+              <NormalButton
+                accessibilityLabel="Return to Title"
+                accessibilityRole="button"
+                label="Return to Title"
+                onPress={() => { if (isWeb) leave(); onLeave(); }}
+              />
+            </Container>
+          ) : (
+          <>
+          <GameHeader onMenu={() => setIsMenuOpen(true)} />
           {!tinyLayout ? (
             <View style={{ flexShrink: 1, maxHeight: compactLayout ? 116 : undefined, minHeight: 0 }}>
               <DungeonMap
@@ -416,6 +517,7 @@ function Multiplayer({ settings, onLeave, onHostSelect, onOptionsSelect, onPlayS
               panelPosition="first"
               compact={compactLayout}
             />
+            {hasRoomTimer ? <TurnTimerBar compact={compactLayout} accessibilityLabel="Turn timer" color={colors.timer} max={roomTimerMaxMs} panelPosition="middle" store={turnClockStore} testID="multiplayer-turn-timer" /> : null}
             <ResourceBar
               testID="multiplayer-energy"
               accessibilityLabel="Player energy"
@@ -431,6 +533,7 @@ function Multiplayer({ settings, onLeave, onHostSelect, onOptionsSelect, onPlayS
           <View style={{ flex: 1, minHeight: 0, overflow: "hidden", position: "relative", zIndex: microgame.active ? 100 : undefined }}>
           {tinyLayout && combatMessage ? <Text pointerEvents="none" style={{ position: "absolute", top: 8, left: 0, right: 0, zIndex: 20, color: colors.accent, fontWeight: "900", textAlign: "center" }}>{combatMessage}</Text> : null}
           <GameViewPanel
+            sceneFrameStore={combatAnimationStore}
             disabled={state.phase !== "playing" || state.ended || disconnected || submitted === state.turn || microgame.active}
             waitingForPlayers={submitted === state.turn}
             pauseAnimations={microgame.active}
@@ -442,8 +545,9 @@ function Multiplayer({ settings, onLeave, onHostSelect, onOptionsSelect, onPlayS
             canPassBlockedDoorways={player.health <= 0}
             roomDoorways={snapshot.roomDoorways}
             roomSceneActors={roomActors}
-            hardTurnCounter={state.difficulty === "easy" ? null : state.turnsLeft}
-            supportEffect={supportEffect}
+            showStairsObjective={player.health <= 0}
+            hardTurnCounter={player.health <= 0 || playerOptions.difficulty === "easy" ? null : state.turnsLeft}
+            supportEffectStore={supportEffectStore}
             onPlayerPress={onGamePlayerPress}
             onDoorwayPress={onGameDoorwayPress}
             onActorPress={onGameActorPress}
@@ -452,6 +556,7 @@ function Multiplayer({ settings, onLeave, onHostSelect, onOptionsSelect, onPlayS
             visible={microgame.active}
             kind={microgame.kind}
             elapsedStore={microgame.elapsedStore}
+            progress={microgame.actionProgress}
             targetDelay={microgame.targetDelay}
             targetSpot={microgame.targetSpot}
             multitapTargetSpot={microgame.multitapTargetSpot}
@@ -466,6 +571,39 @@ function Multiplayer({ settings, onLeave, onHostSelect, onOptionsSelect, onPlayS
           />
           <ItemDetailsMenu visible={itemDetailsOpen && !!snapshot.inventoryItemLabel} label={snapshot.inventoryItemLabel ?? "Item"} description={snapshot.inventoryItemDescription ?? "A useful item."} activationDescription={snapshot.inventoryItemActivationDescription ?? "This item activates automatically when its condition is met."} showUseNow={snapshot.showUseItemNow} useNowDisabled={!snapshot.canUseItemNow || submitted === state.turn || player.health <= 0 || state.ended} onUseNow={() => { submitAfterDefense({ type: "USE_ITEM" }); setItemDetailsOpen(false); }} onClose={() => setItemDetailsOpen(false)} />
           <EquipmentDetailsMenu visible={equipmentDetailsOpen && !!snapshot.equipmentLabel} label={snapshot.equipmentLabel ?? "Equipment"} description={snapshot.equipmentDescription ?? "Equipment provides its listed effects while carried."} dropDisabled={submitted === state.turn || player.health <= 0 || state.ended} onDrop={() => { submitAfterDefense({ type: "DROP_EQUIPMENT" }); setEquipmentDetailsOpen(false); }} onClose={() => setEquipmentDetailsOpen(false)} />
+          <PauseMenu
+            onBackToGame={() => setIsMenuOpen(false)}
+            onQuitToTitle={() => { setIsMenuOpen(false); if (isWeb) leave(); onLeave(); }}
+            quitLabel="Leave Multiplayer"
+            onPracticeAttacking={() => { setIsMenuOpen(false); microgame.start(getGameClass(player.classId).microgame, playerOptions.handedness, { difficulty: playerOptions.difficulty, level: state.level, easeLevel: getMicrogameEaseLevel(player.classId, player.focusBoost) }); }}
+            onPracticeDefending={() => { setIsMenuOpen(false); microgame.start("defense", playerOptions.handedness, { difficulty: playerOptions.difficulty, level: state.level, easeLevel: getMicrogameEaseLevel(player.classId, player.focusBoost) }); }}
+            onOpenMap={tinyLayout ? () => { setIsMenuOpen(false); setIsMapOpen(true); } : undefined}
+            onSettingsChange={patch => {
+              onSettingsChange?.(patch);
+              if (patch.handedness !== undefined) setPlayerOptions({ ...playerOptions, handedness: patch.handedness });
+            }}
+            microgamesEnabled={playerOptions.microgamesEnabled}
+            level={state.level}
+            classId={player.classId}
+            microgameAverage={null}
+            settings={{ ...settings, ...playerOptions }}
+            seed={state.seed.trim()}
+            visible={isMenuOpen}
+          />
+          <StyledModal accessibilityLabel="Dungeon map" accessibilityRole="dialog" animationType="fade" onRequestClose={() => setIsMapOpen(false)} visible={isMapOpen}>
+            <Title>Dungeon Map</Title>
+            <DungeonMap
+              map={map}
+              currentRoomId={player.roomId}
+              compact={compactLayout}
+              players={Object.values(state.players).map(otherPlayer => ({
+                id: otherPlayer.id,
+                roomId: otherPlayer.roomId,
+                color: getMultiplayerPlayerAuraColor(Object.keys(state.players), otherPlayer.id),
+              }))}
+            />
+            <PrimaryButton accessibilityLabel="Close map" accessibilityRole="button" label="Close map" onPress={() => setIsMapOpen(false)} />
+          </StyledModal>
           </View>
 
           {state.phase === "briefing" ? (
@@ -486,6 +624,8 @@ function Multiplayer({ settings, onLeave, onHostSelect, onOptionsSelect, onPlayS
               }}
             />
           ) : null}
+          </>
+          )}
         </>
       ) : (
         <StyledText>You are no longer part of this game. Leave and rejoin a new lobby.</StyledText>
@@ -560,18 +700,6 @@ function roomCodeTextStyle(color: string) {
   return { color, fontSize: 28, fontWeight: "800" as const, textAlign: "center" as const, letterSpacing: 4 };
 }
 
-function getPlayerStatus(
-  ended: boolean,
-  level: number,
-  health: number,
-  submitted: boolean,
-) {
-  if (ended) return `Run complete · ${level - 1} levels cleared`;
-  if (health <= 0) return "You are a ghost. Move through any doorway, attack for 5 damage (except the Werewolf), or support yourself or an ally for +5 damage on their next attack.";
-  if (submitted) return "Action submitted. Waiting for other players…";
-  return "Tap a monster to attack, an item to pick it up, a doorway to move, self or ally to support, or stairs to descend.";
-}
-
 function getDirection(position: "top" | "bottom" | "left" | "right") {
   return { top: "north", bottom: "south", left: "west", right: "east" }[position];
 }
@@ -582,6 +710,7 @@ function ActionButton({ label, onPress, busy }: { label: string; onPress: () => 
       accessibilityLabel={label}
       accessibilityRole="button"
       label={label}
+      disabled={busy}
       onPress={() => {
         if (!busy) onPress();
       }}

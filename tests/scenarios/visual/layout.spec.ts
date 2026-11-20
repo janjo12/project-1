@@ -116,9 +116,16 @@ for (const viewport of viewports) {
     await expectScreenFits(page, "setup");
 
     await page.getByRole("button", { name: "Difficulty help" }).click();
-    await expect(page.getByRole("dialog", { name: "Difficulty help" })).toBeVisible();
+    const helpDialog = page.getByRole("dialog", { name: "Difficulty help" });
+    await expect(helpDialog).toBeVisible();
+    const popupCard = helpDialog.getByTestId("information-popup-card");
+    await expect(popupCard).toHaveCSS("background-color", "rgb(248, 250, 252)");
+    await expect(popupCard).toHaveCSS("border-radius", "12px");
+    await expect(helpDialog.getByTestId("information-popup-tail")).toHaveCount(0);
+    await expect(helpDialog.getByTestId("information-popup-body")).toBeVisible();
+    await expect(popupCard).toHaveCSS("animation-duration", "0s");
     await expectScreenFits(page, "setup help dialog");
-    await page.getByRole("button", { name: "Got it" }).click();
+    await page.getByRole("button", { name: "Got it" }).click({ force: true });
 
     await page.getByRole("button", { name: "Settings" }).click();
     await expect(page.getByText("Settings", { exact: true })).toBeVisible();
@@ -157,7 +164,7 @@ for (const viewport of viewports) {
     await page.getByRole("button", { name: "Menu" }).click();
     await expect(page.getByRole("dialog", { name: "Game menu" })).toBeVisible();
     await expectScreenFits(page, "game menu");
-    await page.getByRole("dialog", { name: "Game menu" }).getByRole("button", { name: "Practice attack microgame" }).click();
+    await page.getByRole("dialog", { name: "Game menu" }).getByRole("button", { name: "Practice Attacking" }).click();
     await expect(page.getByTestId("microgame-overlay")).toBeVisible();
     await expectScreenFits(page, "microgame overlay");
 
@@ -178,7 +185,7 @@ for (const viewport of viewports) {
     expect(roomCode).toBeTruthy();
     await guestPage.getByRole("textbox", { name: "Room code" }).fill(roomCode!.trim());
     await guestPage.getByRole("button", { name: "Join room", exact: true }).click();
-    await expect(guestPage.getByText("[Project 1]", { exact: true })).toBeVisible();
+    await expect(guestPage.getByText("Dungeon Run", { exact: true })).toBeVisible();
     await expect(guestPage.getByRole("button", { name: "Start", exact: true })).toBeVisible();
     await expect(guestPage.getByRole("textbox", { name: "Seed" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Game options", exact: true })).toBeVisible();

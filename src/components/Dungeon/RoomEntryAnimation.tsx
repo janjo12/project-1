@@ -14,14 +14,6 @@ export function getRoomEntryOffset(position: EntryPosition): [number, number] {
   return [0, 0];
 }
 
-export function getRoomEntryInset(position: EntryPosition, inset = 50): [number, number] {
-  if (position === "top") return [0, inset];
-  if (position === "bottom") return [0, -inset];
-  if (position === "left") return [inset, 0];
-  if (position === "right") return [-inset, 0];
-  return [0, 0];
-}
-
 export function RoomEntryAnimation({
   children,
   entering,

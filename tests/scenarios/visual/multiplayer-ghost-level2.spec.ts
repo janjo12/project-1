@@ -103,13 +103,19 @@ test("two live multiplayer players reach Level 2 after a ghost reveals and suppo
     await guestPage.goto(new URL("/", page.url()).toString(), { waitUntil: "domcontentloaded" });
     await guestPage.getByRole("button", { name: "Multiplayer" }).click();
     await guestPage.getByRole("button", { name: "Join game", exact: true }).click();
+    await expect(guestPage.getByRole("textbox", { name: "Room code" })).toBeVisible();
+    await expect(guestPage.getByText(/room server supplies its seed and difficulty/i)).toHaveCount(0);
     await guestPage.getByRole("textbox", { name: "Room code" }).fill(roomCode);
     await guestPage.getByRole("button", { name: "Join room", exact: true }).click();
-    await expect(guestPage.getByText("[Project 1]", { exact: true })).toBeVisible();
+    await expect(guestPage.getByText("Dungeon Run", { exact: true })).toBeVisible();
+    await expect(guestPage.getByRole("switch", { name: "Attack microgames" })).toBeVisible();
+    await expect(guestPage.getByRole("switch", { name: "Left-handed controls" })).toBeVisible();
     await guestPage.getByRole("button", { name: "hard", exact: true }).click();
     await guestPage.getByRole("button", { name: "Start", exact: true }).click();
 
     await page.getByRole("button", { name: "Game options", exact: true }).click();
+    await expect(page.getByRole("switch", { name: "Attack microgames" })).toBeVisible();
+    await expect(page.getByRole("switch", { name: "Left-handed controls" })).toBeVisible();
     await page.getByRole("textbox", { name: "Seed" }).fill("testwarrior");
     await page.getByRole("button", { name: "Start", exact: true }).click();
     await expect(page.getByTestId("class-briefing")).toBeVisible();
@@ -125,6 +131,7 @@ test("two live multiplayer players reach Level 2 after a ghost reveals and suppo
     expect(guestId).toBeTruthy();
     const victimId = guestId!;
     expect(state.phase).toBe("playing");
+    expect(state.difficulty).toBe("normal");
     expect(state.players.host.classId).toBe("warrior");
     expect(state.players[victimId].classId).toBe("warrior");
     expect(state.players[victimId].gameplayOptions?.difficulty).toBe("hard");
@@ -214,7 +221,7 @@ test("two live multiplayer players reach Level 2 after a ghost reveals and suppo
     }
     expect(state.players[victimId].health, "the Werewolf should kill the player who keeps attacking without the Silver Arrow").toBe(0);
     expect(state.players.host.health).toBeGreaterThan(0);
-    await expect(guestPage.getByText(/You are a ghost/)).toBeVisible();
+    await expect(guestPage.getByRole("button", { name: `Ghost · ${victimId} · Support` })).toBeVisible();
 
     // Ghost movement reveals a room ahead without drawing enemy attacks.
     const stairsPath = findPath(state.map, wolfRoomId, stairsRoomId!);
@@ -277,8 +284,9 @@ test("two live multiplayer players reach Level 2 after a ghost reveals and suppo
     expect(state.players.host.nextAttackBonus).toBe(5);
     expect(state.players[victimId].health).toBeGreaterThan(0);
     expect(state.players[victimId].roomId).toBe(state.players.host.roomId);
-    await expect(page.getByText(/^TEST · Level 2 ·/)).toBeVisible();
-    await expect(guestPage.getByText(/You are a ghost/)).toHaveCount(0);
+    await expect(page.getByText("Level 2 Map", { exact: true })).toBeVisible();
+    await expect(guestPage.getByRole("progressbar", { name: "Player health" }))
+      .toHaveAttribute("aria-valuenow", String(state.players[victimId].health));
   } finally {
     if (roomCode && hostId) {
       await request.post("/api/multiplayer", { data: { type: "leave", code: roomCode, playerId: hostId } }).catch(() => undefined);

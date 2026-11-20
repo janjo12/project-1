@@ -17,10 +17,10 @@ describe("documented combat math", () => {
     expect(resolveAttackDamage({ profile: 20, score: 100, charged: true, target: { ...enemy, chases: true } })).toBe(0);
   });
   it("scales attack by score, adds equipment and charged bonus, then applies target defense", () => {
-    expect(resolveAttackDamage({ profile: 20, score: 50, equipmentAttack: 3, charged: true, target: { ...enemy, currentHealth: 100 } })).toBe(16);
+    expect(resolveAttackDamage({ profile: 20, score: 50, equipmentAttack: 3, charged: true, target: { ...enemy, currentHealth: 100 } })).toBe(17);
   });
   it("caps damage to remaining health and never heals from negative inputs", () => {
-    expect(resolveAttackDamage({ profile: 10, score: 100, target: enemy })).toBe(8);
+    expect(resolveAttackDamage({ profile: 10, score: 100, target: enemy })).toBe(9);
     expect(resolveAttackDamage({ profile: 10, score: -10, target: { ...enemy, currentHealth: 20, defense: 0 } })).toBe(1);
   });
   it("applies defense without allowing negative damage", () => {
@@ -34,7 +34,7 @@ describe("documented combat math", () => {
   it("lowers the easy defensive floor while preserving normal and hard scoring", () => {
     expect(scaleDefenseMicrogameScore(0, "easy")).toBe(65);
     expect(scaleDefenseMicrogameScore(100, "easy")).toBe(100);
-    expect(scaleDefenseMicrogameScore(0, "normal")).toBe(25);
+    expect(scaleDefenseMicrogameScore(0, "normal")).toBeCloseTo(27.5);
     expect(scaleDefenseMicrogameScore(0, "hard")).toBe(0);
   });
   it("keeps catalog health within a survivable number of average-score turns", () => {

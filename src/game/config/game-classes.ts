@@ -34,7 +34,7 @@ export const GAME_CLASSES: Record<GameClassId, GameClass> = {
     },
     special: "Shield: Take less damage from attacks. Warriors start with 15 Defense.",
     microgame: "multiswipe",
-    microgameText: "Swipe from either dot to the other dot to complete bars. Each completed swipe is worth three taps.",
+    microgameText: "Swipe from either dot to the other dot along the straight bar. Each completed swipe is worth three taps.",
   },
   cleric: {
     id: "cleric",
@@ -103,7 +103,7 @@ export const GAME_CLASSES: Record<GameClassId, GameClass> = {
   ghost: {
     id: "ghost",
     name: "Ghost",
-    sprite: "ghost_graphic",
+    sprite: "banshee_graphic",
     description: "A fallen ally who haunts the dungeon, moving freely and helping the living fight on.",
     support: {
       singleplayer: "Ghosts only appear in multiplayer after a character falls.",

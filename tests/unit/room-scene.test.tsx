@@ -1,11 +1,13 @@
 import React from "react";
 import { act, fireEvent, render, within } from "@testing-library/react-native";
+import { StyleSheet } from "react-native";
 import { PixelSprite } from "@/components/Common/PixelSprite";
 
 import { RoomScene, type RoomDoorways } from "@/components/Dungeon/Room";
 import { GameViewPanel } from "@/components/Dungeon/GameViewPanel";
 import { CombatantSprite } from "@/components/Enemy/Enemy";
 import { createCombatAnimationFrame } from "@/game/entities";
+import { createSupportEffectStore } from "@/game/state/supportEffectStore";
 import { GAME_PARAMETERS } from "@/game/config/gameparameters";
 
 const doorways: RoomDoorways = {
@@ -46,9 +48,58 @@ test("the outer room border has doorway gaps while guarded-doorway markers stay 
   expect(screen.queryByTestId("room-frame-gap-left")).toBeNull();
   expect(screen.getByRole("button", { name: "top guarded doorway" })).toBeTruthy();
   expect(screen.queryByText("×")).toBeNull();
-  expect(screen.getByText("🔒")).toBeTruthy();
-  expect(screen.getByText("↓")).toBeTruthy();
+  const lockIcon = screen.getByText("🔒");
+  expect(lockIcon).toBeTruthy();
+  expect(StyleSheet.flatten(lockIcon.props.style)).toMatchObject({ fontSize: 24, lineHeight: 28 });
+  expect(screen.getByText("⬇︎")).toBeTruthy();
+  const arrowStyle = StyleSheet.flatten(screen.getByText("⬇︎").props.style);
+  expect(arrowStyle).toMatchObject({ fontSize: 42, fontWeight: "900", letterSpacing: -2, lineHeight: 48 });
+  const arrowMotion = StyleSheet.flatten(screen.getByTestId("doorway-arrow-position-bottom").props.style);
+  expect(arrowMotion.animationDuration).toBe("1000ms");
+  expect(arrowMotion.animationIterationCount).toBe("infinite");
+  expect(arrowMotion.animationName).toEqual({
+    from: { transform: [{ translateY: 12 - 2.5 }] },
+    to: { transform: [{ translateY: 12 + 2.5 }] },
+  });
 });
+
+test.each(["top", "right", "bottom", "left"] as const)(
+  "keeps the open %s doorway arrow visible when the player enters from that side",
+  async (playerPosition) => {
+    const allOpenDoorways: RoomDoorways = { top: "open", right: "open", bottom: "open", left: "open" };
+    const screen = await render(scene("A1", playerPosition, allOpenDoorways));
+
+    expect(screen.getByTestId(`doorway-arrow-${playerPosition}`)).toBeTruthy();
+    expect(["top", "right", "bottom", "left"].map(position => screen.getByTestId(`doorway-arrow-${position}`))).toHaveLength(4);
+  },
+);
+
+test.each(["top", "right", "bottom", "left"] as const)(
+  "moves the %s arrow outward without shifting or overlapping the entering player's clickable target",
+  async playerPosition => {
+    const screen = await render(scene("A1", playerPosition, { top: "open", right: "open", bottom: "open", left: "open" }));
+    const playerTarget = StyleSheet.flatten(screen.getByTestId("local-player-actor").props.style);
+    const expectedPlayerPosition = {
+      top: { left: 152, top: 64 },
+      right: { left: 240, top: 104 },
+      bottom: { left: 152, top: 144 },
+      left: { left: 64, top: 104 },
+    }[playerPosition];
+    expect(playerTarget).toMatchObject(expectedPlayerPosition);
+    expect(playerTarget.width).toBe(80);
+    expect(playerTarget.height).toBe(80);
+
+    const arrowOffset = StyleSheet.flatten(screen.getByTestId(`doorway-arrow-position-${playerPosition}`).props.style);
+    expect(arrowOffset.transform).toEqual([{
+      [playerPosition === "top" || playerPosition === "bottom" ? "translateY" : "translateX"]:
+        playerPosition === "top" || playerPosition === "left" ? -12 : 12,
+    }]);
+    expect(arrowOffset.animationDuration).toBe("1000ms");
+    expect(arrowOffset.animationIterationCount).toBe("infinite");
+    expect(arrowOffset.animationName.to).toBeDefined();
+    expect(screen.getByRole("button", { name: `Tap ${playerPosition} doorway to move` })).toBeTruthy();
+  },
+);
 
 test("a Werewolf hit with no damage shows No Effect in the floating damage position", async () => {
   const animationFrame = { ...createCombatAnimationFrame(), enemyHealthLossElapsed: 40 };
@@ -72,6 +123,8 @@ test("a Werewolf hit with no damage shows No Effect in the floating damage posit
 });
 
 test("support feedback is shown over the selected ally", async () => {
+  const supportEffectStore = createSupportEffectStore();
+  supportEffectStore.trigger({ targetId: "ally", emoji: "🛡️", label: "Vanguard" });
   const screen = await render(
     <RoomScene
       actors={[{ id: "ally", kind: "player", label: "Cleric · ally", sprite: "cleric_graphic", position: "center" }]}
@@ -83,7 +136,7 @@ test("support feedback is shown over the selected ally", async () => {
       playerSprite="warrior_graphic"
       roomId="A1"
       sceneScale={1}
-      supportEffect={{ targetId: "ally", emoji: "🛡️", label: "Vanguard", key: 1 }}
+      supportEffectStore={supportEffectStore}
     />,
   );
 
@@ -205,6 +258,20 @@ test("pressing an enemy sends that actor to the game handler", async () => {
   expect(onActorPress).toHaveBeenCalledWith(zombie);
   expect(screen.queryByText("Zombie")).toBeNull();
   expect(screen.queryByText("Player")).toBeNull();
+});
+
+test("waiting for other players displays a message while dimming the room", async () => {
+  const screen = await render(
+    <GameViewPanel
+      animationFrame={createCombatAnimationFrame()}
+      roomDoorways={doorways}
+      waitingForPlayers
+    />,
+  );
+
+  expect(screen.getByText("Waiting for other players…")).toBeTruthy();
+  expect(StyleSheet.flatten(screen.getByTestId("game-scene-content").props.style).opacity).toBe(0.28);
+  expect(screen.queryByText(/Help your party reach the stairs/)).toBeNull();
 });
 
 test("player and enemy press targets cover the full actor sprite envelope", async () => {
@@ -337,10 +404,103 @@ test("player idle bob keeps running while gameplay effects are paused", async ()
   expect(idleLayer.props.style[1].animationPlayState).toBe("running");
 });
 
-test("player keeps clear of the doorway arrow after entering from an edge", async () => {
+test("a solo player enters near the center of the selected room edge", async () => {
   const screen = await render(scene("A1", "left"));
   const playerStyle = screen.getByTestId("local-player-actor").props.style;
   const flattened = Array.isArray(playerStyle) ? Object.assign({}, ...playerStyle.filter(value => typeof value === "object")) : playerStyle;
 
-  expect(flattened.left).toBeGreaterThan(40);
+  expect(flattened.left).toBe(64);
+  expect(flattened.top).toBe((288 - 80) / 2);
+});
+
+test("doorway guards render beside the doorway they block, centered along that edge", async () => {
+  const positions = ["top", "right", "bottom", "left"] as const;
+  const screen = await render(
+    <RoomScene
+      actors={positions.map(position => ({
+        id: `${position}-guard`,
+        kind: "enemy" as const,
+        isDoorwayGuard: true,
+        label: `${position} guard`,
+        position,
+        sprite: "werewolf_graphic",
+      }))}
+      doorways={{ top: "guarded", right: "guarded", bottom: "guarded", left: "guarded" }}
+      enemyHealthLossAmount={0}
+      playerEnergyLossAmount={0}
+      playerHealthLossAmount={0}
+      playerPosition="center"
+      playerSprite="warrior_graphic"
+      roomId="A1"
+      sceneScale={1}
+    />,
+  );
+  const expected: Record<typeof positions[number], { left: number; top: number }> = {
+    top: { left: 152, top: -8 },
+    right: { left: 312, top: 104 },
+    bottom: { left: 152, top: 216 },
+    left: { left: -8, top: 104 },
+  };
+
+  for (const position of positions) {
+    const guard = StyleSheet.flatten(screen.getByTestId(`room-actor-enemy-${position}-guard`).props.style);
+    expect(guard).toMatchObject(expected[position]);
+    expect(guard.left + guard.width / 2).toBe(position === "left" ? 32 : position === "right" ? 352 : 192);
+    expect(guard.top + guard.height / 2).toBe(position === "top" ? 32 : position === "bottom" ? 256 : 144);
+    const visual = StyleSheet.flatten(screen.getByTestId(`doorway-guard-visual-${position}`).props.style);
+    expect(visual.width).toBe(80);
+    expect(visual.transform).toBeUndefined();
+  }
+});
+
+test("scaled doorway guards stay centered on their doorway axes in crowded rooms", async () => {
+  const positions = ["top", "right", "bottom", "left"] as const;
+  const screen = await render(
+    <RoomScene
+      actors={[
+        ...Array.from({ length: 12 }, (_, index) => ({
+          id: `center-enemy-${index}`,
+          kind: "enemy" as const,
+          label: `Enemy ${index}`,
+          position: "center" as const,
+          sprite: "zombie_graphic",
+        })),
+        ...positions.map(position => ({
+          id: `${position}-guard`,
+          kind: "enemy" as const,
+          isDoorwayGuard: true,
+          label: `${position} guard`,
+          position,
+          sprite: "werewolf_graphic",
+        })),
+      ]}
+      doorways={{ top: "guarded", right: "guarded", bottom: "guarded", left: "guarded" }}
+      enemyHealthLossAmount={0}
+      playerEnergyLossAmount={0}
+      playerHealthLossAmount={0}
+      playerPosition="center"
+      playerSprite="warrior_graphic"
+      roomId="A1"
+      sceneScale={1}
+    />,
+  );
+  const expected: Record<typeof positions[number], { left: number; top: number }> = {
+    top: { left: 152, top: -8 },
+    right: { left: 312, top: 104 },
+    bottom: { left: 152, top: 216 },
+    left: { left: -8, top: 104 },
+  };
+
+  for (const position of positions) {
+    const guard = screen.getByTestId(`room-actor-enemy-${position}-guard`);
+    const style = StyleSheet.flatten(guard.props.style);
+    expect(style).toMatchObject(expected[position]);
+    expect(style.width).toBe(80);
+    expect(style.height).toBe(80);
+    expect(style.left + style.width / 2).toBe(position === "left" ? 32 : position === "right" ? 352 : 192);
+    expect(style.top + style.height / 2).toBe(position === "top" ? 32 : position === "bottom" ? 256 : 144);
+    const visual = StyleSheet.flatten(screen.getByTestId(`doorway-guard-visual-${position}`).props.style);
+    expect(visual.width).toBe(80);
+    expect(visual.transform).toBeUndefined();
+  }
 });
