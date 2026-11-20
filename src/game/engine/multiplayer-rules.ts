@@ -222,6 +222,10 @@ export function resolveMultiplayerTurn(
       }]),
     ),
   };
+  // A clock acquired during this turn cannot be consumed until the next turn.
+  const clockHoldersAtTurnStart = new Set(
+    Object.values(state.players).filter(player => player.item === "clock").map(player => player.id),
+  );
   if (state.phase === "briefing") {
     for (const playerId of Object.keys(state.players)) {
       if (actions.get(playerId)?.type === "CLASS_READY" && !state.briefingReady.includes(playerId)) {
@@ -562,7 +566,7 @@ export function resolveMultiplayerTurn(
     state.werewolfAggroPlayerId = null;
     state.werewolfWitnessPlayerIds = [];
   } else if (state.turnsLeft > 0 && hasSharedTurnBudget(state)) {
-    const clockOwner = alive.find(p => p.item === "clock");
+    const clockOwner = alive.find(p => clockHoldersAtTurnStart.has(p.id) && p.item === "clock");
     const result = resolveTurnLoss(state.turnsLeft, clockOwner?.item ?? null, state.level);
     state.turnsLeft = result.nextCounter;
     if (result.usesClock && clockOwner) clockOwner.item = null;
